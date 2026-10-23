@@ -5,6 +5,10 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import Root from './layouts/Root';
 import Home from './pages/Home';
+import Shop from './pages/Shop';
+import ProductDetails from './pages/ProductDetails';
+import GiftBoxBuilder from './pages/GiftBoxBuilder';
+import CartPage from './pages/CartPage';
 
 const router = createBrowserRouter([
     {
@@ -15,6 +19,22 @@ const router = createBrowserRouter([
       {
         index: true,
         Component: Home,
+      },
+      {
+        path: "shop",
+        element: <Shop />,
+      },
+      {
+        path: "/shop/:id",
+        element: <ProductDetails />,
+      },
+      {
+        path: "/gift-box",
+        element: <GiftBoxBuilder />,
+      },
+      {
+        path: "/cart",
+        element: <CartPage />,
       },
     ],
   },
