@@ -19,6 +19,13 @@ import GiftCategoriesPage from "./pages/GiftCategoriesPage";
 import ErrorApp from "./pages/error/ErrorApp";
 import ErrorPage from "./pages/error/ErrorPage";
 import LoadingPage from "./pages/loading/LoadingPage";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminOrdersPage from "./pages/admin/AdminOrdersPage";
+import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
+import PaymentVerificationPage from "./pages/admin/PaymentVerificationPage";
+import AdminProductsPage from "./pages/admin/AdminProductsPage";
+import AdminProductFormPage from "./pages/admin/AdminProductFormPage";
 
 const router = createBrowserRouter([
   {
@@ -78,16 +85,48 @@ const router = createBrowserRouter([
         path: "categories",
         element: <GiftCategoriesPage />,
       },
+      
       {
         path: "*",
         element: <ErrorPage />,
-      },
-      {
-        path: "loading",
-        element: <LoadingPage />,
-      },
+      }
     ],
   },
+  {
+  path: "/admin",
+  element: <AdminLayout />,
+  // Add your existing admin authentication/authorization guard.
+  children: [
+    { index: true, element: <AdminDashboard /> },
+    { path: "orders", element: <AdminOrdersPage /> },
+    {
+  path: "orders/:orderId",
+  element: <AdminOrderDetailsPage />,
+},
+{
+  path: "payments",
+  element: <PaymentVerificationPage />,
+},
+{
+  path: "products",
+  element: <AdminProductsPage />,
+},
+{
+  path: "products/add",
+  element: <AdminProductFormPage />,
+},
+{
+  path: "products/edit/:productId",
+  element: <AdminProductFormPage />,
+}
+    // { path: "payments", element: <PaymentsPage /> },
+    // { path: "products", element: <ProductsPage /> },
+    // { path: "delivery", element: <DeliveryPage /> },
+    // { path: "customers", element: <CustomersPage /> },
+    // { path: "analytics", element: <AnalyticsPage /> },
+    // { path: "settings", element: <SettingsPage /> },
+  ],
+},
 ]);
 
 createRoot(document.getElementById("root")).render(
