@@ -35,15 +35,15 @@ const MAX_VARIANTS = 100;
 
 const DEFAULT_CATEGORIES = [
   { id: "photo-frames", name: "ফটো ফ্রেম ও স্মৃতির উপহার" },
-  { id: "personalized", name: "পার্সোনালাইজড গিফট" },
+  { id: "magic-mirror-led", name: "ম্যাজিক মিরর ও LED গিফট" },
+  { id: "personalized", name: "কাস্টমাইজড ও পার্সোনালাইজড গিফট" },
+  { id: "gift-combos", name: "গিফট কম্বো ও হ্যাম্পার" },
   { id: "flowers", name: "ফুল ও বুকেট" },
-  { id: "chocolates", name: "চকলেট ও গিফট বক্স" },
-  { id: "clothing", name: "পোশাক ও কম্বো" },
-  { id: "islamic", name: "ইসলামিক গিফট" },
-  { id: "wedding", name: "ওয়েডিং গিফট" },
-  { id: "surprise", name: "সারপ্রাইজ গিফট" },
-  { id: "teddy", name: "টেডি ও লাভ গিফট" },
-  { id: "hampers", name: "লাক্সারি হ্যাম্পার" },
+  { id: "chocolates", name: "চকলেট ও মিষ্টির উপহার" },
+  { id: "clothing", name: "পোশাক ও কাপল সেট" },
+  { id: "party-decorations", name: "পার্টি ও অনুষ্ঠানের সাজসজ্জা" },
+  { id: "islamic", name: "ইসলামিক ও নিকাহ উপহার" },
+  { id: "romantic-gifts", name: "টেডি বেয়ার ও রোমান্টিক গিফট" },
   { id: "others", name: "অন্যান্য (Others)" },
 ];
 

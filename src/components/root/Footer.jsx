@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { MessageCircle, ArrowRight, Mail } from "lucide-react";
 
 import { FaFacebookF, FaInstagram, FaYoutube } from "react-icons/fa6";
-import logo from "../../assets/sokhbilash-footer-logo.png";
+import logo from "../../assets/sokhbilash-nav-logo.png";
 
 const shoppingLinks = [
   { label: "সব পণ্য", to: "/shop" },

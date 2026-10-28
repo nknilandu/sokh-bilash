@@ -7,7 +7,7 @@ import {
   LogIn,
 } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
-import logo from "../../assets/sokhbilash-footer-logo.png"
+import logo from "../../assets/sokhbilash-nav-logo.png"
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -115,7 +115,7 @@ const Navbar = () => {
             ) : (
               <Link
                 to="/login"
-                className="hidden items-center gap-2 rounded-full bg-gold-soft px-4 py-2.5 font-semibold text-primary transition hover:brightness-95 sm:inline-flex"
+                className="hidden items-center gap-2 rounded-full bg-gold-soft px-4 py-2 font-semibold text-primary transition hover:brightness-95 sm:inline-flex"
               >
                 <LogIn size={17} />
                 লগইন
