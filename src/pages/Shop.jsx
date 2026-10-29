@@ -1,6 +1,5 @@
-
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
@@ -131,15 +130,9 @@ const occasions = [
   "বাবা-মা",
 ];
 
-const giftTypes = [
-  "কাস্টমাইজেবল",
-  "প্রিমিয়াম",
-  "কাপল গিফট",
-  "হোম ডেকর",
-];
+const giftTypes = ["কাস্টমাইজেবল", "প্রিমিয়াম", "কাপল গিফট", "হোম ডেকর"];
 
-const formatPrice = (price) =>
-  `৳${Number(price).toLocaleString("en-US")}`;
+const formatPrice = (price) => `৳${Number(price).toLocaleString("en-US")}`;
 
 const initialFilters = {
   categories: [],
@@ -192,15 +185,38 @@ function FilterCheckbox({ label, checked, onChange, count }) {
 }
 
 export default function Shop() {
+  const location = useLocation();
+  const searchInputRef = useRef(null);
+
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("featured");
   const [filters, setFilters] = useState(initialFilters);
   const [favorites, setFavorites] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
-const productsPerPage = 12;
+  const [currentPage, setCurrentPage] = useState(1);
+  const productsPerPage = 12;
 
+  // Focus search input when coming from Navbar
+  useEffect(() => {
+    if (!location.state?.focusSearch) return;
 
+    const frame = requestAnimationFrame(() => {
+      if (searchInputRef.current) {
+        searchInputRef.current.focus({
+          preventScroll: true,
+        });
+
+        searchInputRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [location.key, location.state?.focusSearch]);
+
+  // Keep the rest of your Shop code unchanged
 
   const updateFilter = (key, value) => {
     setFilters((previous) => ({
@@ -258,8 +274,7 @@ const productsPerPage = 12;
         filters.giftTypes.includes(product.giftType);
 
       const matchesPrice =
-        product.price >= filters.minPrice &&
-        product.price <= filters.maxPrice;
+        product.price >= filters.minPrice && product.price <= filters.maxPrice;
 
       const matchesRating = product.rating >= filters.rating;
 
@@ -288,7 +303,7 @@ const productsPerPage = 12;
     setFavorites((previous) =>
       previous.includes(id)
         ? previous.filter((item) => item !== id)
-        : [...previous, id]
+        : [...previous, id],
     );
   };
 
@@ -336,8 +351,8 @@ const productsPerPage = 12;
                   "minPrice",
                   Math.max(
                     0,
-                    Math.min(Number(event.target.value) || 0, filters.maxPrice)
-                  )
+                    Math.min(Number(event.target.value) || 0, filters.maxPrice),
+                  ),
                 )
               }
               className="input input-bordered input-sm w-full rounded-lg"
@@ -353,10 +368,7 @@ const productsPerPage = 12;
               onChange={(event) =>
                 updateFilter(
                   "maxPrice",
-                  Math.max(
-                    filters.minPrice,
-                    Number(event.target.value) || 0
-                  )
+                  Math.max(filters.minPrice, Number(event.target.value) || 0),
                 )
               }
               className="input input-bordered input-sm w-full rounded-lg"
@@ -444,14 +456,12 @@ const productsPerPage = 12;
     </div>
   );
 
-  const totalPages = Math.ceil(
-  filteredProducts.length / productsPerPage
-);
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
 
-const paginatedProducts = filteredProducts.slice(
-  (currentPage - 1) * productsPerPage,
-  currentPage * productsPerPage
-);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * productsPerPage,
+    currentPage * productsPerPage,
+  );
 
   return (
     <main className="page-bg min-h-screen">
@@ -477,8 +487,8 @@ const paginatedProducts = filteredProducts.slice(
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-            প্রিয় মানুষের বিশেষ মুহূর্তকে আরও সুন্দর করে তুলুন আমাদের
-            বাছাই করা উপহারের সংগ্রহ দিয়ে।
+            প্রিয় মানুষের বিশেষ মুহূর্তকে আরও সুন্দর করে তুলুন আমাদের বাছাই করা
+            উপহারের সংগ্রহ দিয়ে।
           </p>
         </div>
 
@@ -486,7 +496,9 @@ const paginatedProducts = filteredProducts.slice(
         <div className="mb-5 flex flex-col gap-3 sm:flex-row">
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-base-300 bg-base-100 px-4 shadow-sm transition focus-within:border-secondary focus-within:ring-2 focus-within:ring-secondary/10">
             <Search size={19} className="shrink-0 text-secondary" />
+
             <input
+              ref={searchInputRef}
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -494,10 +506,14 @@ const paginatedProducts = filteredProducts.slice(
               aria-label="উপহার খুঁজুন"
               className="h-12 min-w-0 flex-1 bg-transparent text-sm text-primary outline-none placeholder:text-muted"
             />
+
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                  searchInputRef.current?.focus();
+                }}
                 aria-label="সার্চ মুছুন"
                 className="rounded-full p-1 text-muted hover:bg-base-200"
               >
@@ -541,9 +557,7 @@ const paginatedProducts = filteredProducts.slice(
                 </p>
 
                 {search && (
-                  <p className="mt-1 text-xs text-muted">
-                    “{search}” এর ফলাফল
-                  </p>
+                  <p className="mt-1 text-xs text-muted">“{search}” এর ফলাফল</p>
                 )}
               </div>
 
@@ -574,10 +588,7 @@ const paginatedProducts = filteredProducts.slice(
                   ...filters.occasions,
                   ...filters.giftTypes,
                 ].map((item) => (
-                  <span
-                    key={item}
-                    className="badge-soft gap-1.5 py-1.5"
-                  >
+                  <span key={item} className="badge-soft gap-1.5 py-1.5">
                     {item}
                     <button
                       type="button"
@@ -609,241 +620,243 @@ const paginatedProducts = filteredProducts.slice(
 
             {/* Product grid */}
             {filteredProducts.length > 0 ? (
-              
               <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+                  {filteredProducts.map((product) => (
+                    <article
+                      key={product.id}
+                      className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-base-300/80 bg-base-100 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
+                    >
+                      {/* Image */}
+                      <div className="relative aspect-square overflow-hidden bg-base-200">
+                        <Link
+                          to={`/shop/${product.id}`}
+                          aria-label={`${product.name} দেখুন`}
+                          className="block h-full w-full"
+                        >
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            onError={(event) => {
+                              event.currentTarget.style.visibility = "hidden";
+                            }}
+                          />
+                        </Link>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-                {filteredProducts.map((product) => (
-                  <article
-                    key={product.id}
-                    className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-base-300/80 bg-base-100 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
-                  >
-                    {/* Image */}
-                    <div className="relative aspect-square overflow-hidden bg-base-200">
-                      <Link
-                        to={`/shop/${product.id}`}
-                        aria-label={`${product.name} দেখুন`}
-                        className="block h-full w-full"
-                      >
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          loading="lazy"
-                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                          onError={(event) => {
-                            event.currentTarget.style.visibility = "hidden";
-                          }}
-                        />
-                      </Link>
+                        <div className="absolute left-2 top-2 flex max-w-[78%] flex-wrap gap-1">
+                          {product.badges.slice(0, 2).map((badge) => (
+                            <span
+                              key={badge.label}
+                              className={
+                                badge.type === "discount"
+                                  ? "badge-gold px-2 py-1 text-[9px] shadow-sm sm:text-[10px]"
+                                  : "badge-soft bg-secondary px-2 py-1 text-[9px] text-white shadow-sm sm:text-[10px]"
+                              }
+                            >
+                              {badge.label}
+                            </span>
+                          ))}
+                        </div>
 
-                      <div className="absolute left-2 top-2 flex max-w-[78%] flex-wrap gap-1">
-                        {product.badges.slice(0, 2).map((badge) => (
-                          <span
-                            key={badge.label}
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(product.id)}
+                          aria-label={
+                            favorites.includes(product.id)
+                              ? "পছন্দের তালিকা থেকে সরান"
+                              : "পছন্দের তালিকায় যোগ করুন"
+                          }
+                          aria-pressed={favorites.includes(product.id)}
+                          className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white/95 text-primary shadow-sm transition hover:scale-110"
+                        >
+                          <Heart
+                            size={16}
                             className={
-                              badge.type === "discount"
-                                ? "badge-gold px-2 py-1 text-[9px] shadow-sm sm:text-[10px]"
-                                : "badge-soft bg-secondary px-2 py-1 text-[9px] text-white shadow-sm sm:text-[10px]"
+                              favorites.includes(product.id)
+                                ? "fill-rose-500 text-rose-500"
+                                : ""
                             }
-                          >
-                            {badge.label}
-                          </span>
-                        ))}
+                          />
+                        </button>
                       </div>
+
+                      {/* Product info */}
+                      <div className="flex flex-1 flex-col p-3 sm:p-4">
+                        <div className="flex items-center gap-1 text-xs">
+                          <Star
+                            size={13}
+                            className="fill-amber-400 text-amber-500"
+                          />
+                          <span className="font-semibold text-primary">
+                            {product.rating.toFixed(1)}
+                          </span>
+                          <span className="truncate text-muted">
+                            ({product.reviews})
+                          </span>
+                        </div>
+
+                        <Link
+                          to={`/shop/${product.id}`}
+                          className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-primary transition hover:text-secondary sm:text-base"
+                        >
+                          {product.name}
+                        </Link>
+
+                        <p className="mt-1 line-clamp-2 text-xs text-muted">
+                          {product.description}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="text-base font-bold text-primary sm:text-lg">
+                            {formatPrice(product.price)}
+                          </span>
+                          {product.oldPrice > product.price && (
+                            <span className="text-xs text-muted line-through">
+                              {formatPrice(product.oldPrice)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-auto flex flex-col gap-2 pt-4">
+                          <Link
+                            to={`/shop/${product.id}`}
+                            className="btn-brand w-full rounded-xl px-2 py-2.5 text-xs sm:text-sm"
+                          >
+                            বিস্তারিত দেখুন
+                          </Link>
+
+                          {product.customizable && (
+                            <Link
+                              to={`/gift-box?product=${product.id}`}
+                              className="btn-outline-brand w-full rounded-xl px-2 py-2 text-xs sm:text-sm"
+                            >
+                              <Gift size={14} />
+                              কাস্টমাইজ করুন
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {filteredProducts.length > 0 && (
+                  <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-base-300/70 bg-base-100 px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted sm:text-sm">
+                      {(currentPage - 1) * productsPerPage + 1}–
+                      {Math.min(
+                        currentPage * productsPerPage,
+                        filteredProducts.length,
+                      )}{" "}
+                      টি পণ্য দেখানো হচ্ছে, মোট {filteredProducts.length} টি
+                    </p>
+
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((page) => page - 1)}
+                        aria-label="আগের পৃষ্ঠা"
+                        className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary transition hover:bg-secondary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        ‹
+                      </button>
+
+                      {Array.from(
+                        { length: totalPages },
+                        (_, index) => index + 1,
+                      )
+                        .filter(
+                          (page) =>
+                            page === 1 ||
+                            page === totalPages ||
+                            Math.abs(page - currentPage) <= 1,
+                        )
+                        .reduce((pages, page, index, array) => {
+                          if (index > 0 && page - array[index - 1] > 1) {
+                            pages.push("...");
+                          }
+                          pages.push(page);
+                          return pages;
+                        }, [])
+                        .map((page, index) =>
+                          page === "..." ? (
+                            <span
+                              key={`dots-${index}`}
+                              className="px-1 text-muted"
+                            >
+                              ...
+                            </span>
+                          ) : (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => setCurrentPage(page)}
+                              aria-current={
+                                currentPage === page ? "page" : undefined
+                              }
+                              className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition ${
+                                currentPage === page
+                                  ? "bg-secondary text-white shadow-sm"
+                                  : "bg-base-200 text-primary hover:bg-secondary/10"
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ),
+                        )}
 
                       <button
                         type="button"
-                        onClick={() => toggleFavorite(product.id)}
-                        aria-label={
-                          favorites.includes(product.id)
-                            ? "পছন্দের তালিকা থেকে সরান"
-                            : "পছন্দের তালিকায় যোগ করুন"
-                        }
-                        aria-pressed={favorites.includes(product.id)}
-                        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white/95 text-primary shadow-sm transition hover:scale-110"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage((page) => page + 1)}
+                        aria-label="পরের পৃষ্ঠা"
+                        className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary transition hover:bg-secondary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        <Heart
-                          size={16}
-                          className={
-                            favorites.includes(product.id)
-                              ? "fill-rose-500 text-rose-500"
-                              : ""
-                          }
-                        />
+                        ›
                       </button>
                     </div>
+                  </div>
+                )}
 
-                    {/* Product info */}
-                    <div className="flex flex-1 flex-col p-3 sm:p-4">
-                      <div className="flex items-center gap-1 text-xs">
-                        <Star
-                          size={13}
-                          className="fill-amber-400 text-amber-500"
-                        />
-                        <span className="font-semibold text-primary">
-                          {product.rating.toFixed(1)}
-                        </span>
-                        <span className="truncate text-muted">
-                          ({product.reviews})
-                        </span>
-                      </div>
-
-                      <Link
-                        to={`/shop/${product.id}`}
-                        className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-primary transition hover:text-secondary sm:text-base"
-                      >
-                        {product.name}
-                      </Link>
-
-                      <p className="mt-1 line-clamp-2 text-xs text-muted">
-                        {product.description}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="text-base font-bold text-primary sm:text-lg">
-                          {formatPrice(product.price)}
-                        </span>
-                        {product.oldPrice > product.price && (
-                          <span className="text-xs text-muted line-through">
-                            {formatPrice(product.oldPrice)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-auto flex flex-col gap-2 pt-4">
-                        <Link
-                          to={`/shop/${product.id}`}
-                          className="btn-brand w-full rounded-xl px-2 py-2.5 text-xs sm:text-sm"
-                        >
-                          বিস্তারিত দেখুন
-                        </Link>
-
-                        {product.customizable && (
-                          <Link
-                            to={`/gift-box?product=${product.id}`}
-                            className="btn-outline-brand w-full rounded-xl px-2 py-2 text-xs sm:text-sm"
-                          >
-                            <Gift size={14} />
-                            কাস্টমাইজ করুন
-                          </Link>
-                        )}
-                      </div>
+                {/* Custom Gift Banner */}
+                <section className="relative mt-7 overflow-hidden rounded-2xl bg-gradient-to-r from-[#310039] via-[#76258a] to-[#4b174d] p-5 text-white shadow-md sm:mt-8 sm:p-7">
+                  <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+                    {/* Icon */}
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-gold-soft">
+                      <Gift size={26} />
                     </div>
-                  </article>
-                ))}
-              </div>
-              
-              
-{/* Pagination */}
-{filteredProducts.length > 0 && (
-  <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-base-300/70 bg-base-100 px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-    <p className="text-xs text-muted sm:text-sm">
-      {((currentPage - 1) * productsPerPage) + 1}–
-      {Math.min(currentPage * productsPerPage, filteredProducts.length)} টি
-      পণ্য দেখানো হচ্ছে, মোট {filteredProducts.length} টি
-    </p>
 
-    <div className="flex items-center justify-center gap-1.5">
-      <button
-        type="button"
-        disabled={currentPage === 1}
-        onClick={() => setCurrentPage((page) => page - 1)}
-        aria-label="আগের পৃষ্ঠা"
-        className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary transition hover:bg-secondary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        ‹
-      </button>
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gold-soft">
+                        <Sparkles size={13} />
+                        বড় কিছু গিফট করার
+                      </span>
 
-      {Array.from({ length: totalPages }, (_, index) => index + 1)
-        .filter(
-          (page) =>
-            page === 1 ||
-            page === totalPages ||
-            Math.abs(page - currentPage) <= 1
-        )
-        .reduce((pages, page, index, array) => {
-          if (index > 0 && page - array[index - 1] > 1) {
-            pages.push("...");
-          }
-          pages.push(page);
-          return pages;
-        }, [])
-        .map((page, index) =>
-          page === "..." ? (
-            <span
-              key={`dots-${index}`}
-              className="px-1 text-muted"
-            >
-              ...
-            </span>
-          ) : (
-            <button
-              key={page}
-              type="button"
-              onClick={() => setCurrentPage(page)}
-              aria-current={currentPage === page ? "page" : undefined}
-              className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition ${
-                currentPage === page
-                  ? "bg-secondary text-white shadow-sm"
-                  : "bg-base-200 text-primary hover:bg-secondary/10"
-              }`}
-            >
-              {page}
-            </button>
-          )
-        )}
+                      <h2 className="mt-1 text-lg font-extrabold leading-snug sm:text-xl">
+                        আপনার নিজস্ব কোনো বিশেষ ভাবনা বা পরিকল্পনা আছে?
+                      </h2>
 
-      <button
-        type="button"
-        disabled={currentPage === totalPages}
-        onClick={() => setCurrentPage((page) => page + 1)}
-        aria-label="পরের পৃষ্ঠা"
-        className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary transition hover:bg-secondary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        ›
-      </button>
-    </div>
-  </div>
-)}
+                      <p className="mt-2 max-w-2xl text-xs leading-5 text-white/80 sm:text-sm">
+                        নিজের পছন্দমতো রং নির্বাচন করুন, প্রিয় উপহারগুলো যোগ
+                        করুন এবং ভালোবাসায় সাজিয়ে প্রিয় মানুষকে উপহার দিন।
+                      </p>
+                    </div>
 
-
-{/* Custom Gift Banner */}
-<section className="relative mt-7 overflow-hidden rounded-2xl bg-gradient-to-r from-[#310039] via-[#76258a] to-[#4b174d] p-5 text-white shadow-md sm:mt-8 sm:p-7">
-  <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-    {/* Icon */}
-    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-gold-soft">
-      <Gift size={26} />
-    </div>
-
-    {/* Content */}
-    <div className="min-w-0 flex-1">
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gold-soft">
-        <Sparkles size={13} />
-        বড় কিছু গিফট করার
-      </span>
-
-      <h2 className="mt-1 text-lg font-extrabold leading-snug sm:text-xl">
-        আপনার নিজস্ব কোনো বিশেষ ভাবনা বা পরিকল্পনা আছে?
-      </h2>
-
-      <p className="mt-2 max-w-2xl text-xs leading-5 text-white/80 sm:text-sm">
-        নিজের পছন্দমতো রং নির্বাচন করুন, প্রিয় উপহারগুলো যোগ করুন
-        এবং ভালোবাসায় সাজিয়ে প্রিয় মানুষকে উপহার দিন।
-      </p>
-    </div>
-
-    {/* CTA */}
-    <Link
-      to="/gift-box"
-      className="btn-gold w-full shrink-0 rounded-full px-5 py-3 text-sm sm:w-auto"
-    >
-      গিফট বক্স ডিজাইন -এ যান
-      <ArrowRight size={16} />
-    </Link>
-  </div>
-</section>
-
-
+                    {/* CTA */}
+                    <Link
+                      to="/gift-box"
+                      className="btn-gold w-full shrink-0 rounded-full px-5 py-3 text-sm sm:w-auto"
+                    >
+                      গিফট বক্স ডিজাইন -এ যান
+                      <ArrowRight size={16} />
+                    </Link>
+                  </div>
+                </section>
               </>
             ) : (
               <div className="section-card flex min-h-64 flex-col items-center justify-center px-5 py-12 text-center">
@@ -869,8 +882,6 @@ const paginatedProducts = filteredProducts.slice(
           </section>
         </div>
       </div>
-
-      
 
       {/* Mobile filter drawer */}
       {filterOpen && (

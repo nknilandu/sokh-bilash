@@ -16,19 +16,25 @@ import OrderRejectedPage from "./pages/OrderRejectedPage";
 import OrderTrackingPage from "./pages/OrderTrackingPage";
 import WishlistPage from "./pages/WishlistPage";
 import GiftCategoriesPage from "./pages/GiftCategoriesPage";
+
 import ErrorApp from "./pages/error/ErrorApp";
 import ErrorPage from "./pages/error/ErrorPage";
+
+import AdminLayout from "./layouts/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminOrdersPage from "./pages/admin/AdminOrdersPage";
 import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
 import PaymentVerificationPage from "./pages/admin/PaymentVerificationPage";
 import AdminProductsPage from "./pages/admin/AdminProductsPage";
 import AdminProductFormPage from "./pages/admin/AdminProductFormPage";
-import Login from "./pages/auth/Login";
+
+import AuthProvider from "../providers/AuthProvider";
 import AuthLayout from "./layouts/AuthLayout";
+import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
-import AdminLayout from "./layouts/AdminLayout";
+
+import { ToastContainer } from "react-toastify";
 
 const router = createBrowserRouter([
   {
@@ -136,6 +142,9 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <RouterProvider router={router} />
+      <ToastContainer position="top-right" autoClose={2500} />
+    </AuthProvider>
   </StrictMode>,
 );

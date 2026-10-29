@@ -5,12 +5,10 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
-  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
-  reload,
 } from "firebase/auth";
 
 export const AuthContext = createContext();
@@ -52,38 +50,6 @@ const AuthProvider = ({ children }) => {
     setUser(auth.currentUser);
   };
 
-  // Send email verification
-  const sendVerificationEmail = async () => {
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-      throw new Error("No authenticated user found");
-    }
-
-    if (currentUser.emailVerified) {
-      return;
-    }
-
-    return sendEmailVerification(currentUser);
-  };
-
-  // Check latest email verification status
-  const checkEmailVerification = async () => {
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-      throw new Error("No authenticated user found");
-    }
-
-    await reload(currentUser);
-
-    const verified = currentUser.emailVerified;
-
-    setEmailVerified(verified);
-
-    return verified;
-  };
-
   // Firebase auth observer
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -106,9 +72,6 @@ const AuthProvider = ({ children }) => {
     forgotPassword,
     logOut,
     updateUserProfile,
-
-    sendVerificationEmail,
-    checkEmailVerification,
   };
 
   return (

@@ -1,17 +1,65 @@
+import { useContext, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+} from "firebase/auth";
+
 import {
   ArrowRight,
   Eye,
   EyeOff,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   Sparkles,
-  ShieldCheck,
 } from "lucide-react";
 
+import { AuthContext } from "../../../providers/AuthProvider";
+import { app } from "../../../firebase/firebase.config";
+import Swal from "sweetalert2";
+
+const firebaseAuth = getAuth(app);
+
+// ================= Firebase Errors =================
+
+const getFirebaseError = (error) => {
+  switch (error.code) {
+    case "auth/invalid-email":
+      return "সঠিক ইমেইল অ্যাড্রেস লিখুন।";
+
+    case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।";
+
+    case "auth/user-disabled":
+      return "এই অ্যাকাউন্টটি বন্ধ করা হয়েছে।";
+
+    case "auth/too-many-requests":
+      return "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ পরে চেষ্টা করুন।";
+
+    case "auth/network-request-failed":
+      return "ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।";
+
+    case "auth/operation-not-allowed":
+      return "Email/Password Login চালু নেই।";
+
+    default:
+      return "লগইন করা যায়নি। আবার চেষ্টা করুন।";
+  }
+};
+
+// ================= Login Page =================
+
 const Login = () => {
+  const navigate = useNavigate();
+  const authContext = useContext(AuthContext);
+
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -19,9 +67,14 @@ const Login = () => {
   });
 
   const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
+  const [touched, setTouched] = useState({});
+  const [formError, setFormError] = useState("");
 
-  // Field validation
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // ================= Validation =================
+
   const validateField = (name, value) => {
     if (name === "email") {
       if (!value.trim()) {
@@ -42,7 +95,8 @@ const Login = () => {
     return "";
   };
 
-  // Input change
+  // ================= Input Change =================
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
@@ -53,19 +107,26 @@ const Login = () => {
       [name]: newValue,
     }));
 
+    setFormError("");
+
     if (name !== "rememberMe") {
       setErrors((prev) => ({
         ...prev,
-        [name]: prev[name]
-          ? validateField(name, newValue)
-          : "",
+        [name]:
+          touched[name] || prev[name] ? validateField(name, newValue) : "",
       }));
     }
   };
 
-  // Input blur
+  // ================= Input Blur =================
+
   const handleBlur = (e) => {
     const { name, value } = e.target;
+
+    setTouched((prev) => ({
+      ...prev,
+      [name]: true,
+    }));
 
     setErrors((prev) => ({
       ...prev,
@@ -73,12 +134,16 @@ const Login = () => {
     }));
   };
 
-  // Submit form
-  const handleSubmit = (e) => {
+  // ================= Login Handler =================
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log("Login button clicked");
+    if (submitting || !authContext?.loginUser) return;
 
+    setFormError("");
+
+    // Step 1: Validate fields
     const newErrors = {
       email: validateField("email", form.email),
       password: validateField("password", form.password),
@@ -86,21 +151,60 @@ const Login = () => {
 
     setErrors(newErrors);
 
+    setTouched({
+      email: true,
+      password: true,
+    });
+
     if (Object.values(newErrors).some(Boolean)) {
       return;
     }
 
-    console.log("Login form submitted:", {
-      email: form.email.trim(),
-      rememberMe: form.rememberMe,
-    });
+    setSubmitting(true);
 
-    // TODO: Firebase Authentication
-    // Never log the password.
-    // Redirect after checking verified user role.
+    try {
+      // Step 2: Set login persistence
+      await setPersistence(
+        firebaseAuth,
+        form.rememberMe ? browserLocalPersistence : browserSessionPersistence,
+      );
+
+      // Step 3: Firebase login
+      await authContext.loginUser(form.email.trim(), form.password);
+
+      // Step 4: Show success message
+      Swal.fire({
+        title: "সফলভাবে লগইন হয়েছে!",
+        icon: "success",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true,
+      });
+
+      // Step 5: Redirect to homepage
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Login Error:", error.code || error.message);
+
+      const message = getFirebaseError(error);
+
+      if (error.code === "auth/invalid-email") {
+        setErrors((prev) => ({
+          ...prev,
+          email: message,
+        }));
+      } else {
+        setFormError(message);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // Shared input style
+  // ================= Input Style =================
+
   const inputClass = (field) => `
     w-full rounded-lg border px-4 py-3
     bg-secondary/5 text-sm text-primary
@@ -108,15 +212,28 @@ const Login = () => {
     placeholder:text-muted/60
     ${
       errors[field]
-        ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/10"
+        ? "border-red-400 focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-500/10"
         : "border-transparent hover:border-secondary/20 focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10"
     }
+    disabled:cursor-not-allowed disabled:opacity-60
   `;
 
-  return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="rounded-2xl border border-base-300/50 bg-white p-5 shadow-[0_10px_40px_rgba(49,0,57,0.08)] sm:p-7">
+  // ================= Auth Context Check =================
 
+  if (!authContext?.loginUser) {
+    return (
+      <div className="mx-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+        AuthProvider পাওয়া যায়নি। main.jsx-এ AuthProvider দিয়ে RouterProvider
+        wrap করুন।
+      </div>
+    );
+  }
+
+  // ================= UI =================
+
+  return (
+    <div className="mx-auto w-full max-w-md">
+      <div className="rounded-2xl border border-base-300/50 bg-white p-5 shadow-[0_10px_40px_rgba(49,0,57,0.08)] sm:p-7">
         {/* Header */}
         <div className="mb-6">
           <div className="mb-2 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-secondary">
@@ -129,16 +246,12 @@ const Login = () => {
           </h1>
 
           <p className="mt-1.5 text-xs leading-5 text-muted sm:text-sm">
-            শখবিলাসের সাথে যুক্ত হয়ে আপনার প্রিয় উপহারের
-            অভিজ্ঞতা আরও সহজ করুন।
+            শখবিলাসের সাথে যুক্ত হয়ে আপনার প্রিয় উপহারের অভিজ্ঞতা আরও সহজ করুন।
           </p>
         </div>
 
-        
-
         {/* Login Form */}
-        <form onSubmit={handleSubmit} noValidate className="space-y-4 mt-10">
-
+        <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4">
           {/* Email */}
           <div>
             <label
@@ -168,6 +281,7 @@ const Login = () => {
                 aria-describedby={
                   errors.email ? "login-email-error" : undefined
                 }
+                disabled={submitting}
                 className={`${inputClass("email")} pl-10`}
               />
             </div>
@@ -197,9 +311,6 @@ const Login = () => {
               <Link
                 to="/forgot-password"
                 className="text-[11px] font-semibold text-secondary transition hover:text-primary hover:underline"
-                onClick={() =>
-                  console.log("Forgot password clicked")
-                }
               >
                 পাসওয়ার্ড ভুলে গেছেন?
               </Link>
@@ -222,32 +333,22 @@ const Login = () => {
                 autoComplete="current-password"
                 aria-invalid={!!errors.password}
                 aria-describedby={
-                  errors.password
-                    ? "login-password-error"
-                    : undefined
+                  errors.password ? "login-password-error" : undefined
                 }
+                disabled={submitting}
                 className={`${inputClass("password")} pl-10 pr-11`}
               />
 
               <button
                 type="button"
                 aria-label={
-                  showPassword
-                    ? "পাসওয়ার্ড লুকান"
-                    : "পাসওয়ার্ড দেখুন"
+                  showPassword ? "পাসওয়ার্ড লুকান" : "পাসওয়ার্ড দেখুন"
                 }
                 aria-pressed={showPassword}
-                onClick={() => {
-                  console.log("Password visibility clicked");
-                  setShowPassword((prev) => !prev);
-                }}
+                onClick={() => setShowPassword((prev) => !prev)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted transition hover:text-secondary focus-visible:outline-2 focus-visible:outline-secondary"
               >
-                {showPassword ? (
-                  <EyeOff size={17} />
-                ) : (
-                  <Eye size={17} />
-                )}
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </div>
 
@@ -262,13 +363,53 @@ const Login = () => {
             )}
           </div>
 
+          {/* Remember Me */}
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              id="login-remember"
+              type="checkbox"
+              name="rememberMe"
+              checked={form.rememberMe}
+              onChange={handleChange}
+              disabled={submitting}
+              className="checkbox checkbox-secondary checkbox-xs rounded-sm"
+            />
+
+            <label
+              htmlFor="login-remember"
+              className="cursor-pointer text-xs text-muted"
+            >
+              আমাকে মনে রাখুন (Remember Me)
+            </label>
+          </div>
+
+          {/* General Login Error */}
+          {formError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700"
+            >
+              {formError}
+            </div>
+          )}
+
           {/* Login Button */}
           <button
             type="submit"
-            className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-secondary px-5 py-3 text-sm font-bold text-white shadow-[0_4px_12px_rgba(118,37,138,0.18)] transition-all duration-200 hover:bg-primary hover:shadow-lg active:scale-[0.99] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/20"
+            disabled={submitting}
+            className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-secondary px-5 py-3 text-sm font-bold text-white shadow-[0_4px_12px_rgba(118,37,138,0.18)] transition-all duration-200 hover:bg-primary hover:shadow-lg active:scale-[0.99] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            লগইন করুন (Log In)
-            <ArrowRight size={17} />
+            {submitting ? (
+              <>
+                <LoaderCircle size={17} className="animate-spin" />
+                লগইন হচ্ছে...
+              </>
+            ) : (
+              <>
+                লগইন করুন (Log In)
+                <ArrowRight size={17} />
+              </>
+            )}
           </button>
         </form>
 
@@ -280,7 +421,6 @@ const Login = () => {
           নতুন অ্যাকাউন্ট তৈরি করতে চান?{" "}
           <Link
             to="/register"
-            onClick={() => console.log("Register link clicked")}
             className="font-bold text-secondary transition hover:text-primary hover:underline"
           >
             সাইন আপ করুন (Sign Up)
@@ -288,7 +428,7 @@ const Login = () => {
           </Link>
         </p>
 
-        {/* Guest Checkout */}
+        {/* Guest Shopping */}
         <p className="mt-4 text-center text-[11px] text-muted">
           অ্যাকাউন্ট ছাড়াও কেনাকাটা করতে পারবেন।{" "}
           <Link
