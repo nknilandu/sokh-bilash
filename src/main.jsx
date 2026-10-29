@@ -27,14 +27,16 @@ import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
 import PaymentVerificationPage from "./pages/admin/PaymentVerificationPage";
 import AdminProductsPage from "./pages/admin/AdminProductsPage";
 import AdminProductFormPage from "./pages/admin/AdminProductFormPage";
+import AdminProtectedRoute from "./routes/AdminProtectedRoute";
 
-import AuthProvider from "../providers/AuthProvider";
+import AuthProvider from "./providers/AuthProvider";
 import AuthLayout from "./layouts/AuthLayout";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 
 import { ToastContainer } from "react-toastify";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const router = createBrowserRouter([
   {
@@ -109,13 +111,24 @@ const router = createBrowserRouter([
       { path: "forgot-password", element: <ForgotPassword /> },
     ],
   },
+
   {
     path: "/admin",
-    element: <AdminLayout />,
-    // Add your existing admin authentication/authorization guard.
+    errorElement: <ErrorApp />,
+    element: (
+      <AdminProtectedRoute>
+        <AdminLayout />
+      </AdminProtectedRoute>
+    ),
     children: [
-      { index: true, element: <AdminDashboard /> },
-      { path: "orders", element: <AdminOrdersPage /> },
+      {
+        index: true,
+        element: <AdminDashboard />,
+      },
+      {
+        path: "orders",
+        element: <AdminOrdersPage />,
+      },
       {
         path: "orders/:orderId",
         element: <AdminOrderDetailsPage />,
@@ -136,15 +149,23 @@ const router = createBrowserRouter([
         path: "products/edit/:productId",
         element: <AdminProductFormPage />,
       },
+      {
+        path: "*",
+        element: <ErrorPage />,
+      },
     ],
   },
 ]);
+// Create a client
+const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-      <ToastContainer position="top-right" autoClose={2500} />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RouterProvider router={router} />
+        <ToastContainer position="top-right" autoClose={2500} />
+      </AuthProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );

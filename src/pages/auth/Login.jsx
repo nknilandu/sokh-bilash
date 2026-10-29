@@ -18,7 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { AuthContext } from "../../../providers/AuthProvider";
+import { AuthContext } from "../../providers/AuthProvider";
 import { app } from "../../../firebase/firebase.config";
 import Swal from "sweetalert2";
 

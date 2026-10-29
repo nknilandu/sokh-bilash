@@ -13,33 +13,46 @@ import {
   Gift,
   LayoutGrid,
   PackagePlus,
+  LayoutDashboard,
+  CreditCard,
+  ClipboardList,
+  Package,
 } from "lucide-react";
 
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Swal from "sweetalert2";
-
-import { AuthContext } from "../../../providers/AuthProvider";
+import { AuthContext } from "../../providers/AuthProvider";
 import logo from "../../assets/sokhbilash-nav-logo.png";
 
-// ================= Navigation =================
+// ================= Customer Navigation =================
 
-const mainNavLinks = [
+const customerNavLinks = [
   { name: "হোম", path: "/", icon: House },
   { name: "সব উপহার", path: "/shop", icon: Gift },
   { name: "ক্যাটাগরি", path: "/categories", icon: LayoutGrid },
   { name: "কাস্টম গিফট", path: "/gift-box", icon: PackagePlus },
 ];
 
-const desktopNavLinks = [
-  ...mainNavLinks,
+const customerDesktopLinks = [
+  ...customerNavLinks,
   { name: "কার্ট", path: "/cart", icon: ShoppingBag },
 ];
 
-const mobileNavLinks = [
-  ...mainNavLinks,
+const customerMobileLinks = [
+  ...customerNavLinks,
   { name: "উইশলিস্ট", path: "/wishlist", icon: Heart },
   { name: "আমার কার্ট", path: "/cart", icon: ShoppingBag },
+];
+
+// ================= Admin Navigation =================
+
+const adminNavLinks = [
+  { name: "হোম", path: "/", icon: House },
+  { name: "ড্যাশবোর্ড", path: "/admin", icon: LayoutDashboard },
+  { name: "প্রোডাক্ট", path: "/admin/products", icon: Package },
+  { name: "পেমেন্ট", path: "/admin/payments", icon: CreditCard },
+  { name: "অর্ডার", path: "/admin/orders", icon: ClipboardList },
 ];
 
 // ================= User Avatar =================
@@ -77,13 +90,24 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user, loading, logOut } = useContext(AuthContext);
+  const { user, loading, role, roleLoading, accountStatus, logOut } =
+    useContext(AuthContext);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const profileRef = useRef(null);
+
+  // ================= Role Based Navigation =================
+
+  const isAdmin = role === "admin" && accountStatus === "active";
+
+  const navigationLoading = loading || (user && roleLoading);
+
+  const desktopNavLinks = isAdmin ? adminNavLinks : customerDesktopLinks;
+
+  const mobileNavLinks = isAdmin ? adminNavLinks : customerMobileLinks;
 
   const displayName =
     user?.displayName || user?.email?.split("@")[0] || "ব্যবহারকারী";
@@ -93,13 +117,13 @@ const Navbar = () => {
     setIsProfileOpen(false);
   };
 
-  // Close menus on route change
+  // Close menus when route changes
   useEffect(() => {
     setIsDrawerOpen(false);
     setIsProfileOpen(false);
   }, [location.pathname, location.search]);
 
-  // Close profile popup on outside click
+  // Close popup when clicking outside
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -122,15 +146,15 @@ const Navbar = () => {
     };
   }, []);
 
-  // Prevent background scrolling when drawer is open
+  // Disable background scroll when drawer opens
   useEffect(() => {
     if (!isDrawerOpen) return;
 
-    const previousOverflow = document.body.style.overflow;
+    const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previous;
     };
   }, [isDrawerOpen]);
 
@@ -140,9 +164,7 @@ const Navbar = () => {
     closeAll();
 
     navigate("/shop", {
-      state: {
-        focusSearch: true,
-      },
+      state: { focusSearch: true },
     });
   };
 
@@ -153,15 +175,13 @@ const Navbar = () => {
 
     const result = await Swal.fire({
       title: "লগআউট করতে চান?",
-      text: "আপনি কি নিশ্চিত যে অ্যাকাউন্ট থেকে লগআউট করতে চান?",
+      text: "আপনি কি নিশ্চিত?",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "হ্যাঁ, লগআউট",
       cancelButtonText: "বাতিল",
       confirmButtonColor: "#DC2626",
       cancelButtonColor: "#76258A",
-      reverseButtons: true,
-      focusCancel: true,
     });
 
     if (!result.isConfirmed) return;
@@ -187,10 +207,13 @@ const Navbar = () => {
       console.error("Logout Error:", error);
 
       Swal.fire({
-        title: "লগআউট করা যায়নি",
-        text: "আবার চেষ্টা করুন।",
+        title: "লগআউট করা যায়নি!",
         icon: "error",
-        confirmButtonColor: "#76258A",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true,
       });
     } finally {
       setLoggingOut(false);
@@ -203,8 +226,7 @@ const Navbar = () => {
     <header className="sticky top-0 z-50 border-b border-white/10 bg-primary text-primary-content shadow-lg">
       <div className="page-container">
         <div className="flex min-h-[76px] items-center justify-between gap-3">
-          {/* ================= Brand Logo ================= */}
-
+          {/* Logo */}
           <Link
             to="/"
             onClick={closeAll}
@@ -218,32 +240,30 @@ const Navbar = () => {
             />
           </Link>
 
-          {/* ================= Desktop Navigation ================= */}
-
+          {/* Desktop Navigation */}
           <nav className="hidden items-center gap-4 lg:flex xl:gap-7">
-            {desktopNavLinks.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === "/"}
-                className={({ isActive }) =>
-                  `flex items-center gap-1.5 whitespace-nowrap text-sm font-medium transition-colors ${
-                    isActive
-                      ? "text-gold-soft"
-                      : "text-white/80 hover:text-gold-soft"
-                  }`
-                }
-              >
-                {item.name}
-              </NavLink>
-            ))}
+            {!navigationLoading &&
+              desktopNavLinks.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.path === "/"}
+                  className={({ isActive }) =>
+                    `whitespace-nowrap text-sm font-medium transition-colors ${
+                      isActive
+                        ? "text-gold-soft"
+                        : "text-white/80 hover:text-gold-soft"
+                    }`
+                  }
+                >
+                  {item.name}
+                </NavLink>
+              ))}
           </nav>
 
-          {/* ================= Right Actions ================= */}
-
+          {/* Right Actions */}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {/* Search - Always Visible */}
-
             <button
               type="button"
               onClick={handleSearchClick}
@@ -254,27 +274,25 @@ const Navbar = () => {
               <Search size={21} />
             </button>
 
-            {/* Wishlist - Beside Search */}
+            {/* Wishlist - Customer Desktop Only */}
+            {!isAdmin && !navigationLoading && (
+              <Link
+                to="/wishlist"
+                onClick={closeAll}
+                aria-label="Wishlist"
+                title="আমার উইশলিস্ট"
+                className="hidden size-10 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-gold-soft lg:flex"
+              >
+                <Heart size={21} />
+              </Link>
+            )}
 
-            <Link
-              to="/wishlist"
-              onClick={closeAll}
-              aria-label="Wishlist"
-              title="আমার উইশলিস্ট"
-              className="hidden lg:flex size-10 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-gold-soft"
-            >
-              <Heart size={21} />
-            </Link>
-
-            {/* ================= Desktop Profile ================= */}
-
+            {/* Desktop Profile */}
             <div ref={profileRef} className="relative hidden lg:block">
               {loading ? (
                 <div className="size-10 animate-pulse rounded-full bg-white/15" />
               ) : user ? (
                 <>
-                  {/* Profile Avatar Button */}
-
                   <button
                     type="button"
                     onClick={() => setIsProfileOpen((prev) => !prev)}
@@ -285,12 +303,9 @@ const Navbar = () => {
                     <UserAvatar user={user} size="size-9" />
                   </button>
 
-                  {/* ================= Profile Popup ================= */}
-
+                  {/* Profile Popup */}
                   {isProfileOpen && (
-                    <div className="absolute right-0 top-full z-50 mt-3 w-72 rounded-2xl border border-base-300 bg-white p-4 text-primary shadow-[0_16px_50px_rgba(0,0,0,0.18)]">
-                      {/* User Information */}
-
+                    <div className="absolute right-0 top-full z-50 mt-3 w-72 rounded-2xl border border-base-300 bg-white p-4 text-primary shadow-xl">
                       <div className="flex items-center gap-3">
                         <UserAvatar user={user} size="size-13" />
 
@@ -302,14 +317,17 @@ const Navbar = () => {
                           <p className="mt-1 truncate text-xs text-muted">
                             {user.email}
                           </p>
+
+                          {isAdmin && (
+                            <span className="mt-1 inline-block rounded-full bg-secondary/10 px-2 py-0.5 text-[10px] font-semibold text-secondary">
+                              Admin
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Actions */}
-
                       <div className="mt-4 grid grid-cols-2 gap-2">
-                        {/* Profile Button */}
-
+                        {/* Profile */}
                         <Link
                           to="/profile"
                           onClick={closeAll}
@@ -319,8 +337,7 @@ const Navbar = () => {
                           প্রোফাইল
                         </Link>
 
-                        {/* Logout - Red */}
-
+                        {/* Logout */}
                         <button
                           type="button"
                           onClick={handleLogout}
@@ -339,7 +356,6 @@ const Navbar = () => {
                   )}
                 </>
               ) : (
-                // Guest Login
                 <Link
                   to="/login"
                   className="inline-flex items-center gap-2 rounded-full bg-gold-soft px-4 py-2 text-sm font-semibold text-primary transition hover:brightness-95"
@@ -350,8 +366,7 @@ const Navbar = () => {
               )}
             </div>
 
-            {/* ================= Mobile Menu Button ================= */}
-
+            {/* Mobile Menu */}
             <button
               type="button"
               onClick={() => {
@@ -374,15 +389,12 @@ const Navbar = () => {
       {isDrawerOpen && (
         <div id="mobile-drawer" className="fixed inset-0 z-[100] lg:hidden">
           {/* Backdrop */}
-
           <button
             type="button"
             onClick={closeAll}
             aria-label="Close menu"
             className="absolute inset-0 h-full w-full bg-black/60"
           />
-
-          {/* Drawer Content */}
 
           <aside
             role="dialog"
@@ -391,35 +403,29 @@ const Navbar = () => {
             className="absolute inset-y-0 right-0 flex h-full w-[85%] max-w-sm flex-col bg-white text-primary shadow-2xl"
           >
             {/* Drawer Header */}
-
             <div className="flex items-center justify-between border-b border-base-300 px-5 py-4">
               <img
                 src={logo}
-                alt="logo"
-                className="h-9 w-fit object-cover scale-130"
+                alt="SokhBilash"
+                className="h-9 w-auto object-contain"
               />
 
               <button
                 type="button"
                 onClick={closeAll}
                 aria-label="Close navigation"
-                className="flex size-9 items-center justify-center rounded-lg bg-base-200 text-primary transition hover:bg-base-300"
+                className="flex size-9 items-center justify-center rounded-lg bg-base-200 text-primary"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Scrollable Drawer Body */}
-
             <div className="flex-1 overflow-y-auto px-4 py-5">
-              {/* ================= Profile Card ================= */}
-
+              {/* Profile Card */}
               {loading ? (
                 <div className="h-28 animate-pulse rounded-xl bg-base-200" />
               ) : user ? (
                 <div className="rounded-xl border border-secondary/10 bg-secondary/5 p-3.5">
-                  {/* User Details */}
-
                   <div className="flex items-center gap-3">
                     <UserAvatar user={user} size="size-13" />
 
@@ -431,16 +437,21 @@ const Navbar = () => {
                       <p className="mt-1 truncate text-xs text-muted">
                         {user.email}
                       </p>
+
+                      {isAdmin && (
+                        <span className="mt-1 text-[10px] font-semibold text-secondary">
+                          Admin Account
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Profile + Logout */}
-
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <Link
                       to="/profile"
                       onClick={closeAll}
-                      className="flex items-center justify-center gap-1.5 rounded-lg border border-secondary/20 bg-white px-3 py-2.5 text-xs font-semibold text-secondary transition hover:bg-secondary/10"
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-secondary/20 bg-white px-3 py-2.5 text-xs font-semibold text-secondary"
                     >
                       <UserRound size={15} />
                       প্রোফাইল
@@ -471,7 +482,6 @@ const Navbar = () => {
 
                     <div>
                       <p className="text-sm font-bold text-primary">স্বাগতম!</p>
-
                       <p className="mt-1 text-xs text-muted">
                         আপনার অ্যাকাউন্টে লগইন করুন
                       </p>
@@ -481,7 +491,7 @@ const Navbar = () => {
                   <Link
                     to="/login"
                     onClick={closeAll}
-                    className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-3 text-xs font-semibold text-white transition hover:bg-primary"
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-3 text-xs font-semibold text-white"
                   >
                     <LogIn size={16} />
                     লগইন করুন
@@ -489,36 +499,45 @@ const Navbar = () => {
                 </div>
               )}
 
-              {/* ================= Drawer Navigation ================= */}
-
+              {/* Role Based Drawer Links */}
               <nav className="mt-5 space-y-1">
-                {mobileNavLinks.map((item) => {
-                  const Icon = item.icon;
+                {navigationLoading ? (
+                  <div className="space-y-3 py-4">
+                    {[1, 2, 3].map((item) => (
+                      <div
+                        key={item}
+                        className="h-10 animate-pulse rounded-lg bg-base-200"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  mobileNavLinks.map((item) => {
+                    const Icon = item.icon;
 
-                  return (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      end={item.path === "/"}
-                      onClick={closeAll}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-                          isActive
-                            ? "bg-secondary/10 text-secondary"
-                            : "text-primary/80 hover:bg-base-200 hover:text-secondary"
-                        }`
-                      }
-                    >
-                      <Icon size={19} />
-                      {item.name}
-                    </NavLink>
-                  );
-                })}
+                    return (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        end={item.path === "/"}
+                        onClick={closeAll}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
+                            isActive
+                              ? "bg-secondary/10 text-secondary"
+                              : "text-primary/80 hover:bg-base-200 hover:text-secondary"
+                          }`
+                        }
+                      >
+                        <Icon size={19} />
+                        {item.name}
+                      </NavLink>
+                    );
+                  })
+                )}
               </nav>
             </div>
 
             {/* Drawer Footer */}
-
             <div className="border-t border-base-300 px-5 py-4 text-center">
               <p className="text-[11px] text-muted">
                 © {new Date().getFullYear()} SokhBilash

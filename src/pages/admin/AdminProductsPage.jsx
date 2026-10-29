@@ -1,5 +1,8 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import Swal from "sweetalert2";
+
 import {
   Plus,
   Search,
@@ -9,1021 +12,593 @@ import {
   Star,
   Pencil,
   Trash2,
-  Eye,
-  X,
-  Save,
-  ImagePlus,
+  RefreshCw,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  RefreshCw,
-  AlertTriangle,
-  Tag,
-  Gift,
+  LoaderCircle,
   ImageOff,
-  Check,
   Layers3,
+  ShieldCheck,
+  ArrowUpDown,
 } from "lucide-react";
+import { AuthContext } from "../../providers/AuthProvider";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-// ========================================
-// DEMO DATA
-// Replace with API responses
-// ========================================
 
-const demoCategories = [
-  { _id: "cat1", name: "ফটো ফ্রেম ও স্মৃতির উপহার", slug: "photo-frames" },
-  { _id: "cat2", name: "নিকাহনামা ও বিবাহের উপহার", slug: "nikah-wedding" },
-  { _id: "cat3", name: "কাস্টমাইজড উপহার", slug: "personalized-gifts" },
-  { _id: "cat4", name: "কম্বো গিফট", slug: "combo-gifts" },
-  { _id: "cat5", name: "ফুল ও বুকে", slug: "flowers-bouquets" },
-  { _id: "cat6", name: "চকলেট ও গিফট বক্স", slug: "chocolate-gift-boxes" },
-  { _id: "cat7", name: "বার্থডে ও সারপ্রাইজ", slug: "birthday-surprise" },
-  { _id: "cat8", name: "ইসলামিক উপহার", slug: "islamic-gifts" },
-  { _id: "cat9", name: "রোমান্টিক ও কাপল গিফট", slug: "romantic-couple" },
-  { _id: "cat10", name: "লাক্সারি গিফট হ্যাম্পার", slug: "luxury-hampers" },
-];
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/$/, "");
 
-const demoOccasions = [
-  { _id: "occ1", name: "জন্মদিন", slug: "birthday" },
-  { _id: "occ2", name: "বিবাহবার্ষিকী", slug: "anniversary" },
-  { _id: "occ3", name: "বিয়ে ও নিকাহ", slug: "wedding-nikah" },
-  { _id: "occ4", name: "ভালোবাসা ও রোমান্স", slug: "love-romance" },
-  { _id: "occ5", name: "ইসলামিক উপলক্ষ", slug: "islamic" },
-  { _id: "occ6", name: "বাবা-মা দিবস", slug: "parents-day" },
-  { _id: "occ7", name: "অভিনন্দন ও অর্জন", slug: "congratulations" },
-  { _id: "occ8", name: "সারপ্রাইজ ও বিশেষ মুহূর্ত", slug: "surprise" },
-];
-
-const demoProducts = [
-  {
-    _id: "p1",
-    name: "Customized Premium Photo Frame",
-    slug: "customized-premium-photo-frame",
-    sku: "SKB-PF-001",
-    description: "Premium personalized photo frame.",
-    categoryId: "cat1",
-    occasionIds: ["occ2", "occ4"],
-    price: 1850,
-    salePrice: 1650,
-    images: [
-      "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=500&q=80",
-    ],
-    isAvailable: true,
-    isFeatured: true,
-    isCustomizable: true,
-    createdAt: "2026-10-24T10:00:00",
-  },
-  {
-    _id: "p2",
-    name: "Luxury Birthday Gift Hamper",
-    slug: "luxury-birthday-gift-hamper",
-    sku: "SKB-LH-002",
-    description: "Luxury gift hamper for birthdays.",
-    categoryId: "cat10",
-    occasionIds: ["occ1", "occ8"],
-    price: 3250,
-    salePrice: 0,
-    images: [
-      "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&q=80",
-    ],
-    isAvailable: true,
-    isFeatured: true,
-    isCustomizable: false,
-    createdAt: "2026-10-23T10:00:00",
-  },
-  {
-    _id: "p3",
-    name: "Premium Nikah Nama Frame",
-    slug: "premium-nikah-nama-frame",
-    sku: "SKB-NK-003",
-    description: "Beautiful personalized Nikah Nama frame.",
-    categoryId: "cat2",
-    occasionIds: ["occ3"],
-    price: 2450,
-    salePrice: 2250,
-    images: [],
-    isAvailable: false,
-    isFeatured: false,
-    isCustomizable: true,
-    createdAt: "2026-10-22T10:00:00",
-  },
-  {
-    _id: "p4",
-    name: "Couple Saree Panjabi Combo",
-    slug: "couple-saree-panjabi-combo",
-    sku: "SKB-CB-004",
-    description: "Matching couple saree and panjabi set.",
-    categoryId: "cat4",
-    occasionIds: ["occ2", "occ4"],
-    price: 4950,
-    salePrice: 4650,
-    images: [],
-    isAvailable: true,
-    isFeatured: false,
-    isCustomizable: false,
-    createdAt: "2026-10-21T10:00:00",
-  },
-  {
-    _id: "p5",
-    name: "Premium Flower Bouquet",
-    slug: "premium-flower-bouquet",
-    sku: "SKB-FL-005",
-    description: "Fresh flower bouquet.",
-    categoryId: "cat5",
-    occasionIds: ["occ1", "occ4"],
-    price: 1450,
-    salePrice: 0,
-    images: [],
-    isAvailable: true,
-    isFeatured: true,
-    isCustomizable: false,
-    createdAt: "2026-10-20T10:00:00",
-  },
-];
-
-const money = (amount) =>
-  `৳${Number(amount || 0).toLocaleString("bn-BD")}`;
+const money = (value) =>
+  `৳${Number(value || 0).toLocaleString("bn-BD")}`;
 
 const formatDate = (value) =>
-  new Date(value).toLocaleDateString("bn-BD", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  value
+    ? new Date(value).toLocaleDateString("bn-BD", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
 
-const makeSlug = (text) =>
-  text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-
-const emptyForm = {
-  name: "",
-  slug: "",
-  sku: "",
-  description: "",
-  categoryId: "",
-  occasionIds: [],
-  price: "",
-  salePrice: "",
-  images: [""],
-  isAvailable: true,
-  isFeatured: false,
-  isCustomizable: false,
-};
-
-// ========================================
-// SMALL COMPONENTS
-// ========================================
-
-function StatCard({ title, subtitle, value, icon: Icon, style }) {
+// ================= STAT CARD =================
+function StatCard({ title, value, icon: Icon, iconClass, note }) {
   return (
-    <div className="rounded-xl border border-base-300/70 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-bold text-primary sm:text-sm">
+    <div className="rounded-2xl border border-base-300/80 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-primary">
             {title}
           </p>
-          <p className="mt-1 text-[11px] text-muted">{subtitle}</p>
+          <p className="mt-1 text-xs text-muted">
+            {note}
+          </p>
         </div>
-        <div
-          className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${style}`}
+
+        <span
+          className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${iconClass}`}
         >
-          <Icon size={20} />
-        </div>
+          <Icon size={21} />
+        </span>
       </div>
-      <p className="mt-4 text-2xl font-extrabold text-primary sm:text-3xl">
-        {value}
+
+      <p className="mt-4 text-xl font-bold text-primary">
+        {Number(value || 0).toLocaleString("bn-BD")}
       </p>
     </div>
   );
 }
 
+// ================= PRODUCT IMAGE =================
+
+function ProductImage({ product }) {
+  const [failed, setFailed] = useState(false);
+
+  const image = product.images?.[0];
+
+  const src = typeof image === "string"
+    ? image
+    : image?.url || "";
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  return (
+    <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-200">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={product.name}
+          loading="lazy"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <ImageOff size={21} className="text-muted" />
+      )}
+    </div>
+  );
+}
+
+// ================= AVAILABILITY BADGE =================
+
 function AvailabilityBadge({ available }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
         available
           ? "border-green-200 bg-green-50 text-green-700"
           : "border-red-200 bg-red-50 text-red-700"
       }`}
     >
       {available ? (
-        <CheckCircle2 size={12} />
+        <CheckCircle2 size={14} />
       ) : (
-        <XCircle size={12} />
+        <XCircle size={14} />
       )}
+
       {available ? "Available" : "Unavailable"}
     </span>
   );
 }
 
-function ProductImage({ src, name }) {
-  const [failed, setFailed] = useState(false);
-
-  return (
-    <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-200 sm:size-14">
-      {src && !failed ? (
-        <img
-          src={src}
-          alt={name}
-          loading="lazy"
-          className="h-full w-full object-cover"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <ImageOff size={19} className="text-muted" />
-      )}
-    </div>
-  );
-}
-
-function FormField({ label, required, children }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold text-primary">
-        {label}
-        {required && <span className="ml-1 text-red-500">*</span>}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-const inputClass =
-  "w-full rounded-xl border border-base-300 bg-base-200 px-3 py-2.5 text-xs text-primary outline-none focus:border-secondary focus:bg-white";
-
-// ========================================
-// ADD / EDIT PRODUCT MODAL
-// ========================================
-
-function ProductFormModal({
-  product,
-  categories,
-  occasions,
-  onClose,
-  onSave,
-}) {
-  const isEdit = Boolean(product);
-
-  const [form, setForm] = useState(
-    product
-      ? {
-          ...product,
-          price: String(product.price),
-          salePrice: product.salePrice
-            ? String(product.salePrice)
-            : "",
-          images: product.images.length
-            ? [...product.images]
-            : [""],
-          occasionIds: [...product.occasionIds],
-        }
-      : { ...emptyForm, images: [""], occasionIds: [] }
-  );
-
-  const [error, setError] = useState("");
-
-  const update = (key, value) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  const toggleOccasion = (id) => {
-    setForm((prev) => ({
-      ...prev,
-      occasionIds: prev.occasionIds.includes(id)
-        ? prev.occasionIds.filter((item) => item !== id)
-        : [...prev.occasionIds, id],
-    }));
-  };
-
-  const updateImage = (index, value) => {
-    setForm((prev) => ({
-      ...prev,
-      images: prev.images.map((img, i) =>
-        i === index ? value : img
-      ),
-    }));
-  };
-
-  const addImage = () =>
-    update("images", [...form.images, ""]);
-
-  const removeImage = (index) =>
-    update(
-      "images",
-      form.images.filter((_, i) => i !== index)
-    );
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError("");
-
-    if (!form.name.trim()) {
-      return setError("Product name is required.");
-    }
-
-    if (!form.categoryId) {
-      return setError("Please select a category.");
-    }
-
-    if (
-      form.price === "" ||
-      !Number.isFinite(Number(form.price)) ||
-      Number(form.price) <= 0
-    ) {
-      return setError("Enter a valid regular price.");
-    }
-
-    const sale = form.salePrice === ""
-      ? 0
-      : Number(form.salePrice);
-
-    if (
-      !Number.isFinite(sale) ||
-      sale < 0 ||
-      (sale > 0 && sale >= Number(form.price))
-    ) {
-      return setError(
-        "Sale price must be lower than regular price."
-      );
-    }
-
-    const payload = {
-      ...form,
-      name: form.name.trim(),
-      slug: makeSlug(form.slug || form.name),
-      sku: form.sku.trim(),
-      description: form.description.trim(),
-      price: Number(form.price),
-      salePrice: sale,
-      images: form.images
-        .map((url) => url.trim())
-        .filter(Boolean),
-    };
-
-    onSave(payload);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-primary/60 p-3 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-base-300 px-4 py-4 sm:px-6">
-          <div>
-            <p className="text-[11px] font-bold text-secondary">
-              PRODUCT MANAGEMENT
-            </p>
-            <h2 className="mt-1 text-lg font-extrabold text-primary">
-              {isEdit ? "Edit Product" : "Add New Product"}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-9 items-center justify-center rounded-lg bg-base-200"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <form
-          id="product-form"
-          onSubmit={handleSubmit}
-          className="space-y-5 overflow-y-auto p-4 sm:p-6"
-        >
-          {error && (
-            <div className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">
-              {error}
-            </div>
-          )}
-
-          {/* BASIC INFORMATION */}
-          <div>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-primary">
-              <Package size={17} className="text-secondary" />
-              Basic Information
-            </h3>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="Product Name" required>
-                <input
-                  value={form.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    setForm((prev) => ({
-                      ...prev,
-                      name,
-                      slug:
-                        !isEdit &&
-                        (!prev.slug ||
-                          prev.slug === makeSlug(prev.name))
-                          ? makeSlug(name)
-                          : prev.slug,
-                    }));
-                  }}
-                  placeholder="Premium Photo Frame"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Product SKU">
-                <input
-                  value={form.sku}
-                  onChange={(e) => update("sku", e.target.value)}
-                  placeholder="SKB-PF-001"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Product Slug">
-                <input
-                  value={form.slug}
-                  onChange={(e) => update("slug", e.target.value)}
-                  placeholder="premium-photo-frame"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Category" required>
-                <select
-                  value={form.categoryId}
-                  onChange={(e) =>
-                    update("categoryId", e.target.value)
-                  }
-                  className={inputClass}
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((category) => (
-                    <option
-                      key={category._id}
-                      value={category._id}
-                    >
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-            </div>
-
-            <div className="mt-3">
-              <FormField label="Product Description">
-                <textarea
-                  value={form.description}
-                  onChange={(e) =>
-                    update("description", e.target.value)
-                  }
-                  rows={4}
-                  placeholder="Write product description..."
-                  className={inputClass}
-                />
-              </FormField>
-            </div>
-          </div>
-
-          {/* OCCASIONS */}
-          <div className="border-t border-base-300 pt-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-primary">
-              <Gift size={17} className="text-secondary" />
-              Suitable Occasions
-            </h3>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {occasions.map((occasion) => (
-                <label
-                  key={occasion._id}
-                  className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-xs font-semibold ${
-                    form.occasionIds.includes(occasion._id)
-                      ? "border-secondary bg-secondary/10 text-secondary"
-                      : "border-base-300 bg-base-200 text-primary"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.occasionIds.includes(
-                      occasion._id
-                    )}
-                    onChange={() =>
-                      toggleOccasion(occasion._id)
-                    }
-                    className="checkbox checkbox-xs checkbox-secondary"
-                  />
-                  {occasion.name}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* PRICING */}
-          <div className="border-t border-base-300 pt-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-primary">
-              <Tag size={17} className="text-secondary" />
-              Product Pricing
-            </h3>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="Regular Price (৳)" required>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) =>
-                    update("price", e.target.value)
-                  }
-                  placeholder="1850"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Sale Price (৳)">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.salePrice}
-                  onChange={(e) =>
-                    update("salePrice", e.target.value)
-                  }
-                  placeholder="Optional"
-                  className={inputClass}
-                />
-              </FormField>
-            </div>
-          </div>
-
-          {/* PRODUCT IMAGES */}
-          <div className="border-t border-base-300 pt-5">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="flex items-center gap-2 text-sm font-extrabold text-primary">
-                <ImagePlus size={17} className="text-secondary" />
-                Product Images
-              </h3>
-
-              <button
-                type="button"
-                onClick={addImage}
-                className="flex items-center gap-1 text-xs font-bold text-secondary"
-              >
-                <Plus size={15} />
-                Add Image
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {form.images.map((image, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
-                    type="url"
-                    value={image}
-                    onChange={(e) =>
-                      updateImage(index, e.target.value)
-                    }
-                    placeholder="https://example.com/image.jpg"
-                    className={`${inputClass} min-w-0 flex-1`}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <p className="mt-2 text-[11px] text-muted">
-              আপাতত image URL ব্যবহার করা হয়েছে।
-              পরে image upload API integrate করা যাবে।
-            </p>
-          </div>
-
-          {/* PRODUCT SETTINGS */}
-          <div className="border-t border-base-300 pt-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-primary">
-              <Layers3 size={17} className="text-secondary" />
-              Product Settings
-            </h3>
-
-            <div className="space-y-3">
-              {[
-                {
-                  key: "isAvailable",
-                  title: "Available for Purchase",
-                  description:
-                    "Customer এই product অর্ডার করতে পারবে।",
-                },
-                {
-                  key: "isFeatured",
-                  title: "Featured Product",
-                  description:
-                    "Homepage featured products section-এ দেখানো যাবে।",
-                },
-                {
-                  key: "isCustomizable",
-                  title: "Customization Available",
-                  description:
-                    "Customer personalized details দিতে পারবে।",
-                },
-              ].map((setting) => (
-                <label
-                  key={setting.key}
-                  className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-base-300 bg-base-200 p-3"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-primary">
-                      {setting.title}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted">
-                      {setting.description}
-                    </p>
-                  </div>
-
-                  <input
-                    type="checkbox"
-                    checked={form[setting.key]}
-                    onChange={(e) =>
-                      update(setting.key, e.target.checked)
-                    }
-                    className="toggle toggle-sm toggle-secondary"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-        </form>
-
-        {/* FOOTER */}
-        <div className="flex justify-end gap-2 border-t border-base-300 bg-white px-4 py-4 sm:px-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-base-300 px-4 py-2.5 text-xs font-bold text-primary"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="submit"
-            form="product-form"
-            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white"
-          >
-            <Save size={16} />
-            {isEdit ? "Save Changes" : "Add Product"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ========================================
-// DELETE CONFIRMATION MODAL
-// ========================================
-
-function DeleteConfirmModal({ product, onClose, onConfirm }) {
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-primary/60 p-4 backdrop-blur-sm">
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
-          <AlertTriangle size={24} />
-        </div>
-
-        <h2 className="text-lg font-extrabold text-primary">
-          Delete Product?
-        </h2>
-
-        <p className="mt-2 text-xs leading-6 text-muted">
-          আপনি কি নিশ্চিতভাবে{" "}
-          <span className="font-bold text-primary">
-            {product.name}
-          </span>{" "}
-          delete করতে চান? এই action undo করা যাবে না।
-        </p>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-base-300 px-4 py-2.5 text-xs font-bold"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onConfirm(product._id)}
-            className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white"
-          >
-            <Trash2 size={15} />
-            Delete Product
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ========================================
-// MAIN PAGE
-// ========================================
+// ================= MAIN PAGE =================
 
 export default function AdminProductsPage() {
-  // DEMO: replace with useQuery and Axios
-  const [products, setProducts] = useState(demoProducts);
-  const categories = demoCategories;
-  const occasions = demoOccasions;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const {
+    user,
+    loading: authLoading,
+    role,
+    roleLoading,
+    accountStatus,
+  } = useContext(AuthContext);
 
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("newest");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const [status, setStatus] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
 
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [deletingProduct, setDeletingProduct] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
-  const perPage = 8;
+  const isAdmin =
+    !!user &&
+    role === "admin" &&
+    accountStatus === "active";
 
-  const categoryMap = useMemo(
-    () =>
-      Object.fromEntries(
-        categories.map((category) => [
-          category._id,
-          category.name,
-        ])
-      ),
-    [categories]
+  // ================= SEARCH DEBOUNCE =================
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ================= GET CATEGORIES =================
+
+  const { data: categoryData } = useQuery({
+    queryKey: ["catalogCategories"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/categories`);
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch categories");
+      }
+
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categories = categoryData?.categories || [];
+
+  const categoryMap = Object.fromEntries(
+    categories.map((item) => [item.id, item.name])
   );
 
-  const stats = useMemo(
-    () => ({
-      total: products.length,
-      available: products.filter((p) => p.isAvailable).length,
-      unavailable: products.filter((p) => !p.isAvailable).length,
-      featured: products.filter((p) => p.isFeatured).length,
-    }),
-    [products]
-  );
+  // ================= GET ADMIN PRODUCTS =================
 
-  const filteredProducts = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: [
+      "adminProducts",
+      debouncedSearch,
+      status,
+      category,
+      sort,
+      page,
+    ],
 
-    return products
-      .filter((product) => {
-        const matchesSearch =
-          !term ||
-          product.name.toLowerCase().includes(term) ||
-          product.sku.toLowerCase().includes(term) ||
-          product.slug.toLowerCase().includes(term);
+    enabled: isAdmin && !authLoading && !roleLoading,
 
-        const matchesStatus =
-          activeTab === "all" ||
-          (activeTab === "available" && product.isAvailable) ||
-          (activeTab === "unavailable" && !product.isAvailable) ||
-          (activeTab === "featured" && product.isFeatured);
+    queryFn: async ({ signal }) => {
+      const token = await user.getIdToken();
 
-        const matchesCategory =
-          categoryFilter === "all" ||
-          product.categoryId === categoryFilter;
-
-        return (
-          matchesSearch && matchesStatus && matchesCategory
-        );
-      })
-      .sort((a, b) => {
-        if (sortBy === "price_low") {
-          return (
-            (a.salePrice || a.price) -
-            (b.salePrice || b.price)
-          );
-        }
-
-        if (sortBy === "price_high") {
-          return (
-            (b.salePrice || b.price) -
-            (a.salePrice || a.price)
-          );
-        }
-
-        if (sortBy === "name") {
-          return a.name.localeCompare(b.name);
-        }
-
-        return new Date(b.createdAt) - new Date(a.createdAt);
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        status,
+        category,
+        sort,
+        page: String(page),
+        limit: "10",
       });
-  }, [products, search, activeTab, categoryFilter, sortBy]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredProducts.length / perPage)
-  );
-
-  const currentPage = Math.min(page, totalPages);
-
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * perPage,
-    currentPage * perPage
-  );
-
-  const tabs = [
-    { value: "all", label: "সব প্রোডাক্ট", count: stats.total },
-    {
-      value: "available",
-      label: "Available",
-      count: stats.available,
-    },
-    {
-      value: "unavailable",
-      label: "Unavailable",
-      count: stats.unavailable,
-    },
-    {
-      value: "featured",
-      label: "Featured",
-      count: stats.featured,
-    },
-  ];
-
-  const openAdd = () => {
-    setEditingProduct(null);
-    setFormOpen(true);
-  };
-
-  const openEdit = (product) => {
-    setEditingProduct(product);
-    setFormOpen(true);
-  };
-
-  // DEMO ONLY: replace with POST/PATCH mutations
-  const handleSave = (payload) => {
-    if (editingProduct) {
-      setProducts((prev) =>
-        prev.map((product) =>
-          product._id === editingProduct._id
-            ? { ...product, ...payload }
-            : product
-        )
-      );
-    } else {
-      setProducts((prev) => [
+      const res = await fetch(
+        `${API_URL}/admin/products?${params.toString()}`,
         {
-          ...payload,
-          _id: `local-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal,
+        }
+      );
+
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok || !result.success) {
+        throw new Error(
+          result.message || "Failed to fetch products"
+        );
+      }
+
+      return result;
+    },
+
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
+  });
+
+  const products = data?.products || [];
+
+  const stats = data?.stats || {
+    total: 0,
+    available: 0,
+    unavailable: 0,
+    featured: 0,
+  };
+
+  const pagination = data?.pagination || {
+    page: 1,
+    total: 0,
+    limit: 10,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  };
+
+  // Keep page valid after filters or deletion
+  useEffect(() => {
+    if (data?.pagination && page > data.pagination.totalPages) {
+      setPage(data.pagination.totalPages);
     }
+  }, [data, page]);
 
-    setFormOpen(false);
-    setEditingProduct(null);
+  // ================= UPDATE AVAILABILITY =================
+
+  const toggleAvailability = async (product, available) => {
+    if (updatingId || deletingId) return;
+
+    setUpdatingId(product._id);
+
+    try {
+      const token = await user.getIdToken();
+
+      const res = await fetch(
+        `${API_URL}/admin/products/${product._id}/availability`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ available }),
+        }
+      );
+
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok || !result.success) {
+        throw new Error(
+          result.message || "Availability update failed"
+        );
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["adminProducts"],
+      });
+
+      Swal.fire({
+        title: available
+          ? "প্রোডাক্ট Available করা হয়েছে!"
+          : "প্রোডাক্ট Unavailable করা হয়েছে!",
+        icon: "success",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true,
+      });
+
+    } catch (error) {
+      Swal.fire({
+        title: error.message,
+        icon: "error",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+      });
+
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
-  // DEMO ONLY: replace with PATCH
-  const toggleAvailability = (id) => {
-    setProducts((prev) =>
-      prev.map((product) =>
-        product._id === id
-          ? { ...product, isAvailable: !product.isAvailable }
-          : product
-      )
-    );
+  // ================= DELETE PRODUCT =================
+
+  const handleDelete = async (product) => {
+    if (updatingId || deletingId) return;
+
+    const confirmation = await Swal.fire({
+      title: "প্রোডাক্ট ডিলিট করবেন?",
+      text: `${product.name} স্থায়ীভাবে মুছে যাবে।`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "হ্যাঁ, ডিলিট করুন",
+      cancelButtonText: "বাতিল",
+      confirmButtonColor: "#DC2626",
+      cancelButtonColor: "#76258A",
+    });
+
+    if (!confirmation.isConfirmed) return;
+
+    setDeletingId(product._id);
+
+    try {
+      const token = await user.getIdToken();
+
+      const res = await fetch(
+        `${API_URL}/admin/products/${product._id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok || !result.success) {
+        throw new Error(
+          result.message || "Product delete failed"
+        );
+      }
+
+      // If last product on the page is deleted,
+      // move to the previous page.
+      if (products.length === 1 && page > 1) {
+        setPage((prev) => prev - 1);
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["adminProducts"],
+      });
+
+      Swal.fire({
+        title: "প্রোডাক্ট সফলভাবে ডিলিট হয়েছে!",
+        icon: "success",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true,
+      });
+
+    } catch (error) {
+      Swal.fire({
+        title: error.message,
+        icon: "error",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+      });
+
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  // DEMO ONLY: replace with DELETE
-  const handleDelete = (id) => {
-    setProducts((prev) =>
-      prev.filter((product) => product._id !== id)
-    );
-    setDeletingProduct(null);
-  };
+  // ================= FILTER HANDLERS =================
 
   const resetFilters = () => {
     setSearch("");
-    setActiveTab("all");
-    setCategoryFilter("all");
-    setSortBy("newest");
+    setDebouncedSearch("");
+    setStatus("all");
+    setCategory("all");
+    setSort("newest");
     setPage(1);
   };
+
+  const tabs = [
+    { id: "all", label: "সব প্রোডাক্ট", count: stats.total },
+    { id: "available", label: "Available", count: stats.available },
+    { id: "unavailable", label: "Unavailable", count: stats.unavailable },
+    { id: "featured", label: "Featured", count: stats.featured },
+  ];
+
+  const totalPages = pagination.totalPages;
+
+  const pageNumbers = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1
+  ).filter(
+    (number) =>
+      number === 1 ||
+      number === totalPages ||
+      Math.abs(number - page) <= 1
+  );
+
+  // ================= AUTH LOADING =================
+
+  if (authLoading || roleLoading) {
+    return (
+      <div className="flex min-h-80 items-center justify-center">
+        <LoaderCircle
+          size={30}
+          className="animate-spin text-secondary"
+        />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+        <ShieldCheck
+          size={30}
+          className="mx-auto text-red-500"
+        />
+        <p className="mt-3 text-sm font-bold text-red-700">
+          এই পেজটি শুধু Admin-এর জন্য।
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
 
-      {/* PAGE HEADER */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-extrabold text-primary sm:text-2xl">
-            প্রোডাক্ট ম্যানেজমেন্ট
-          </h1>
-          <p className="mt-1 text-xs text-muted">
-            প্রোডাক্ট যোগ, সম্পাদনা, availability এবং featured
-            products পরিচালনা করুন।
-          </p>
-        </div>
+      {/* ================= PAGE HEADER ================= */}
 
-        <button
-          type="button"
-          onClick={openAdd}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-secondary"
-        >
-          <Plus size={17} />
-          Add New Product
-        </button>
-      </div>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-[#4b1558] to-secondary p-5 text-white shadow-md sm:p-6">
 
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="মোট প্রোডাক্ট"
-          subtitle="Total Products"
-          value={stats.total.toLocaleString("bn-BD")}
-          icon={Package}
-          style="bg-secondary/10 text-secondary"
-        />
+        <div className="absolute -right-10 -top-14 size-44 rounded-full bg-white/5" />
+        <div className="absolute bottom-0 right-32 size-24 rounded-full bg-gold-soft/10 blur-xl" />
 
-        <StatCard
-          title="Available Products"
-          subtitle="Ready for Purchase"
-          value={stats.available.toLocaleString("bn-BD")}
-          icon={CheckCircle2}
-          style="bg-green-100 text-green-700"
-        />
+        <div className="relative flex flex-wrap items-center justify-between gap-5">
 
-        <StatCard
-          title="Unavailable Products"
-          subtitle="Not Available"
-          value={stats.unavailable.toLocaleString("bn-BD")}
-          icon={XCircle}
-          style="bg-red-100 text-red-700"
-        />
-
-        <StatCard
-          title="Featured Products"
-          subtitle="Homepage Highlights"
-          value={stats.featured.toLocaleString("bn-BD")}
-          icon={Star}
-          style="bg-[#ffe16d]/50 text-primary"
-        />
-      </div>
-
-      {/* PRODUCT LIST */}
-      <div className="overflow-hidden rounded-2xl border border-base-300/70 bg-white shadow-sm">
-
-        {/* SECTION TITLE */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-4 sm:p-5">
           <div>
-            <h2 className="text-base font-extrabold text-primary">
-              প্রোডাক্ট তালিকা
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              All Products & Availability
+            <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-gold-soft">
+              <Layers3 size={14} />
+              Catalog Management
+            </span>
+
+            <h1 className="text-xl font-bold sm:text-2xl">
+              প্রোডাক্ট ম্যানেজমেন্ট
+            </h1>
+
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">
+              আপনার স্টোরের প্রোডাক্ট, মূল্য, availability এবং featured collection পরিচালনা করুন।
             </p>
           </div>
 
-          <span className="rounded-full bg-secondary/10 px-3 py-1.5 text-xs font-bold text-secondary">
-            {filteredProducts.length.toLocaleString("bn-BD")} Products
-          </span>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/products/add")}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gold-soft px-5 py-3 text-sm font-bold text-primary shadow-sm transition hover:bg-[#ffe990]"
+          >
+            <Plus size={18} />
+            নতুন প্রোডাক্ট যোগ করুন
+          </button>
+        </div>
+      </div>
+
+      {/* ================= KPI CARDS ================= */}
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard
+          title="মোট প্রোডাক্ট"
+          note="Total Products"
+          value={stats.total}
+          icon={Package}
+          iconClass="bg-secondary/10 text-secondary"
+        />
+
+        <StatCard
+          title="Available"
+          note="ক্রয়যোগ্য প্রোডাক্ট"
+          value={stats.available}
+          icon={CheckCircle2}
+          iconClass="bg-green-50 text-green-700"
+        />
+
+        <StatCard
+          title="Unavailable"
+          note="ক্রয়যোগ্য নয়"
+          value={stats.unavailable}
+          icon={XCircle}
+          iconClass="bg-red-50 text-red-600"
+        />
+
+        <StatCard
+          title="Featured"
+          note="বিশেষভাবে নির্বাচিত"
+          value={stats.featured}
+          icon={Star}
+          iconClass="bg-amber-50 text-amber-700"
+        />
+      </div>
+
+      {/* ================= PRODUCT LIST ================= */}
+
+      <section className="overflow-hidden rounded-2xl border border-base-300/80 bg-white shadow-sm">
+
+        {/* Section Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-4 sm:p-5">
+          <div>
+            <h2 className="text-base font-bold text-primary">
+              প্রোডাক্ট তালিকা
+            </h2>
+
+            <p className="mt-1 text-xs text-muted">
+              সার্চ, ফিল্টার ও প্রোডাক্টের তথ্য পরিচালনা
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isFetching && (
+              <LoaderCircle
+                size={17}
+                className="animate-spin text-secondary"
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2 text-sm font-medium text-secondary hover:bg-base-200 disabled:opacity-50"
+            >
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {/* TABS */}
+        {/* ================= STATUS TABS ================= */}
+
         <div className="flex gap-2 overflow-x-auto border-b border-base-300 px-4 py-3 sm:px-5">
           {tabs.map((tab) => (
             <button
-              key={tab.value}
+              key={tab.id}
               type="button"
               onClick={() => {
-                setActiveTab(tab.value);
+                setStatus(tab.id);
                 setPage(1);
               }}
-              className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
-                activeTab === tab.value
+              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                status === tab.id
                   ? "bg-primary text-white"
-                  : "bg-base-200 text-muted hover:bg-secondary/10"
+                  : "bg-base-200 text-primary/70 hover:bg-secondary/10"
               }`}
             >
               {tab.label}
+
               <span
-                className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                  activeTab === tab.value
-                    ? "bg-white/20"
-                    : "bg-white"
+                className={`rounded-md px-2 py-0.5 text-xs ${
+                  status === tab.id
+                    ? "bg-white/20 text-white"
+                    : "bg-white text-secondary"
                 }`}
               >
                 {tab.count}
@@ -1032,343 +607,466 @@ export default function AdminProductsPage() {
           ))}
         </div>
 
-        {/* FILTERS */}
-        <div className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1fr)_220px_170px_auto]">
-          <label className="flex h-11 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 focus-within:border-secondary">
-            <Search size={17} className="text-muted" />
+        {/* ================= SEARCH + FILTERS ================= */}
+
+        <div className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1fr)_220px_190px_auto]">
+
+          {/* Search */}
+          <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 focus-within:border-secondary focus-within:bg-white">
+            <Search size={19} className="shrink-0 text-secondary" />
+
             <input
+              type="search"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
+              onChange={(event) => {
+                setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search name, SKU or slug..."
-              className="w-full min-w-0 bg-transparent text-xs text-primary outline-none"
+              placeholder="বাংলা, English, Banglish, SKU..."
+              className="min-w-0 flex-1 bg-transparent text-sm text-primary outline-none placeholder:text-muted"
             />
           </label>
 
+          {/* Category Filter */}
           <select
-            value={categoryFilter}
-            onChange={(e) => {
-              setCategoryFilter(e.target.value);
+            value={category}
+            onChange={(event) => {
+              setCategory(event.target.value);
               setPage(1);
             }}
-            className="h-11 rounded-xl border border-base-300 bg-base-200 px-3 text-xs font-semibold text-primary outline-none"
+            className="h-11 min-w-0 rounded-xl border border-base-300 bg-base-200 px-3 text-sm text-primary outline-none focus:border-secondary"
           >
-            <option value="all">All Categories</option>
-            {categories.map((category) => (
-              <option key={category._id} value={category._id}>
-                {category.name}
+            <option value="all">সব ক্যাটাগরি</option>
+
+            {categories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
               </option>
             ))}
           </select>
 
-          <select
-            value={sortBy}
-            onChange={(e) => {
-              setSortBy(e.target.value);
-              setPage(1);
-            }}
-            className="h-11 rounded-xl border border-base-300 bg-base-200 px-3 text-xs font-semibold text-primary outline-none"
-          >
-            <option value="newest">Newest First</option>
-            <option value="price_low">Price: Low to High</option>
-            <option value="price_high">Price: High to Low</option>
-            <option value="name">Name A–Z</option>
-          </select>
+          {/* Sorting */}
+          <label className="flex h-11 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3">
+            <ArrowUpDown
+              size={16}
+              className="shrink-0 text-secondary"
+            />
 
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
+              className="w-full min-w-0 bg-transparent text-sm text-primary outline-none"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="price_low">Price: Low to High</option>
+              <option value="price_high">Price: High to Low</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </label>
+
+          {/* Reset */}
           <button
             type="button"
             onClick={resetFilters}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-base-300 px-4 text-xs font-bold text-secondary"
+            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-secondary/20 bg-secondary/5 px-4 text-sm font-semibold text-secondary transition hover:bg-secondary/10"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={16} />
             Reset
           </button>
         </div>
 
-        {/* DESKTOP ZEBRA TABLE */}
-        <div className="hidden overflow-x-auto lg:block">
-          <table className="w-full min-w-[1050px] border-collapse text-left">
-            <thead>
-              <tr className="bg-[#f3edf5] text-[11px] font-bold text-primary">
-                <th className="px-4 py-4">Product</th>
-                <th className="px-4 py-4">Category</th>
-                <th className="px-4 py-4">Price</th>
-                <th className="px-4 py-4">Availability</th>
-                <th className="px-4 py-4">Featured</th>
-                <th className="px-4 py-4">Created</th>
-                <th className="px-4 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
+        {/* ================= RESULT BAR ================= */}
 
-            <tbody>
-              {paginatedProducts.map((product, index) => (
-                <tr
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#faf7fc] px-4 py-3 sm:px-5">
+          <p className="text-sm text-primary">
+            মোট ফলাফল:{" "}
+            <span className="font-bold text-secondary">
+              {pagination.total.toLocaleString("bn-BD")}টি
+            </span>
+          </p>
+
+          <span className="text-xs text-muted">
+            প্রতি পেজে ১০টি প্রোডাক্ট
+          </span>
+        </div>
+
+        {/* ================= LOADING ================= */}
+
+        {isLoading && (
+          <div className="flex min-h-64 flex-col items-center justify-center gap-3">
+            <LoaderCircle
+              size={32}
+              className="animate-spin text-secondary"
+            />
+            <p className="text-sm text-muted">
+              প্রোডাক্ট লোড হচ্ছে...
+            </p>
+          </div>
+        )}
+
+        {/* ================= ERROR ================= */}
+
+        {isError && !isLoading && (
+          <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-4 text-center">
+            <XCircle size={34} className="text-red-500" />
+
+            <p className="text-sm font-semibold text-red-600">
+              {error?.message || "প্রোডাক্ট লোড করা যায়নি"}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white"
+            >
+              আবার চেষ্টা করুন
+            </button>
+          </div>
+        )}
+
+        {/* ================= TABLE ================= */}
+
+        {!isLoading && !isError && (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1010px] border-collapse text-left">
+
+                <thead className="bg-[#f3ecf6]">
+                  <tr className="text-xs font-bold text-primary">
+                    <th className="px-4 py-4">প্রোডাক্ট</th>
+                    <th className="px-4 py-4">ক্যাটাগরি</th>
+                    <th className="px-4 py-4">মূল্য</th>
+                    <th className="px-4 py-4">Availability</th>
+                    <th className="px-4 py-4">Featured</th>
+                    <th className="px-4 py-4">তারিখ</th>
+                    <th className="px-4 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {products.map((product, index) => (
+                    <tr
+                      key={product._id}
+                      className={`border-b border-base-300/60 transition hover:bg-secondary/5 ${
+                        index % 2 === 0
+                          ? "bg-white"
+                          : "bg-[#fbf8fc]"
+                      }`}
+                    >
+                      {/* Product */}
+                      <td className="px-4 py-4">
+                        <div className="flex min-w-[230px] items-center gap-3">
+                          <ProductImage product={product} />
+
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 max-w-64 text-sm font-bold text-primary">
+                              {product.name}
+                            </p>
+
+                            <p className="mt-1 text-xs text-muted">
+                              SKU: {product.sku}
+                            </p>
+
+                            {product.customizable && (
+                              <span className="mt-1 inline-flex rounded-md bg-secondary/10 px-2 py-0.5 text-xs text-secondary">
+                                Customizable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-4 py-4 text-sm text-primary">
+                        {categoryMap[product.categoryId] ||
+                          product.categoryId ||
+                          "—"}
+                      </td>
+
+                      {/* Price */}
+                      <td className="px-4 py-4">
+                        <p className="whitespace-nowrap text-sm font-bold text-primary">
+                          {money(
+                            product.salePrice ??
+                              product.regularPrice
+                          )}
+                        </p>
+
+                        {product.salePrice != null && (
+                          <p className="mt-1 text-xs text-muted line-through">
+                            {money(product.regularPrice)}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* Availability */}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={product.available === true}
+                            disabled={!!updatingId || !!deletingId}
+                            onChange={(event) =>
+                              toggleAvailability(
+                                product,
+                                event.target.checked
+                              )
+                            }
+                            aria-label={`Availability for ${product.name}`}
+                            className="toggle toggle-sm toggle-success"
+                          />
+
+                          <AvailabilityBadge
+                            available={product.available === true}
+                          />
+                        </div>
+                      </td>
+
+                      {/* Featured */}
+                      <td className="px-4 py-4">
+                        {product.featured ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-gold-soft/50 px-2.5 py-1.5 text-xs font-semibold text-primary">
+                            <Star size={14} />
+                            Featured
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted">—</span>
+                        )}
+                      </td>
+
+                      {/* Date */}
+                      <td className="whitespace-nowrap px-4 py-4 text-xs text-muted">
+                        {formatDate(product.createdAt)}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(
+                                `/admin/products/edit/${product._id}`
+                              )
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 px-3 py-2 text-sm font-medium text-secondary transition hover:bg-secondary hover:text-white"
+                          >
+                            <Pencil size={15} />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={!!deletingId || !!updatingId}
+                            onClick={() => handleDelete(product)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-600 hover:text-white disabled:opacity-50"
+                          >
+                            {deletingId === product._id ? (
+                              <LoaderCircle
+                                size={15}
+                                className="animate-spin"
+                              />
+                            ) : (
+                              <Trash2 size={15} />
+                            )}
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ================= MOBILE CARDS ================= */}
+
+            <div className="space-y-3 p-3 lg:hidden">
+              {products.map((product) => (
+                <div
                   key={product._id}
-                  className={`border-b border-base-300/50 transition hover:bg-purple-50/70 ${
-                    index % 2 === 0
-                      ? "bg-white"
-                      : "bg-[#faf7fb]"
-                  }`}
+                  className="rounded-xl border border-base-300 bg-white p-4 shadow-sm"
                 >
-                  {/* PRODUCT */}
-                  <td className="px-4 py-4">
-                    <div className="flex min-w-[220px] items-center gap-3">
-                      <ProductImage
-                        src={product.images?.[0]}
-                        name={product.name}
-                      />
+                  <div className="flex items-start gap-3">
+                    <ProductImage product={product} />
 
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 text-xs font-extrabold text-primary">
-                          {product.name}
-                        </p>
-                        <p className="mt-1 text-[10px] text-muted">
-                          SKU: {product.sku || "—"}
-                        </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm font-bold text-primary">
+                        {product.name}
+                      </p>
 
-                        {product.isCustomizable && (
-                          <span className="mt-1 inline-flex rounded-md bg-secondary/10 px-2 py-0.5 text-[10px] font-bold text-secondary">
-                            Customizable
+                      <p className="mt-1 text-xs text-muted">
+                        {product.sku}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted">
+                        {categoryMap[product.categoryId] || "—"}
+                      </p>
+
+                      <p className="mt-2 text-sm font-bold text-secondary">
+                        {money(
+                          product.salePrice ??
+                            product.regularPrice
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-200 p-3">
+                    <AvailabilityBadge
+                      available={product.available === true}
+                    />
+
+                    <input
+                      type="checkbox"
+                      checked={product.available === true}
+                      disabled={!!updatingId || !!deletingId}
+                      onChange={(event) =>
+                        toggleAvailability(
+                          product,
+                          event.target.checked
+                        )
+                      }
+                      className="toggle toggle-sm toggle-success"
+                      aria-label={`Availability for ${product.name}`}
+                    />
+                  </div>
+
+                  {product.featured && (
+                    <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-secondary">
+                      <Star size={14} />
+                      Featured Product
+                    </p>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/admin/products/edit/${product._id}`
+                        )
+                      }
+                      className="flex items-center justify-center gap-2 rounded-lg bg-secondary/10 px-3 py-2.5 text-sm font-medium text-secondary"
+                    >
+                      <Pencil size={16} />
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!!deletingId || !!updatingId}
+                      onClick={() => handleDelete(product)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm font-medium text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 size={16} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ================= EMPTY STATE ================= */}
+
+            {products.length === 0 && (
+              <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+                <span className="flex size-16 items-center justify-center rounded-2xl bg-secondary/10 text-secondary">
+                  <Package size={30} />
+                </span>
+
+                <p className="mt-4 text-base font-bold text-primary">
+                  কোনো প্রোডাক্ট পাওয়া যায়নি
+                </p>
+
+                <p className="mt-2 text-sm text-muted">
+                  সার্চ বা ফিল্টার পরিবর্তন করে দেখুন।
+                </p>
+
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="mt-4 rounded-lg bg-secondary px-4 py-2.5 text-sm font-medium text-white"
+                >
+                  ফিল্টার রিসেট করুন
+                </button>
+              </div>
+            )}
+
+            {/* ================= PAGINATION ================= */}
+
+            {pagination.total > 0 && (
+              <div className="flex flex-col gap-3 border-t border-base-300 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <p className="text-sm text-muted">
+                  {(
+                    (pagination.page - 1) * 10 + 1
+                  ).toLocaleString("bn-BD")}
+                  {" – "}
+                  {Math.min(
+                    pagination.page * 10,
+                    pagination.total
+                  ).toLocaleString("bn-BD")}
+                  {" / "}
+                  {pagination.total.toLocaleString("bn-BD")}
+                  {"টি প্রোডাক্ট"}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={!pagination.hasPreviousPage}
+                    onClick={() =>
+                      setPage((prev) => Math.max(1, prev - 1))
+                    }
+                    className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary hover:bg-base-200 disabled:opacity-40"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+
+                  {pageNumbers.map((number, index) => (
+                    <div key={number} className="flex items-center gap-1.5">
+                      {index > 0 &&
+                        number - pageNumbers[index - 1] > 1 && (
+                          <span className="px-1 text-sm text-muted">
+                            ...
                           </span>
                         )}
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* CATEGORY */}
-                  <td className="px-4 py-4 text-xs font-semibold text-primary">
-                    {categoryMap[product.categoryId] || "—"}
-                  </td>
-
-                  {/* PRICE */}
-                  <td className="px-4 py-4">
-                    {product.salePrice > 0 ? (
-                      <>
-                        <p className="text-sm font-extrabold text-primary">
-                          {money(product.salePrice)}
-                        </p>
-                        <p className="mt-1 text-[11px] text-muted line-through">
-                          {money(product.price)}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm font-extrabold text-primary">
-                        {money(product.price)}
-                      </p>
-                    )}
-                  </td>
-
-                  {/* AVAILABILITY TOGGLE */}
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={product.isAvailable}
-                        onChange={() =>
-                          toggleAvailability(product._id)
-                        }
-                        className="toggle toggle-sm toggle-success"
-                        aria-label={`Toggle availability for ${product.name}`}
-                      />
-                      <AvailabilityBadge
-                        available={product.isAvailable}
-                      />
-                    </div>
-                  </td>
-
-                  {/* FEATURED */}
-                  <td className="px-4 py-4">
-                    {product.isFeatured ? (
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-[#ffe16d]/40 px-2.5 py-1.5 text-[11px] font-bold text-primary">
-                        <Star size={13} />
-                        Featured
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted">—</span>
-                    )}
-                  </td>
-
-                  {/* DATE */}
-                  <td className="whitespace-nowrap px-4 py-4 text-xs text-muted">
-                    {formatDate(product.createdAt)}
-                  </td>
-
-                  {/* ACTIONS */}
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(product)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 px-3 py-2 text-[11px] font-bold text-secondary hover:bg-secondary hover:text-white"
-                      >
-                        <Pencil size={14} />
-                        Edit
-                      </button>
 
                       <button
                         type="button"
-                        onClick={() => setDeletingProduct(product)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-bold text-red-600 hover:bg-red-600 hover:text-white"
+                        onClick={() => setPage(number)}
+                        className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition ${
+                          page === number
+                            ? "bg-secondary text-white"
+                            : "bg-base-200 text-primary hover:bg-secondary/10"
+                        }`}
                       >
-                        <Trash2 size={14} />
-                        Delete
+                        {number}
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ))}
 
-        {/* MOBILE CARDS */}
-        <div className="space-y-3 p-3 lg:hidden">
-          {paginatedProducts.map((product) => (
-            <div
-              key={product._id}
-              className="rounded-xl border border-base-300 bg-white p-3"
-            >
-              <div className="flex items-start gap-3">
-                <ProductImage
-                  src={product.images?.[0]}
-                  name={product.name}
-                />
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-extrabold text-primary">
-                    {product.name}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    {categoryMap[product.categoryId] || "—"}
-                  </p>
-                  <p className="mt-2 text-sm font-extrabold text-secondary">
-                    {money(product.salePrice || product.price)}
-                  </p>
+                  <button
+                    type="button"
+                    disabled={!pagination.hasNextPage}
+                    onClick={() =>
+                      setPage((prev) => prev + 1)
+                    }
+                    className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary hover:bg-base-200 disabled:opacity-40"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
                 </div>
               </div>
-
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-base-200 p-3">
-                <AvailabilityBadge
-                  available={product.isAvailable}
-                />
-
-                <input
-                  type="checkbox"
-                  checked={product.isAvailable}
-                  onChange={() =>
-                    toggleAvailability(product._id)
-                  }
-                  className="toggle toggle-sm toggle-success"
-                  aria-label={`Toggle availability for ${product.name}`}
-                />
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => openEdit(product)}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-secondary/10 px-3 py-2.5 text-xs font-bold text-secondary"
-                >
-                  <Pencil size={15} />
-                  Edit
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDeletingProduct(product)}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-xs font-bold text-red-600"
-                >
-                  <Trash2 size={15} />
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* EMPTY STATE */}
-        {paginatedProducts.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-center">
-            <Package size={32} className="text-secondary" />
-            <p className="mt-3 text-sm font-bold text-primary">
-              কোনো প্রোডাক্ট পাওয়া যায়নি
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              Search বা filter পরিবর্তন করুন।
-            </p>
-          </div>
+            )}
+          </>
         )}
-
-        {/* PAGINATION */}
-        {filteredProducts.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 p-4">
-            <p className="text-xs text-muted">
-              Showing{" "}
-              {((currentPage - 1) * perPage + 1).toLocaleString("bn-BD")}
-              {"–"}
-              {Math.min(
-                currentPage * perPage,
-                filteredProducts.length
-              ).toLocaleString("bn-BD")}
-              {" of "}
-              {filteredProducts.length.toLocaleString("bn-BD")}
-            </p>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() =>
-                  setPage((prev) => Math.max(1, prev - 1))
-                }
-                className="flex size-9 items-center justify-center rounded-lg border border-base-300 disabled:opacity-40"
-              >
-                <ChevronLeft size={17} />
-              </button>
-
-              <span className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white">
-                {currentPage} / {totalPages}
-              </span>
-
-              <button
-                type="button"
-                disabled={currentPage === totalPages}
-                onClick={() =>
-                  setPage((prev) =>
-                    Math.min(totalPages, prev + 1)
-                  )
-                }
-                className="flex size-9 items-center justify-center rounded-lg border border-base-300 disabled:opacity-40"
-              >
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ADD / EDIT MODAL */}
-      {formOpen && (
-        <ProductFormModal
-          key={editingProduct?._id || "new"}
-          product={editingProduct}
-          categories={categories}
-          occasions={occasions}
-          onClose={() => setFormOpen(false)}
-          onSave={handleSave}
-        />
-      )}
-
-      {/* DELETE MODAL */}
-      {deletingProduct && (
-        <DeleteConfirmModal
-          product={deletingProduct}
-          onClose={() => setDeletingProduct(null)}
-          onConfirm={handleDelete}
-        />
-      )}
+      </section>
     </div>
   );
 }

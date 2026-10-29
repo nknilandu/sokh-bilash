@@ -1,12 +1,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { useQueryClient } from "@tanstack/react-query";
+import Swal from "sweetalert2";
+import { getAuth } from "firebase/auth";
 
 import {
-  ArrowLeft,
-  CheckCircle2,
   Gift,
   GripVertical,
   Image as ImageIcon,
@@ -25,27 +24,18 @@ import {
   Search,
 } from "lucide-react";
 
+import { app } from "../../../firebase/firebase.config";
+
 // =====================================
 // CONFIGURATION
 // =====================================
 
-const STORAGE_KEY = "sokhbilash-demo-products-v2";
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/$/, "");
+
 const MAX_IMAGES = 5;
 const MAX_VARIANTS = 100;
-
-const DEFAULT_CATEGORIES = [
-  { id: "photo-frames", name: "ফটো ফ্রেম ও স্মৃতির উপহার" },
-  { id: "magic-mirror-led", name: "ম্যাজিক মিরর ও LED গিফট" },
-  { id: "personalized", name: "কাস্টমাইজড ও পার্সোনালাইজড গিফট" },
-  { id: "gift-combos", name: "গিফট কম্বো ও হ্যাম্পার" },
-  { id: "flowers", name: "ফুল ও বুকেট" },
-  { id: "chocolates", name: "চকলেট ও মিষ্টির উপহার" },
-  { id: "clothing", name: "পোশাক ও কাপল সেট" },
-  { id: "party-decorations", name: "পার্টি ও অনুষ্ঠানের সাজসজ্জা" },
-  { id: "islamic", name: "ইসলামিক ও নিকাহ উপহার" },
-  { id: "romantic-gifts", name: "টেডি বেয়ার ও রোমান্টিক গিফট" },
-  { id: "others", name: "অন্যান্য (Others)" },
-];
 
 // =====================================
 // STYLES
@@ -113,6 +103,7 @@ const createProduct = () => ({
   salePrice: "",
   description: "",
   categoryId: "",
+  occasionIds: [],
 
   images: [createImage()],
 
@@ -182,6 +173,7 @@ function Field({
     <div className="min-w-0">
       <p className="mb-2 text-sm font-semibold text-[#310039]">
         {label}
+
         {required && (
           <span className="ml-1 text-red-500">*</span>
         )}
@@ -448,9 +440,7 @@ function VariantCard({
 
           <MiniSwitch
             checked={variant.available}
-            onChange={(v) =>
-              onChange({ available: v })
-            }
+            onChange={(v) => onChange({ available: v })}
           />
         </div>
       </div>
@@ -516,9 +506,7 @@ function VariantCard({
                 onChange={(e) =>
                   onChange({
                     autoSku: e.target.checked,
-                    sku: e.target.checked
-                      ? ""
-                      : variant.sku,
+                    sku: e.target.checked ? "" : variant.sku,
                   })
                 }
                 className="checkbox checkbox-sm border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
@@ -545,12 +533,9 @@ function VariantCard({
 // MAIN PAGE
 // =====================================
 
-export default function AdminProductFormPage({
-  initialProduct = null,
-  onPublish = null,
-  categories = DEFAULT_CATEGORIES,
-}) {
+export default function AdminProductFormPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { productId } = useParams();
 
   const isEdit = Boolean(productId);
@@ -565,82 +550,256 @@ export default function AdminProductFormPage({
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [categories, setCategories] = useState([]);
+  const [occasions, setOccasions] = useState([]);
+  const [taxonomiesLoading, setTaxonomiesLoading] = useState(true);
+
+  const [productLoading, setProductLoading] = useState(isEdit);
+  const [productLoaded, setProductLoaded] = useState(!isEdit);
+
   const draggingId = useRef(null);
 
   // =====================================
-  // LOAD EXISTING PRODUCT
+  // LOAD CATEGORIES AND OCCASIONS
   // =====================================
 
   useEffect(() => {
-    let existing = initialProduct;
+    let ignore = false;
 
-    // Existing demo products can still be opened.
-    // Publish no longer writes to localStorage.
-    if (!existing && productId) {
+    const loadTaxonomies = async () => {
+      setTaxonomiesLoading(true);
+
       try {
-        const list = JSON.parse(
-          localStorage.getItem(STORAGE_KEY) || "[]"
-        );
+        const [categoryRes, occasionRes] = await Promise.all([
+          fetch(`${API_URL}/categories`),
+          fetch(`${API_URL}/occasions`),
+        ]);
 
-        existing = list.find(
-          (item) =>
-            String(item.id || item._id) === String(productId)
-        );
-      } catch {
-        existing = null;
+        const [categoryData, occasionData] = await Promise.all([
+          categoryRes.json(),
+          occasionRes.json(),
+        ]);
+
+        if (
+          !categoryRes.ok ||
+          !categoryData.success ||
+          !occasionRes.ok ||
+          !occasionData.success
+        ) {
+          throw new Error("ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
+        }
+
+        if (!ignore) {
+          setCategories(categoryData.categories || []);
+          setOccasions(occasionData.occasions || []);
+        }
+      } catch (err) {
+        console.error("Load categories/occasions:", err);
+
+        if (!ignore) {
+          setError(
+            err.message || "ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।"
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setTaxonomiesLoading(false);
+        }
       }
-    }
+    };
 
-    if (!existing) {
-      setForm(createProduct());
+    loadTaxonomies();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  // =====================================
+  // LOAD EXISTING PRODUCT FROM MONGODB
+  // =====================================
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadProduct = async () => {
+      setError("");
+      setSuccess("");
       setSelectedPhoto(null);
-      return;
-    }
+      setVariantQuery("");
+      setVariantFilter("all");
 
-    const defaults = createProduct();
+      // ADD MODE
+      if (!productId) {
+        setForm(createProduct());
+        setProductLoading(false);
+        setProductLoaded(true);
+        return;
+      }
 
-    const images = (existing.images || [])
-      .map((image) =>
-        typeof image === "string"
-          ? createImage(image)
-          : {
-              id: image.id || uid(),
-              url: image.url || "",
-            }
-      )
-      .slice(0, MAX_IMAGES);
+      // EDIT MODE
+      setProductLoading(true);
+      setProductLoaded(false);
 
-    setForm({
-      ...defaults,
-      ...existing,
+      try {
+        const auth = getAuth(app);
 
-      id: String(existing.id || existing._id || ""),
+        // Wait until Firebase restores logged-in user
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
 
-      images: images.length
-        ? images
-        : [createImage()],
+        const currentUser = auth.currentUser;
 
-      options: Object.fromEntries(
-        Object.entries(defaults.options).map(
-          ([key, def]) => [
-            key,
-            {
-              ...def,
-              ...(existing.options?.[key] || {}),
+        if (!currentUser) {
+          throw new Error("প্রোডাক্ট এডিট করতে লগইন করুন।");
+        }
+
+        const token = await currentUser.getIdToken();
+
+        const response = await fetch(
+          `${API_URL}/admin/products/${productId}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
             },
-          ]
+            cache: "no-store",
+          }
+        );
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || !result.success || !result.product) {
+          throw new Error(
+            result.message || "প্রোডাক্ট লোড করা যায়নি।"
+          );
+        }
+
+        if (ignore) return;
+
+        const existing = result.product;
+        const defaults = createProduct();
+
+        // RESTORE IMAGES
+        const images = (
+          Array.isArray(existing.images) ? existing.images : []
         )
-      ),
+          .map((image) => {
+            if (typeof image === "string") {
+              return createImage(image);
+            }
 
-      variantOverrides:
-        existing.variantOverrides || {},
+            return {
+              id: image?.id || uid(),
+              url: image?.url || "",
+            };
+          })
+          .slice(0, MAX_IMAGES);
 
-      customerFieldType:
-        existing.customerFieldType || "none",
-    });
+        // RESTORE VARIANT OPTIONS
+        const options = Object.fromEntries(
+          Object.entries(defaults.options).map(
+            ([type, defaultGroup]) => {
+              const savedGroup = existing.options?.[type] || {};
 
-    setSelectedPhoto(null);
-  }, [productId, initialProduct]);
+              return [
+                type,
+                {
+                  ...defaultGroup,
+                  ...savedGroup,
+                  values: Array.isArray(savedGroup.values)
+                    ? savedGroup.values.map((value) => ({
+                        id: value.id || uid(),
+                        label: String(value.label || ""),
+                      }))
+                    : [],
+                },
+              ];
+            }
+          )
+        );
+
+        // RESTORE COMPLETE PRODUCT FORM
+        setForm({
+          ...defaults,
+          ...existing,
+
+          id: String(existing._id || existing.id || ""),
+
+          name: existing.name || "",
+          sku: existing.sku || "",
+          autoSku: existing.autoSku === true,
+          description: existing.description || "",
+
+          regularPrice: String(existing.regularPrice ?? ""),
+
+          salePrice:
+            existing.salePrice == null
+              ? ""
+              : String(existing.salePrice),
+
+          categoryId: existing.categoryId || "",
+
+          occasionIds: Array.isArray(existing.occasionIds)
+            ? existing.occasionIds
+            : [],
+
+          images: images.length ? images : [createImage()],
+
+          available: existing.available === true,
+          featured: existing.featured === true,
+          customizable: existing.customizable === true,
+
+          variantsEnabled: existing.variantsEnabled === true,
+
+          options,
+
+          variantOverrides:
+            existing.variantOverrides &&
+            typeof existing.variantOverrides === "object" &&
+            !Array.isArray(existing.variantOverrides)
+              ? existing.variantOverrides
+              : {},
+
+          customerFieldType:
+            existing.customerFieldType || "none",
+
+          surpriseBox: existing.surpriseBox === true,
+
+          packaging:
+            existing.packaging === "premium"
+              ? "premium"
+              : "regular",
+
+          premiumBoxPrice: String(
+            existing.premiumBoxPrice ?? 250
+          ),
+        });
+
+        setProductLoaded(true);
+      } catch (err) {
+        console.error("Load Product Error:", err);
+
+        if (!ignore) {
+          setError(
+            err.message || "প্রোডাক্ট লোড করা যায়নি।"
+          );
+          setProductLoaded(false);
+        }
+      } finally {
+        if (!ignore) {
+          setProductLoading(false);
+        }
+      }
+    };
+
+    loadProduct();
+
+    return () => {
+      ignore = true;
+    };
+  }, [productId]);
 
   // =====================================
   // FIELD UPDATES
@@ -700,10 +859,7 @@ export default function AdminProductFormPage({
         ? prev
         : {
             ...prev,
-            images: [
-              ...prev.images,
-              createImage(),
-            ],
+            images: [...prev.images, createImage()],
           }
     );
   };
@@ -1073,7 +1229,7 @@ export default function AdminProductFormPage({
   };
 
   // =====================================
-  // PUBLISH PRODUCT
+  // PUBLISH / UPDATE PRODUCT
   // =====================================
 
   const handleSubmit = async (event) => {
@@ -1084,11 +1240,24 @@ export default function AdminProductFormPage({
 
     const fail = (message) => {
       setError(message);
-      toast.error(message);
+
+      Swal.fire({
+        title: message,
+        icon: "error",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+      });
     };
 
-    // BASIC VALIDATION
+    // PREVENT UPDATE BEFORE PRODUCT LOAD
+    if (isEdit && !productLoaded) {
+      return fail("প্রোডাক্টের তথ্য এখনো লোড হয়নি।");
+    }
 
+    // BASIC VALIDATION
     if (!form.name.trim()) {
       return fail("প্রোডাক্টের নাম লিখুন।");
     }
@@ -1120,8 +1289,11 @@ export default function AdminProductFormPage({
       return fail("ক্যাটাগরি নির্বাচন করুন।");
     }
 
-    // IMAGE VALIDATION
+    if (!form.occasionIds.length) {
+      return fail("অন্তত একটি উপলক্ষ নির্বাচন করুন।");
+    }
 
+    // IMAGE VALIDATION
     const images = form.images.filter(
       (image) => image.url.trim()
     );
@@ -1146,7 +1318,6 @@ export default function AdminProductFormPage({
     }
 
     // VARIANT VALIDATION
-
     if (combinationCount > MAX_VARIANTS) {
       return fail(
         `সর্বোচ্চ ${MAX_VARIANTS}টি variant রাখা যাবে।`
@@ -1203,7 +1374,6 @@ export default function AdminProductFormPage({
     }
 
     // PACKAGING VALIDATION
-
     if (
       !Number.isFinite(Number(form.premiumBoxPrice)) ||
       Number(form.premiumBoxPrice) < 0 ||
@@ -1218,8 +1388,6 @@ export default function AdminProductFormPage({
 
     // =====================================
     // COMPLETE PRODUCT OBJECT
-    // Backend-ready payload.
-    // Slug will be generated by backend.
     // =====================================
 
     const payload = {
@@ -1278,72 +1446,134 @@ export default function AdminProductFormPage({
     setLoading(true);
 
     try {
-      // =====================================
-      // CONSOLE LOG: COMPLETE PRODUCT
-      // =====================================
+      const auth = getAuth(app);
 
-      console.log("SokhBilash Product Payload:", payload);
+      if (typeof auth.authStateReady === "function") {
+        await auth.authStateReady();
+      }
 
-      // =====================================
-      // FUTURE BACKEND IMPLEMENTATION
-      // =====================================
-      // Pass an onPublish prop when your API is ready.
-      //
-      // Example:
-      // const onPublish = async (product) => {
-      //   await axiosSecure.post("/products", product);
-      // };
-      //
-      // With no onPublish prop, data is only logged.
+      const currentUser = auth.currentUser;
 
-      if (onPublish) {
-        await onPublish(payload);
+      if (!currentUser) {
+        throw new Error("প্রোডাক্ট সংরক্ষণ করতে লগইন করুন।");
+      }
 
-        toast.success(
-          "প্রোডাক্ট সফলভাবে প্রকাশ করা হয়েছে।"
-        );
+      const token = await currentUser.getIdToken();
 
-        setSuccess(
-          "প্রোডাক্ট সফলভাবে প্রকাশ করা হয়েছে।"
-        );
-      } else {
-        toast.success(
-          "সম্পূর্ণ Product Object Console-এ দেখানো হয়েছে।"
-        );
+      // ADD = POST, EDIT = PATCH
+      const response = await fetch(
+        isEdit
+          ? `${API_URL}/admin/products/${productId}`
+          : `${API_URL}/admin/products`,
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
 
-        setSuccess(
-          "Product Object Console-এ তৈরি হয়েছে। Backend-এ সংরক্ষণ করা হয়নি।"
+      const result = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।"
         );
       }
 
-      setForm((prev) => ({
-        ...prev,
-        id: payload.id,
-        createdAt: payload.createdAt,
-        updatedAt: payload.updatedAt,
-      }));
-    } catch (e) {
+      setSuccess(
+        isEdit
+          ? "প্রোডাক্ট আপডেট হয়েছে!"
+          : "প্রোডাক্ট যোগ হয়েছে!"
+      );
+
+      Swal.fire({
+        title: isEdit
+          ? "প্রোডাক্ট আপডেট হয়েছে!"
+          : "প্রোডাক্ট যোগ হয়েছে!",
+        icon: "success",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true,
+      });
+
+      // REFRESH PRODUCT LIST CACHE
+      await queryClient.invalidateQueries({
+        queryKey: ["adminProducts"],
+      });
+
+      navigate("/admin/products", {
+        replace: true,
+      });
+    } catch (err) {
       const message =
-        e?.message || "প্রোডাক্ট প্রস্তুত করা যায়নি।";
+        err.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।";
 
       setError(message);
-      toast.error(message);
+
+      Swal.fire({
+        title: message,
+        icon: "error",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   // =====================================
-  // JSX
+  // PRODUCT LOADING / ERROR
+  // =====================================
+
+  if (isEdit && productLoading) {
+    return (
+      <div className="flex min-h-[65vh] flex-col items-center justify-center gap-3">
+        <Loader2
+          size={32}
+          className="animate-spin text-secondary"
+        />
+
+        <p className="text-sm text-muted">
+          প্রোডাক্টের তথ্য লোড হচ্ছে...
+        </p>
+      </div>
+    );
+  }
+
+  if (isEdit && !productLoaded) {
+    return (
+      <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+        <p className="text-sm font-semibold text-red-700">
+          {error || "প্রোডাক্ট লোড করা যায়নি।"}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => navigate("/admin/products")}
+          className="mt-4 rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-white"
+        >
+          প্রোডাক্ট তালিকায় ফিরে যান
+        </button>
+      </div>
+    );
+  }
+
+  // =====================================
+  // JSX - ORIGINAL DESIGN
   // =====================================
 
   return (
     <div className="min-h-screen text-[#310039]">
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        theme="light"
-      />
 
       {/* PAGE HEADING */}
 
@@ -1372,6 +1602,7 @@ export default function AdminProductFormPage({
         {/* LEFT COLUMN */}
 
         <div className="min-w-0 space-y-5">
+
           {/* BASIC DETAILS */}
 
           <Section
@@ -2055,7 +2286,7 @@ export default function AdminProductFormPage({
                       maxLength={500}
                       value=""
                       disabled
-                      placeholder="গ্রাহকের বিশেষ নির্দেশনা লিখুন..."
+                      placeholder="গ্রাহকের বিশেষ নির্দেশনা..."
                       className={`${inputClass} resize-y`}
                     />
                   </Field>
@@ -2241,6 +2472,7 @@ export default function AdminProductFormPage({
                   )
                 }
                 className={`${inputClass} bg-[#f7f0fc]`}
+                disabled={taxonomiesLoading}
               >
                 <option value="">
                   ক্যাটাগরি নির্বাচন করুন
@@ -2254,15 +2486,57 @@ export default function AdminProductFormPage({
                     {category.name}
                   </option>
                 ))}
-
-                {!categories.some(
-                  (category) => category.id === "others"
-                ) && (
-                  <option value="others">
-                    অন্যান্য (Others)
-                  </option>
-                )}
               </select>
+            </Field>
+
+            {/* OCCASIONS: MULTIPLE SELECTION */}
+
+            <Field
+              label="উপলক্ষ (Occasions)"
+              required
+              hint="প্রয়োজন অনুযায়ী একাধিক উপলক্ষ নির্বাচন করুন।"
+            >
+              <div className="space-y-2 rounded-xl border border-[#e8ddec] bg-[#f7f0fc] p-3">
+                {taxonomiesLoading && (
+                  <p className="text-xs text-[#82748b]">
+                    উপলক্ষ লোড হচ্ছে...
+                  </p>
+                )}
+
+                {occasions.map((occasion) => (
+                  <label
+                    key={occasion.id}
+                    className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.occasionIds.includes(occasion.id)}
+                      onChange={(e) => {
+                        update(
+                          "occasionIds",
+                          e.target.checked
+                            ? [...form.occasionIds, occasion.id]
+                            : form.occasionIds.filter(
+                                (id) => id !== occasion.id
+                              )
+                        );
+                      }}
+                      className="checkbox checkbox-sm checkbox-secondary"
+                    />
+
+                    {occasion.imageUrl && (
+                      <img
+                        src={occasion.imageUrl}
+                        alt=""
+                        loading="lazy"
+                        className="size-9 shrink-0 rounded-lg object-cover"
+                      />
+                    )}
+
+                    <span>{occasion.name}</span>
+                  </label>
+                ))}
+              </div>
             </Field>
           </Section>
 
@@ -2415,7 +2689,12 @@ export default function AdminProductFormPage({
               <div className="mt-5 space-y-3 border-t border-[#f0e8f3] pt-5">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={
+                    loading ||
+                    taxonomiesLoading ||
+                    productLoading ||
+                    (isEdit && !productLoaded)
+                  }
                   className={`${primaryButton} w-full py-3`}
                 >
                   {loading ? (
@@ -2427,7 +2706,11 @@ export default function AdminProductFormPage({
                     <Save size={18} />
                   )}
 
-                  প্রোডাক্ট প্রকাশ করুন
+                  {loading
+                    ? "সংরক্ষণ হচ্ছে..."
+                    : isEdit
+                      ? "প্রোডাক্ট আপডেট করুন"
+                      : "প্রোডাক্ট যোগ করুন"}
                 </button>
 
                 <button

@@ -11,7 +11,7 @@ import {
   Sparkles,
   ShieldCheck,
 } from "lucide-react";
-import { AuthContext } from "../../../providers/AuthProvider";
+import { AuthContext } from "../../providers/AuthProvider";
 import Swal from "sweetalert2";
 
 const ForgotPassword = () => {
