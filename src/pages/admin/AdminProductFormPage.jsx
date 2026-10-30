@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -64,14 +63,11 @@ const makeSku = () =>
     .slice(2, 7)
     .toUpperCase()}`;
 
-const money = (value) =>
-  `৳ ${Number(value || 0).toLocaleString("bn-BD")}`;
+const money = (value) => `৳ ${Number(value || 0).toLocaleString("bn-BD")}`;
 
 const validUrl = (url) => {
   try {
-    return ["https:", "http:"].includes(
-      new URL(String(url).trim()).protocol
-    );
+    return ["https:", "http:"].includes(new URL(String(url).trim()).protocol);
   } catch {
     return false;
   }
@@ -152,9 +148,7 @@ function Section({ title, right, children }) {
         {right}
       </div>
 
-      <div className="space-y-4 p-4 sm:p-5">
-        {children}
-      </div>
+      <div className="space-y-4 p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -163,28 +157,19 @@ function Section({ title, right, children }) {
 // FIELD
 // =====================================
 
-function Field({
-  label,
-  required = false,
-  hint,
-  children,
-}) {
+function Field({ label, required = false, hint, children }) {
   return (
     <div className="min-w-0">
       <p className="mb-2 text-sm font-semibold text-[#310039]">
         {label}
 
-        {required && (
-          <span className="ml-1 text-red-500">*</span>
-        )}
+        {required && <span className="ml-1 text-red-500">*</span>}
       </p>
 
       {children}
 
       {hint && (
-        <p className="mt-1.5 text-xs leading-relaxed text-[#82748b]">
-          {hint}
-        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-[#82748b]">{hint}</p>
       )}
     </div>
   );
@@ -194,11 +179,7 @@ function Field({
 // SWITCH
 // =====================================
 
-function MiniSwitch({
-  checked,
-  onChange,
-  disabled = false,
-}) {
+function MiniSwitch({ checked, onChange, disabled = false }) {
   return (
     <label className="relative inline-flex shrink-0 cursor-pointer items-center">
       <input
@@ -251,26 +232,16 @@ function Photo({ url, className = "" }) {
 // STATUS CARD
 // =====================================
 
-function StatusCard({
-  title,
-  subtitle,
-  checked,
-  onChange,
-}) {
+function StatusCard({ title, subtitle, checked, onChange }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl bg-[#f7f0fc] px-4 py-4">
       <div className="min-w-0">
         <p className="text-sm font-bold">{title}</p>
 
-        <p className="mt-1 text-xs text-[#82748b]">
-          {subtitle}
-        </p>
+        <p className="mt-1 text-xs text-[#82748b]">{subtitle}</p>
       </div>
 
-      <MiniSwitch
-        checked={checked}
-        onChange={onChange}
-      />
+      <MiniSwitch checked={checked} onChange={onChange} />
     </div>
   );
 }
@@ -279,14 +250,7 @@ function StatusCard({
 // VARIANT OPTION GROUP
 // =====================================
 
-function OptionGroup({
-  title,
-  type,
-  group,
-  onToggle,
-  onAdd,
-  onRemove,
-}) {
+function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
   const [draft, setDraft] = useState("");
 
   const addValues = () => {
@@ -315,9 +279,7 @@ function OptionGroup({
   return (
     <div
       className={`rounded-xl p-4 ${
-        group.enabled
-          ? "bg-[#f7f0fc]"
-          : "bg-[#f9f7fa] opacity-75"
+        group.enabled ? "bg-[#f7f0fc]" : "bg-[#f9f7fa] opacity-75"
       }`}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -395,12 +357,7 @@ function OptionGroup({
 // POLISHED VARIANT CARD
 // =====================================
 
-function VariantCard({
-  variant,
-  onChange,
-  coverImage,
-  basePrice,
-}) {
+function VariantCard({ variant, onChange, coverImage, basePrice }) {
   return (
     <article
       className={`flex min-h-[286px] min-w-0 flex-col rounded-xl border p-3.5 transition sm:p-4 ${
@@ -512,9 +469,7 @@ function VariantCard({
                 className="checkbox checkbox-sm border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
               />
 
-              <span className="hidden 2xl:inline">
-                Auto
-              </span>
+              <span className="hidden 2xl:inline">Auto</span>
             </label>
           </div>
         </Field>
@@ -597,9 +552,7 @@ export default function AdminProductFormPage() {
         console.error("Load categories/occasions:", err);
 
         if (!ignore) {
-          setError(
-            err.message || "ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।"
-          );
+          setError(err.message || "ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
         }
       } finally {
         if (!ignore) {
@@ -657,23 +610,18 @@ export default function AdminProductFormPage() {
 
         const token = await currentUser.getIdToken();
 
-        const response = await fetch(
-          `${API_URL}/admin/products/${productId}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            cache: "no-store",
-          }
-        );
+        const response = await fetch(`${API_URL}/admin/products/${productId}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        });
 
         const result = await response.json().catch(() => ({}));
 
         if (!response.ok || !result.success || !result.product) {
-          throw new Error(
-            result.message || "প্রোডাক্ট লোড করা যায়নি।"
-          );
+          throw new Error(result.message || "প্রোডাক্ট লোড করা যায়নি।");
         }
 
         if (ignore) return;
@@ -682,9 +630,7 @@ export default function AdminProductFormPage() {
         const defaults = createProduct();
 
         // RESTORE IMAGES
-        const images = (
-          Array.isArray(existing.images) ? existing.images : []
-        )
+        const images = (Array.isArray(existing.images) ? existing.images : [])
           .map((image) => {
             if (typeof image === "string") {
               return createImage(image);
@@ -699,25 +645,23 @@ export default function AdminProductFormPage() {
 
         // RESTORE VARIANT OPTIONS
         const options = Object.fromEntries(
-          Object.entries(defaults.options).map(
-            ([type, defaultGroup]) => {
-              const savedGroup = existing.options?.[type] || {};
+          Object.entries(defaults.options).map(([type, defaultGroup]) => {
+            const savedGroup = existing.options?.[type] || {};
 
-              return [
-                type,
-                {
-                  ...defaultGroup,
-                  ...savedGroup,
-                  values: Array.isArray(savedGroup.values)
-                    ? savedGroup.values.map((value) => ({
-                        id: value.id || uid(),
-                        label: String(value.label || ""),
-                      }))
-                    : [],
-                },
-              ];
-            }
-          )
+            return [
+              type,
+              {
+                ...defaultGroup,
+                ...savedGroup,
+                values: Array.isArray(savedGroup.values)
+                  ? savedGroup.values.map((value) => ({
+                      id: value.id || uid(),
+                      label: String(value.label || ""),
+                    }))
+                  : [],
+              },
+            ];
+          }),
         );
 
         // RESTORE COMPLETE PRODUCT FORM
@@ -735,9 +679,7 @@ export default function AdminProductFormPage() {
           regularPrice: String(existing.regularPrice ?? ""),
 
           salePrice:
-            existing.salePrice == null
-              ? ""
-              : String(existing.salePrice),
+            existing.salePrice == null ? "" : String(existing.salePrice),
 
           categoryId: existing.categoryId || "",
 
@@ -762,19 +704,13 @@ export default function AdminProductFormPage() {
               ? existing.variantOverrides
               : {},
 
-          customerFieldType:
-            existing.customerFieldType || "none",
+          customerFieldType: existing.customerFieldType || "none",
 
           surpriseBox: existing.surpriseBox === true,
 
-          packaging:
-            existing.packaging === "premium"
-              ? "premium"
-              : "regular",
+          packaging: existing.packaging === "premium" ? "premium" : "regular",
 
-          premiumBoxPrice: String(
-            existing.premiumBoxPrice ?? 250
-          ),
+          premiumBoxPrice: String(existing.premiumBoxPrice ?? 250),
         });
 
         setProductLoaded(true);
@@ -782,9 +718,7 @@ export default function AdminProductFormPage() {
         console.error("Load Product Error:", err);
 
         if (!ignore) {
-          setError(
-            err.message || "প্রোডাক্ট লোড করা যায়নি।"
-          );
+          setError(err.message || "প্রোডাক্ট লোড করা যায়নি।");
           setProductLoaded(false);
         }
       } finally {
@@ -860,7 +794,7 @@ export default function AdminProductFormPage() {
         : {
             ...prev,
             images: [...prev.images, createImage()],
-          }
+          },
     );
   };
 
@@ -868,9 +802,7 @@ export default function AdminProductFormPage() {
     setForm((prev) => ({
       ...prev,
       images: prev.images.map((image) =>
-        image.id === id
-          ? { ...image, url }
-          : image
+        image.id === id ? { ...image, url } : image,
       ),
     }));
   };
@@ -878,9 +810,7 @@ export default function AdminProductFormPage() {
   const removePhoto = (id) => {
     setForm((prev) => ({
       ...prev,
-      images: prev.images.filter(
-        (image) => image.id !== id
-      ),
+      images: prev.images.filter((image) => image.id !== id),
     }));
 
     if (selectedPhoto === id) {
@@ -894,13 +824,9 @@ export default function AdminProductFormPage() {
     setForm((prev) => {
       const images = [...prev.images];
 
-      const from = images.findIndex(
-        (x) => x.id === fromId
-      );
+      const from = images.findIndex((x) => x.id === fromId);
 
-      const to = images.findIndex(
-        (x) => x.id === toId
-      );
+      const to = images.findIndex((x) => x.id === toId);
 
       if (from < 0 || to < 0) return prev;
 
@@ -916,21 +842,14 @@ export default function AdminProductFormPage() {
 
   const movePhoto = (index, step) => {
     if (form.images[index + step]) {
-      reorderPhoto(
-        form.images[index].id,
-        form.images[index + step].id
-      );
+      reorderPhoto(form.images[index].id, form.images[index + step].id);
     }
   };
 
-  const gallery = form.images.filter(
-    (image) => validUrl(image.url)
-  );
+  const gallery = form.images.filter((image) => validUrl(image.url));
 
   const mainPhoto =
-    gallery.find(
-      (image) => image.id === selectedPhoto
-    ) || gallery[0];
+    gallery.find((image) => image.id === selectedPhoto) || gallery[0];
 
   // =====================================
   // VARIANT OPTIONS
@@ -958,9 +877,7 @@ export default function AdminProductFormPage() {
       const group = prev.options[type];
 
       const exists = group.values.some(
-        (x) =>
-          x.label.toLowerCase() ===
-          value.toLowerCase()
+        (x) => x.label.toLowerCase() === value.toLowerCase(),
       );
 
       if (exists) return prev;
@@ -991,9 +908,7 @@ export default function AdminProductFormPage() {
         ...prev.options,
         [type]: {
           ...prev.options[type],
-          values: prev.options[type].values.filter(
-            (x) => x.id !== id
-          ),
+          values: prev.options[type].values.filter((x) => x.id !== id),
         },
       },
     }));
@@ -1006,20 +921,15 @@ export default function AdminProductFormPage() {
   const activeGroups = useMemo(
     () =>
       Object.entries(form.options).filter(
-        ([, group]) =>
-          group.enabled && group.values.length
+        ([, group]) => group.enabled && group.values.length,
       ),
-    [form.options]
+    [form.options],
   );
 
   const combinationCount =
     !form.variantsEnabled || !activeGroups.length
       ? 0
-      : activeGroups.reduce(
-          (n, [, group]) =>
-            n * group.values.length,
-          1
-        );
+      : activeGroups.reduce((n, [, group]) => n * group.values.length, 1);
 
   const combinations = useMemo(() => {
     if (
@@ -1043,32 +953,23 @@ export default function AdminProductFormPage() {
               label: v.label,
             },
           ],
-        }))
+        })),
       );
     }
 
     return rows.map((row) => ({
       ...row,
 
-      key: row.parts
-        .map((part) => `${part.type}:${part.id}`)
-        .join("|"),
+      key: row.parts.map((part) => `${part.type}:${part.id}`).join("|"),
 
-      title: row.parts
-        .map((part) => part.label)
-        .join(" / "),
+      title: row.parts.map((part) => part.label).join(" / "),
     }));
-  }, [
-    activeGroups,
-    combinationCount,
-    form.variantsEnabled,
-  ]);
+  }, [activeGroups, combinationCount, form.variantsEnabled]);
 
   const variants = useMemo(
     () =>
       combinations.map((row) => {
-        const patch =
-          form.variantOverrides[row.key] || {};
+        const patch = form.variantOverrides[row.key] || {};
 
         const autoSku = patch.autoSku ?? true;
 
@@ -1085,11 +986,7 @@ export default function AdminProductFormPage() {
           available: patch.available ?? true,
         };
       }),
-    [
-      combinations,
-      form.variantOverrides,
-      form.sku,
-    ]
+    [combinations, form.variantOverrides, form.sku],
   );
 
   const updateVariant = (key, patch) => {
@@ -1114,17 +1011,11 @@ export default function AdminProductFormPage() {
   const filteredVariants = useMemo(
     () =>
       variants.filter((v) => {
-        if (
-          variantFilter === "available" &&
-          !v.available
-        ) {
+        if (variantFilter === "available" && !v.available) {
           return false;
         }
 
-        if (
-          variantFilter === "unavailable" &&
-          v.available
-        ) {
+        if (variantFilter === "unavailable" && v.available) {
           return false;
         }
 
@@ -1132,42 +1023,26 @@ export default function AdminProductFormPage() {
           !variantQuery.trim() ||
           `${v.title} ${v.sku}`
             .toLowerCase()
-            .includes(
-              variantQuery.toLowerCase().trim()
-            )
+            .includes(variantQuery.toLowerCase().trim())
         );
       }),
-    [
-      variants,
-      variantFilter,
-      variantQuery,
-    ]
+    [variants, variantFilter, variantQuery],
   );
 
   // =====================================
   // PRICE PREVIEW
   // =====================================
 
-  const regularPrice =
-    Number(form.regularPrice) || 0;
+  const regularPrice = Number(form.regularPrice) || 0;
 
-  const salePrice =
-    Number(form.salePrice) || 0;
+  const salePrice = Number(form.salePrice) || 0;
 
-  const basePrice =
-    salePrice > 0
-      ? salePrice
-      : regularPrice;
+  const basePrice = salePrice > 0 ? salePrice : regularPrice;
 
-  const purchasableVariants = variants.filter(
-    (v) => v.available
-  );
+  const purchasableVariants = variants.filter((v) => v.available);
 
-  const prices = purchasableVariants.map(
-    (v) =>
-      v.price === ""
-        ? basePrice
-        : Number(v.price)
+  const prices = purchasableVariants.map((v) =>
+    v.price === "" ? basePrice : Number(v.price),
   );
 
   const minPrice = form.variantsEnabled
@@ -1280,9 +1155,7 @@ export default function AdminProductFormPage() {
         salePrice <= 0 ||
         salePrice >= regularPrice)
     ) {
-      return fail(
-        "অফার মূল্য নিয়মিত মূল্যের চেয়ে কম হতে হবে।"
-      );
+      return fail("অফার মূল্য নিয়মিত মূল্যের চেয়ে কম হতে হবে।");
     }
 
     if (!form.categoryId) {
@@ -1294,83 +1167,50 @@ export default function AdminProductFormPage() {
     }
 
     // IMAGE VALIDATION
-    const images = form.images.filter(
-      (image) => image.url.trim()
-    );
+    const images = form.images.filter((image) => image.url.trim());
 
-    if (
-      !images.length ||
-      images.some((image) => !validUrl(image.url))
-    ) {
-      return fail(
-        "অন্তত একটি সঠিক Image URL প্রয়োজন।"
-      );
+    if (!images.length || images.some((image) => !validUrl(image.url))) {
+      return fail("অন্তত একটি সঠিক Image URL প্রয়োজন।");
     }
 
-    if (
-      new Set(
-        images.map((i) => i.url.trim())
-      ).size !== images.length
-    ) {
-      return fail(
-        "একই Image URL একাধিকবার দেওয়া যাবে না।"
-      );
+    if (new Set(images.map((i) => i.url.trim())).size !== images.length) {
+      return fail("একই Image URL একাধিকবার দেওয়া যাবে না।");
     }
 
     // VARIANT VALIDATION
     if (combinationCount > MAX_VARIANTS) {
-      return fail(
-        `সর্বোচ্চ ${MAX_VARIANTS}টি variant রাখা যাবে।`
-      );
+      return fail(`সর্বোচ্চ ${MAX_VARIANTS}টি variant রাখা যাবে।`);
     }
 
-    if (
-      form.variantsEnabled &&
-      !variants.length
-    ) {
+    if (form.variantsEnabled && !variants.length) {
       return fail(
-        "Variant চালু থাকলে অন্তত একটি Size, Color বা Type যোগ করুন।"
+        "Variant চালু থাকলে অন্তত একটি Size, Color বা Type যোগ করুন।",
       );
     }
 
     for (const v of variants) {
       if (!v.sku.trim()) {
-        return fail(
-          `${v.title}: SKU প্রয়োজন।`
-        );
+        return fail(`${v.title}: SKU প্রয়োজন।`);
       }
 
-      if (
-        v.imageUrl.trim() &&
-        !validUrl(v.imageUrl)
-      ) {
-        return fail(
-          `${v.title}: Image URL সঠিক নয়।`
-        );
+      if (v.imageUrl.trim() && !validUrl(v.imageUrl)) {
+        return fail(`${v.title}: Image URL সঠিক নয়।`);
       }
 
       if (
         v.price !== "" &&
-        (!Number.isFinite(Number(v.price)) ||
-          Number(v.price) <= 0)
+        (!Number.isFinite(Number(v.price)) || Number(v.price) <= 0)
       ) {
-        return fail(
-          `${v.title}: মূল্য সঠিক নয়।`
-        );
+        return fail(`${v.title}: মূল্য সঠিক নয়।`);
       }
     }
 
-    const allSkus = [
-      form.sku,
-      ...variants.map((v) => v.sku),
-    ].map((s) => s.trim().toUpperCase());
+    const allSkus = [form.sku, ...variants.map((v) => v.sku)].map((s) =>
+      s.trim().toUpperCase(),
+    );
 
-    if (
-      new Set(allSkus).size !== allSkus.length
-    ) {
-      return fail(
-        "Product ও Variant SKU আলাদা হতে হবে।"
-      );
+    if (new Set(allSkus).size !== allSkus.length) {
+      return fail("Product ও Variant SKU আলাদা হতে হবে।");
     }
 
     // PACKAGING VALIDATION
@@ -1379,9 +1219,7 @@ export default function AdminProductFormPage() {
       Number(form.premiumBoxPrice) < 0 ||
       form.premiumBoxPrice === ""
     ) {
-      return fail(
-        "Premium Box-এর মূল্য সঠিক নয়।"
-      );
+      return fail("Premium Box-এর মূল্য সঠিক নয়।");
     }
 
     const now = new Date().toISOString();
@@ -1399,10 +1237,7 @@ export default function AdminProductFormPage() {
 
       regularPrice,
 
-      salePrice:
-        form.salePrice === ""
-          ? null
-          : salePrice,
+      salePrice: form.salePrice === "" ? null : salePrice,
 
       images: images.map((i) => ({
         id: i.id,
@@ -1413,20 +1248,12 @@ export default function AdminProductFormPage() {
         key: v.key,
         title: v.title,
 
-        options: Object.fromEntries(
-          v.parts.map((p) => [
-            p.type,
-            p.label,
-          ])
-        ),
+        options: Object.fromEntries(v.parts.map((p) => [p.type, p.label])),
 
         sku: v.sku.trim(),
         autoSku: v.autoSku,
 
-        price:
-          v.price === ""
-            ? basePrice
-            : Number(v.price),
+        price: v.price === "" ? basePrice : Number(v.price),
 
         imageUrl: v.imageUrl.trim(),
         available: v.available,
@@ -1434,9 +1261,7 @@ export default function AdminProductFormPage() {
 
       customerFields: getCustomerFields(),
 
-      premiumBoxPrice: Number(
-        form.premiumBoxPrice
-      ),
+      premiumBoxPrice: Number(form.premiumBoxPrice),
 
       status: "published",
       createdAt: form.createdAt || now,
@@ -1472,29 +1297,19 @@ export default function AdminProductFormPage() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
-      const result = await response
-        .json()
-        .catch(() => ({}));
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok || !result.success) {
-        throw new Error(
-          result.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।"
-        );
+        throw new Error(result.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।");
       }
 
-      setSuccess(
-        isEdit
-          ? "প্রোডাক্ট আপডেট হয়েছে!"
-          : "প্রোডাক্ট যোগ হয়েছে!"
-      );
+      setSuccess(isEdit ? "প্রোডাক্ট আপডেট হয়েছে!" : "প্রোডাক্ট যোগ হয়েছে!");
 
       Swal.fire({
-        title: isEdit
-          ? "প্রোডাক্ট আপডেট হয়েছে!"
-          : "প্রোডাক্ট যোগ হয়েছে!",
+        title: isEdit ? "প্রোডাক্ট আপডেট হয়েছে!" : "প্রোডাক্ট যোগ হয়েছে!",
         icon: "success",
         toast: true,
         position: "top-end",
@@ -1512,8 +1327,7 @@ export default function AdminProductFormPage() {
         replace: true,
       });
     } catch (err) {
-      const message =
-        err.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।";
+      const message = err.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।";
 
       setError(message);
 
@@ -1538,14 +1352,9 @@ export default function AdminProductFormPage() {
   if (isEdit && productLoading) {
     return (
       <div className="flex min-h-[65vh] flex-col items-center justify-center gap-3">
-        <Loader2
-          size={32}
-          className="animate-spin text-secondary"
-        />
+        <Loader2 size={32} className="animate-spin text-secondary" />
 
-        <p className="text-sm text-muted">
-          প্রোডাক্টের তথ্য লোড হচ্ছে...
-        </p>
+        <p className="text-sm text-muted">প্রোডাক্টের তথ্য লোড হচ্ছে...</p>
       </div>
     );
   }
@@ -1574,7 +1383,6 @@ export default function AdminProductFormPage() {
 
   return (
     <div className="min-h-screen text-[#310039]">
-
       {/* PAGE HEADING */}
 
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
@@ -1602,7 +1410,6 @@ export default function AdminProductFormPage() {
         {/* LEFT COLUMN */}
 
         <div className="min-w-0 space-y-5">
-
           {/* BASIC DETAILS */}
 
           <Section
@@ -1613,40 +1420,28 @@ export default function AdminProductFormPage() {
               </span>
             }
           >
-            <Field
-              label="প্রোডাক্টের নাম (Product Name)"
-              required
-            >
+            <Field label="প্রোডাক্টের নাম (Product Name)" required>
               <input
                 value={form.name}
-                onChange={(e) =>
-                  update("name", e.target.value)
-                }
+                onChange={(e) => update("name", e.target.value)}
                 placeholder="বিবাহবার্ষিকী স্পেশাল কাস্টম কাঠের গিফট বক্স"
                 className={`${inputClass} bg-[#f8f1fd]`}
               />
             </Field>
 
-            <Field
-              label="মাস্টার SKU (Master SKU)"
-              required
-            >
+            <Field label="মাস্টার SKU (Master SKU)" required>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={form.sku}
                   disabled={form.autoSku}
-                  onChange={(e) =>
-                    update("sku", e.target.value)
-                  }
+                  onChange={(e) => update("sku", e.target.value)}
                   placeholder="SKB-BOX-2026"
                   className={`${inputClass} flex-1 bg-[#f8f1fd] disabled:opacity-75`}
                 />
 
                 <button
                   type="button"
-                  onClick={() =>
-                    update("sku", makeSku())
-                  }
+                  onClick={() => update("sku", makeSku())}
                   disabled={!form.autoSku}
                   className={softButton}
                 >
@@ -1659,15 +1454,9 @@ export default function AdminProductFormPage() {
                 <input
                   type="checkbox"
                   checked={form.autoSku}
-                  onChange={(e) =>
-                    update(
-                      "autoSku",
-                      e.target.checked
-                    )
-                  }
+                  onChange={(e) => update("autoSku", e.target.checked)}
                   className="checkbox checkbox-sm border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                 />
-
                 স্বয়ংক্রিয় SKU ব্যবহার করুন
               </label>
             </Field>
@@ -1684,12 +1473,7 @@ export default function AdminProductFormPage() {
                     min="0.01"
                     step="0.01"
                     value={form.regularPrice}
-                    onChange={(e) =>
-                      update(
-                        "regularPrice",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => update("regularPrice", e.target.value)}
                     placeholder="5800"
                     className={inputClass}
                   />
@@ -1706,12 +1490,7 @@ export default function AdminProductFormPage() {
                     min="0.01"
                     step="0.01"
                     value={form.salePrice}
-                    onChange={(e) =>
-                      update(
-                        "salePrice",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => update("salePrice", e.target.value)}
                     placeholder="4950"
                     className={inputClass}
                   />
@@ -1723,12 +1502,7 @@ export default function AdminProductFormPage() {
               <textarea
                 rows={5}
                 value={form.description}
-                onChange={(e) =>
-                  update(
-                    "description",
-                    e.target.value
-                  )
-                }
+                onChange={(e) => update("description", e.target.value)}
                 placeholder="প্রোডাক্ট সম্পর্কে বিস্তারিত লিখুন..."
                 className={`${inputClass} resize-y bg-[#f8f1fd]`}
               />
@@ -1746,24 +1520,19 @@ export default function AdminProductFormPage() {
             }
           >
             <p className="text-sm leading-relaxed text-[#84778b]">
-              ছবির URL পেস্ট করুন। ড্র্যাগ করে পজিশন
-              পরিবর্তন করুন। প্রথম ছবিটি প্রধান ছবি হবে।
+              ছবির URL পেস্ট করুন। ড্র্যাগ করে পজিশন পরিবর্তন করুন। প্রথম ছবিটি
+              প্রধান ছবি হবে।
             </p>
 
             <div className="space-y-2">
               {form.images.map((image, index) => (
                 <div
                   key={image.id}
-                  onDragOver={(e) =>
-                    e.preventDefault()
-                  }
+                  onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
 
-                    reorderPhoto(
-                      draggingId.current,
-                      image.id
-                    );
+                    reorderPhoto(draggingId.current, image.id);
 
                     draggingId.current = null;
                   }}
@@ -1774,13 +1543,9 @@ export default function AdminProductFormPage() {
                     onDragStart={(e) => {
                       draggingId.current = image.id;
 
-                      e.dataTransfer.effectAllowed =
-                        "move";
+                      e.dataTransfer.effectAllowed = "move";
 
-                      e.dataTransfer.setData(
-                        "text/plain",
-                        image.id
-                      );
+                      e.dataTransfer.setData("text/plain", image.id);
                     }}
                     onDragEnd={() => {
                       draggingId.current = null;
@@ -1797,27 +1562,17 @@ export default function AdminProductFormPage() {
                   <input
                     type="url"
                     value={image.url}
-                    onChange={(e) =>
-                      updatePhoto(
-                        image.id,
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => updatePhoto(image.id, e.target.value)}
                     placeholder="ছবির URL পেস্ট করুন (https://...)"
                     className="min-w-0 flex-1 rounded-lg border border-[#eee5f2] bg-white px-3 py-2 text-sm outline-none focus:border-[#b66ac5]"
                   />
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setSelectedPhoto(image.id)
-                    }
+                    onClick={() => setSelectedPhoto(image.id)}
                     className="shrink-0"
                   >
-                    <Photo
-                      url={image.url}
-                      className="size-10 rounded-lg"
-                    />
+                    <Photo url={image.url} className="size-10 rounded-lg" />
                   </button>
 
                   {index === 0 && (
@@ -1830,9 +1585,7 @@ export default function AdminProductFormPage() {
                     <button
                       type="button"
                       disabled={index === 0}
-                      onClick={() =>
-                        movePhoto(index, -1)
-                      }
+                      onClick={() => movePhoto(index, -1)}
                       className="text-[#8c7793] disabled:opacity-25"
                     >
                       <ArrowUp size={15} />
@@ -1840,13 +1593,8 @@ export default function AdminProductFormPage() {
 
                     <button
                       type="button"
-                      disabled={
-                        index ===
-                        form.images.length - 1
-                      }
-                      onClick={() =>
-                        movePhoto(index, 1)
-                      }
+                      disabled={index === form.images.length - 1}
+                      onClick={() => movePhoto(index, 1)}
                       className="text-[#8c7793] disabled:opacity-25"
                     >
                       <ArrowDown size={15} />
@@ -1855,9 +1603,7 @@ export default function AdminProductFormPage() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      removePhoto(image.id)
-                    }
+                    onClick={() => removePhoto(image.id)}
                     aria-label="Remove image"
                     className="text-[#903eaa] hover:text-red-500"
                   >
@@ -1870,14 +1616,11 @@ export default function AdminProductFormPage() {
             <button
               type="button"
               onClick={addPhoto}
-              disabled={
-                form.images.length >= MAX_IMAGES
-              }
+              disabled={form.images.length >= MAX_IMAGES}
               className={softButton}
             >
               <Plus size={17} />
-              আরেকটি ছবির লিংক যোগ করুন
-              ({form.images.length}/{MAX_IMAGES})
+              আরেকটি ছবির লিংক যোগ করুন ({form.images.length}/{MAX_IMAGES})
             </button>
           </Section>
 
@@ -1893,15 +1636,11 @@ export default function AdminProductFormPage() {
 
                 <MiniSwitch
                   checked={form.variantsEnabled}
-                  onChange={(v) =>
-                    update("variantsEnabled", v)
-                  }
+                  onChange={(v) => update("variantsEnabled", v)}
                 />
 
                 <span className="text-xs font-bold text-[#903eaa]">
-                  {form.variantsEnabled
-                    ? "চালু"
-                    : "বন্ধ"}
+                  {form.variantsEnabled ? "চালু" : "বন্ধ"}
                 </span>
               </div>
             }
@@ -1941,13 +1680,12 @@ export default function AdminProductFormPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="text-base font-bold text-[#903eaa]">
-                        জেনারেটেড ভ্যারিয়েন্ট তালিকা
-                        (Generated Variant List)
+                        জেনারেটেড ভ্যারিয়েন্ট তালিকা (Generated Variant List)
                       </h3>
 
                       <p className="mt-1 text-xs text-[#88788e]">
-                        প্রতি ভ্যারিয়েন্টের ছবি, মূল্য,
-                        SKU ও availability আলাদা।
+                        প্রতি ভ্যারিয়েন্টের ছবি, মূল্য, SKU ও availability
+                        আলাদা।
                       </p>
                     </div>
 
@@ -1957,12 +1695,7 @@ export default function AdminProductFormPage() {
                       </span>
 
                       <span className="rounded-lg bg-[#edf9f0] px-3 py-2 text-xs font-semibold text-[#237547]">
-                        উপলব্ধ{" "}
-                        {
-                          variants.filter(
-                            (v) => v.available
-                          ).length
-                        }
+                        উপলব্ধ {variants.filter((v) => v.available).length}
                         টি
                       </span>
                     </div>
@@ -1970,13 +1703,12 @@ export default function AdminProductFormPage() {
 
                   {combinationCount > MAX_VARIANTS ? (
                     <p className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">
-                      সর্বোচ্চ {MAX_VARIANTS}টি ভ্যারিয়েন্ট
-                      রাখা যাবে। অপশন কমিয়ে দিন।
+                      সর্বোচ্চ {MAX_VARIANTS}টি ভ্যারিয়েন্ট রাখা যাবে। অপশন
+                      কমিয়ে দিন।
                     </p>
                   ) : variants.length === 0 ? (
                     <div className="mt-4 rounded-lg border border-dashed border-[#e5d7eb] bg-[#faf6fc] p-8 text-center text-sm text-[#85758d]">
-                      Size, Color বা Type যোগ করলে
-                      ভ্যারিয়েন্ট তৈরি হবে।
+                      Size, Color বা Type যোগ করলে ভ্যারিয়েন্ট তৈরি হবে।
                     </div>
                   ) : (
                     <>
@@ -1991,11 +1723,7 @@ export default function AdminProductFormPage() {
 
                           <input
                             value={variantQuery}
-                            onChange={(e) =>
-                              setVariantQuery(
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => setVariantQuery(e.target.value)}
                             placeholder="ভ্যারিয়েন্ট বা SKU সার্চ করুন..."
                             className={`${inputClass} pl-10`}
                           />
@@ -2003,32 +1731,19 @@ export default function AdminProductFormPage() {
 
                         <select
                           value={variantFilter}
-                          onChange={(e) =>
-                            setVariantFilter(
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => setVariantFilter(e.target.value)}
                           className={`${inputClass} sm:w-44`}
                         >
-                          <option value="all">
-                            সব ভ্যারিয়েন্ট
-                          </option>
+                          <option value="all">সব ভ্যারিয়েন্ট</option>
 
-                          <option value="available">
-                            উপলব্ধ
-                          </option>
+                          <option value="available">উপলব্ধ</option>
 
-                          <option value="unavailable">
-                            অনুপলব্ধ
-                          </option>
+                          <option value="unavailable">অনুপলব্ধ</option>
                         </select>
                       </div>
 
                       <div className="mt-3 flex items-center justify-between text-xs text-[#8d7994]">
-                        <span>
-                          দেখানো হচ্ছে{" "}
-                          {filteredVariants.length}টি
-                        </span>
+                        <span>দেখানো হচ্ছে {filteredVariants.length}টি</span>
 
                         {filteredVariants.length > 6 && (
                           <span className="font-semibold text-[#903eaa]">
@@ -2046,24 +1761,17 @@ export default function AdminProductFormPage() {
                             : ""
                         }`}
                       >
-                        {filteredVariants.map(
-                          (variant) => (
-                            <VariantCard
-                              key={variant.key}
-                              variant={variant}
-                              coverImage={
-                                gallery[0]?.url
-                              }
-                              basePrice={basePrice}
-                              onChange={(patch) =>
-                                updateVariant(
-                                  variant.key,
-                                  patch
-                                )
-                              }
-                            />
-                          )
-                        )}
+                        {filteredVariants.map((variant) => (
+                          <VariantCard
+                            key={variant.key}
+                            variant={variant}
+                            coverImage={gallery[0]?.url}
+                            basePrice={basePrice}
+                            onChange={(patch) =>
+                              updateVariant(variant.key, patch)
+                            }
+                          />
+                        ))}
                       </div>
 
                       {filteredVariants.length === 0 && (
@@ -2077,18 +1785,12 @@ export default function AdminProductFormPage() {
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-[#e6d9ed] bg-[#fbf7fd] px-4 py-10 text-center">
-                <Package
-                  size={32}
-                  className="mx-auto mb-3 text-[#a788b1]"
-                />
+                <Package size={32} className="mx-auto mb-3 text-[#a788b1]" />
 
-                <p className="text-base font-bold">
-                  Single Product Mode
-                </p>
+                <p className="text-base font-bold">Single Product Mode</p>
 
                 <p className="mt-2 text-sm text-[#82758b]">
-                  আলাদা সাইজ, কালার বা ডিজাইন থাকলে
-                  Variant System চালু করুন।
+                  আলাদা সাইজ, কালার বা ডিজাইন থাকলে Variant System চালু করুন।
                 </p>
               </div>
             )}
@@ -2124,9 +1826,7 @@ export default function AdminProductFormPage() {
                   text: "শুধু সাধারণ লিখিত বা উপহারের তথ্য।",
                 },
               ].map((mode) => {
-                const selected =
-                  form.customerFieldType ===
-                  mode.value;
+                const selected = form.customerFieldType === mode.value;
 
                 return (
                   <label
@@ -2142,11 +1842,7 @@ export default function AdminProductFormPage() {
                         type="radio"
                         name="customerFieldType"
                         checked={selected}
-                        onChange={() =>
-                          chooseCustomerMode(
-                            mode.value
-                          )
-                        }
+                        onChange={() => chooseCustomerMode(mode.value)}
                         className="radio radio-sm mt-0.5 shrink-0 border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                       />
 
@@ -2172,130 +1868,109 @@ export default function AdminProductFormPage() {
             </div>
 
             <div className="flex items-start gap-2 rounded-lg bg-[#faf5fc] p-3 text-xs text-[#806f88]">
-              <Info
-                size={17}
-                className="shrink-0"
-              />
+              <Info size={17} className="shrink-0" />
 
               <p>
-                Frame Field বা Custom Note বেছে নিলেই
-                Customizable Product নিজে থেকে চালু হবে।
-                নিচের ফিল্ডগুলো শুধু গ্রাহক ফর্মের
-                প্রিভিউ; এখানে তথ্য দেওয়া যাবে না।
+                Frame Field বা Custom Note বেছে নিলেই Customizable Product নিজে
+                থেকে চালু হবে। নিচের ফিল্ডগুলো শুধু গ্রাহক ফর্মের প্রিভিউ; এখানে
+                তথ্য দেওয়া যাবে না।
               </p>
             </div>
 
             {/* FRAME FIELD PREVIEW - ALL DISABLED */}
 
-            {form.customerFieldType === "frame" &&
-              form.customizable && (
-                <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
-                  <div className="mb-4 flex items-center justify-between gap-2">
-                    <h3 className="flex items-center gap-2 text-sm font-bold">
-                      <ImageIcon
-                        size={18}
-                        className="text-[#903eaa]"
-                      />
+            {form.customerFieldType === "frame" && form.customizable && (
+              <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-bold">
+                    <ImageIcon size={18} className="text-[#903eaa]" />
+                    ফ্রেম ফিল্ড সেটিংস (Frame Field Preview)
+                  </h3>
 
-                      ফ্রেম ফিল্ড সেটিংস
-                      (Frame Field Preview)
-                    </h3>
+                  <span className="text-xs text-[#903eaa]">লাইভ প্রিভিউ</span>
+                </div>
 
-                    <span className="text-xs text-[#903eaa]">
-                      লাইভ প্রিভিউ
-                    </span>
-                  </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {/* PHOTO UPLOAD - DISABLED */}
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {/* PHOTO UPLOAD - DISABLED */}
-
-                    <div className="rounded-lg bg-white p-4">
-                      <Field
-                        label="৩. আপনার ছবি আপলোড করুন"
-                        hint="সর্বোচ্চ ২০টি ছবি আপলোড করা যাবে"
-                      >
-                        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-[#e4d3eb] bg-[#fbf8fd] p-5 text-center text-xs text-[#76258a]">
-                          <UploadCloud size={25} />
-
-                          <span>
-                            ছবি বেছে নিন (Max 20)
-                          </span>
-
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            disabled
-                            className="sr-only"
-                          />
-                        </label>
-                      </Field>
-                    </div>
-
-                    {/* NAME AND DATE - DISABLED */}
-
-                    <div className="space-y-3 rounded-lg bg-white p-4">
-                      <Field label="৪.১. নাম">
-                        <input
-                          disabled
-                          placeholder="গ্রাহকের নাম..."
-                          className={inputClass}
-                        />
-                      </Field>
-
-                      <Field label="৪.২. জন্মতারিখ / বিবাহবার্ষিকী">
-                        <input
-                          type="date"
-                          disabled
-                          className={inputClass}
-                        />
-                      </Field>
-                    </div>
-                  </div>
-
-                  {/* ENGRAVING - DISABLED */}
-
-                  <div className="mt-3 rounded-lg bg-white p-4">
+                  <div className="rounded-lg bg-white p-4">
                     <Field
-                      label="৫. ফ্রেমের নিচের খোদাই বার্তা / উইশ"
-                      hint="ফ্রেমের নিচে যে বিশেষ বার্তাটি খোদাই করতে চান, এখানে নোটের মতো লিখুন।"
+                      label="৩. আপনার ছবি আপলোড করুন"
+                      hint="সর্বোচ্চ ২০টি ছবি আপলোড করা যাবে"
                     >
-                      <textarea
-                        rows={3}
-                        maxLength={500}
+                      <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-[#e4d3eb] bg-[#fbf8fd] p-5 text-center text-xs text-[#76258a]">
+                        <UploadCloud size={25} />
+
+                        <span>ছবি বেছে নিন (Max 20)</span>
+
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          disabled
+                          className="sr-only"
+                        />
+                      </label>
+                    </Field>
+                  </div>
+
+                  {/* NAME AND DATE - DISABLED */}
+
+                  <div className="space-y-3 rounded-lg bg-white p-4">
+                    <Field label="৪.১. নাম">
+                      <input
                         disabled
-                        placeholder="যেমন: ভালোবাসার স্মৃতি..."
-                        className={`${inputClass} resize-y`}
+                        placeholder="গ্রাহকের নাম..."
+                        className={inputClass}
                       />
+                    </Field>
+
+                    <Field label="৪.২. জন্মতারিখ / বিবাহবার্ষিকী">
+                      <input type="date" disabled className={inputClass} />
                     </Field>
                   </div>
                 </div>
-              )}
 
-            {/* CUSTOM NOTE - DISABLED */}
+                {/* ENGRAVING - DISABLED */}
 
-            {form.customerFieldType === "note" &&
-              form.customizable && (
-                <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
+                <div className="mt-3 rounded-lg bg-white p-4">
                   <Field
-                    label="কাস্টম নোট (Customer Note Preview)"
-                    hint="গ্রাহক অর্ডারের সময় বিশেষ নির্দেশনা লিখতে পারবেন।"
+                    label="৫. ফ্রেমের নিচের খোদাই বার্তা / উইশ"
+                    hint="ফ্রেমের নিচে যে বিশেষ বার্তাটি খোদাই করতে চান, এখানে নোটের মতো লিখুন।"
                   >
                     <textarea
-                      rows={4}
+                      rows={3}
                       maxLength={500}
-                      value=""
                       disabled
-                      placeholder="গ্রাহকের বিশেষ নির্দেশনা..."
+                      placeholder="যেমন: ভালোবাসার স্মৃতি..."
                       className={`${inputClass} resize-y`}
                     />
                   </Field>
-
-                  <p className="mt-2 text-right text-xs text-[#8e7995]">
-                    0/500
-                  </p>
                 </div>
-              )}
+              </div>
+            )}
+
+            {/* CUSTOM NOTE - DISABLED */}
+
+            {form.customerFieldType === "note" && form.customizable && (
+              <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
+                <Field
+                  label="কাস্টম নোট (Customer Note Preview)"
+                  hint="গ্রাহক অর্ডারের সময় বিশেষ নির্দেশনা লিখতে পারবেন।"
+                >
+                  <textarea
+                    rows={4}
+                    maxLength={500}
+                    value=""
+                    disabled
+                    placeholder="গ্রাহকের বিশেষ নির্দেশনা..."
+                    className={`${inputClass} resize-y`}
+                  />
+                </Field>
+
+                <p className="mt-2 text-right text-xs text-[#8e7995]">0/500</p>
+              </div>
+            )}
 
             {/* SURPRISE BOX */}
 
@@ -2310,9 +1985,7 @@ export default function AdminProductFormPage() {
                     সারপ্রাইজ বক্স অপশন (Surprise Box)
                   </p>
 
-                  <p className="mt-1 text-xs text-[#82748b]">
-                    ডিফল্ট: No
-                  </p>
+                  <p className="mt-1 text-xs text-[#82748b]">ডিফল্ট: No</p>
                 </div>
               </div>
 
@@ -2321,14 +1994,10 @@ export default function AdminProductFormPage() {
 
                 <MiniSwitch
                   checked={form.surpriseBox}
-                  onChange={(v) =>
-                    update("surpriseBox", v)
-                  }
+                  onChange={(v) => update("surpriseBox", v)}
                 />
 
-                <span className="text-xs text-[#903eaa]">
-                  Yes
-                </span>
+                <span className="text-xs text-[#903eaa]">Yes</span>
               </div>
             </div>
           </Section>
@@ -2354,12 +2023,8 @@ export default function AdminProductFormPage() {
                 <input
                   type="radio"
                   name="packaging"
-                  checked={
-                    form.packaging === "regular"
-                  }
-                  onChange={() =>
-                    update("packaging", "regular")
-                  }
+                  checked={form.packaging === "regular"}
+                  onChange={() => update("packaging", "regular")}
                   className="radio radio-sm mt-0.5 border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                 />
 
@@ -2388,12 +2053,8 @@ export default function AdminProductFormPage() {
                 <input
                   type="radio"
                   name="packaging"
-                  checked={
-                    form.packaging === "premium"
-                  }
-                  onChange={() =>
-                    update("packaging", "premium")
-                  }
+                  checked={form.packaging === "premium"}
+                  onChange={() => update("packaging", "premium")}
                   className="radio radio-sm mt-0.5 border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                 />
 
@@ -2412,10 +2073,7 @@ export default function AdminProductFormPage() {
                       min="0"
                       value={form.premiumBoxPrice}
                       onChange={(e) =>
-                        update(
-                          "premiumBoxPrice",
-                          e.target.value
-                        )
+                        update("premiumBoxPrice", e.target.value)
                       }
                       className="w-24 rounded-lg border border-[#e7dcec] bg-white px-3 py-2 text-sm outline-none focus:border-[#903eaa]"
                     />
@@ -2438,18 +2096,14 @@ export default function AdminProductFormPage() {
               title="ক্রয়যোগ্য / উপলব্ধ"
               subtitle="Available for Purchase"
               checked={form.available}
-              onChange={(v) =>
-                update("available", v)
-              }
+              onChange={(v) => update("available", v)}
             />
 
             <StatusCard
               title="ফিচার্ড প্রোডাক্ট"
               subtitle="Featured Product"
               checked={form.featured}
-              onChange={(v) =>
-                update("featured", v)
-              }
+              onChange={(v) => update("featured", v)}
             />
 
             <StatusCard
@@ -2459,30 +2113,17 @@ export default function AdminProductFormPage() {
               onChange={toggleCustomizable}
             />
 
-            <Field
-              label="ক্যাটাগরি (Category)"
-              required
-            >
+            <Field label="ক্যাটাগরি (Category)" required>
               <select
                 value={form.categoryId}
-                onChange={(e) =>
-                  update(
-                    "categoryId",
-                    e.target.value
-                  )
-                }
+                onChange={(e) => update("categoryId", e.target.value)}
                 className={`${inputClass} bg-[#f7f0fc]`}
                 disabled={taxonomiesLoading}
               >
-                <option value="">
-                  ক্যাটাগরি নির্বাচন করুন
-                </option>
+                <option value="">ক্যাটাগরি নির্বাচন করুন</option>
 
                 {categories.map((category) => (
-                  <option
-                    key={category.id}
-                    value={category.id}
-                  >
+                  <option key={category.id} value={category.id}>
                     {category.name}
                   </option>
                 ))}
@@ -2498,9 +2139,7 @@ export default function AdminProductFormPage() {
             >
               <div className="space-y-2 rounded-xl border border-[#e8ddec] bg-[#f7f0fc] p-3">
                 {taxonomiesLoading && (
-                  <p className="text-xs text-[#82748b]">
-                    উপলক্ষ লোড হচ্ছে...
-                  </p>
+                  <p className="text-xs text-[#82748b]">উপলক্ষ লোড হচ্ছে...</p>
                 )}
 
                 {occasions.map((occasion) => (
@@ -2517,8 +2156,8 @@ export default function AdminProductFormPage() {
                           e.target.checked
                             ? [...form.occasionIds, occasion.id]
                             : form.occasionIds.filter(
-                                (id) => id !== occasion.id
-                              )
+                                (id) => id !== occasion.id,
+                              ),
                         );
                       }}
                       className="checkbox checkbox-sm checkbox-secondary"
@@ -2544,30 +2183,20 @@ export default function AdminProductFormPage() {
 
           <div className="overflow-hidden rounded-xl border border-[#ede4f1] bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-[#eee4f2] bg-[#faf6fc] px-4 py-4">
-              <Star
-                size={18}
-                className="text-[#903eaa]"
-              />
+              <Star size={18} className="text-[#903eaa]" />
 
-              <h3 className="text-base font-bold">
-                স্টোরফ্রন্ট লাইভ প্রিভিউ
-              </h3>
+              <h3 className="text-base font-bold">স্টোরফ্রন্ট লাইভ প্রিভিউ</h3>
             </div>
 
             <div className="p-4">
               <div className="relative overflow-hidden rounded-lg border border-[#efe6f2]">
                 {mainPhoto ? (
-                  <Photo
-                    url={mainPhoto.url}
-                    className="aspect-square w-full"
-                  />
+                  <Photo url={mainPhoto.url} className="aspect-square w-full" />
                 ) : (
                   <div className="flex aspect-square flex-col items-center justify-center gap-3 bg-[#f7f0fc] text-[#a58caf]">
                     <ImageIcon size={48} />
 
-                    <span className="text-sm">
-                      Product Image Preview
-                    </span>
+                    <span className="text-sm">Product Image Preview</span>
                   </div>
                 )}
 
@@ -2586,9 +2215,7 @@ export default function AdminProductFormPage() {
                 </div>
 
                 <span className="absolute bottom-3 right-3 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold">
-                  {form.available
-                    ? "উপলব্ধ"
-                    : "অনুপলব্ধ"}
+                  {form.available ? "উপলব্ধ" : "অনুপলব্ধ"}
                 </span>
               </div>
 
@@ -2600,19 +2227,14 @@ export default function AdminProductFormPage() {
                     <button
                       key={image.id}
                       type="button"
-                      onClick={() =>
-                        setSelectedPhoto(image.id)
-                      }
+                      onClick={() => setSelectedPhoto(image.id)}
                       className={`size-12 overflow-hidden rounded-lg border-2 ${
                         mainPhoto?.id === image.id
                           ? "border-[#903eaa]"
                           : "border-transparent"
                       }`}
                     >
-                      <Photo
-                        url={image.url}
-                        className="size-full"
-                      />
+                      <Photo url={image.url} className="size-full" />
                     </button>
                   ))}
                 </div>
@@ -2626,13 +2248,11 @@ export default function AdminProductFormPage() {
                 </p>
 
                 <h3 className="text-base font-bold">
-                  {form.name ||
-                    "আপনার প্রোডাক্টের নাম এখানে দেখাবে"}
+                  {form.name || "আপনার প্রোডাক্টের নাম এখানে দেখাবে"}
                 </h3>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {form.variantsEnabled &&
-                  prices.length === 0 ? (
+                  {form.variantsEnabled && prices.length === 0 ? (
                     <p className="text-sm font-bold text-red-500">
                       সব ভ্যারিয়েন্ট অনুপলব্ধ
                     </p>
@@ -2644,12 +2264,11 @@ export default function AdminProductFormPage() {
                     </p>
                   )}
 
-                  {!form.variantsEnabled &&
-                    salePrice > 0 && (
-                      <span className="text-sm text-[#998d9c] line-through">
-                        {money(regularPrice)}
-                      </span>
-                    )}
+                  {!form.variantsEnabled && salePrice > 0 && (
+                    <span className="text-sm text-[#998d9c] line-through">
+                      {money(regularPrice)}
+                    </span>
+                  )}
                 </div>
 
                 {form.variantsEnabled && (
@@ -2658,19 +2277,15 @@ export default function AdminProductFormPage() {
                   </p>
                 )}
 
-                {form.customizable &&
-                  form.customerFieldType === "frame" && (
-                    <p className="text-xs text-[#82758b]">
-                      ✓ ফ্রেম ফিল্ড কাস্টমাইজেশন সক্রিয়
-                    </p>
-                  )}
+                {form.customizable && form.customerFieldType === "frame" && (
+                  <p className="text-xs text-[#82758b]">
+                    ✓ ফ্রেম ফিল্ড কাস্টমাইজেশন সক্রিয়
+                  </p>
+                )}
 
-                {form.customizable &&
-                  form.customerFieldType === "note" && (
-                    <p className="text-xs text-[#82758b]">
-                      ✓ কাস্টম নোট সক্রিয়
-                    </p>
-                  )}
+                {form.customizable && form.customerFieldType === "note" && (
+                  <p className="text-xs text-[#82758b]">✓ কাস্টম নোট সক্রিয়</p>
+                )}
 
                 {form.surpriseBox && (
                   <p className="text-xs text-[#82758b]">
@@ -2680,8 +2295,7 @@ export default function AdminProductFormPage() {
 
                 {form.packaging === "premium" && (
                   <p className="text-xs text-[#82758b]">
-                    ✓ প্রিমিয়াম বক্স:{" "}
-                    {money(form.premiumBoxPrice)}
+                    ✓ প্রিমিয়াম বক্স: {money(form.premiumBoxPrice)}
                   </p>
                 )}
               </div>
@@ -2698,10 +2312,7 @@ export default function AdminProductFormPage() {
                   className={`${primaryButton} w-full py-3`}
                 >
                   {loading ? (
-                    <Loader2
-                      size={18}
-                      className="animate-spin"
-                    />
+                    <Loader2 size={18} className="animate-spin" />
                   ) : (
                     <Save size={18} />
                   )}
@@ -2715,9 +2326,7 @@ export default function AdminProductFormPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    navigate("/admin/products")
-                  }
+                  onClick={() => navigate("/admin/products")}
                   className={`${softButton} w-full`}
                 >
                   বাতিল করে ফিরে যান
@@ -2727,14 +2336,11 @@ export default function AdminProductFormPage() {
           </div>
 
           <div className="flex gap-3 rounded-xl border border-[#eee4f2] bg-white p-4 text-sm leading-relaxed text-[#88788d]">
-            <Info
-              size={19}
-              className="mt-0.5 shrink-0 text-[#903eaa]"
-            />
+            <Info size={19} className="mt-0.5 shrink-0 text-[#903eaa]" />
 
             <p>
-              Slug backend-এ স্বয়ংক্রিয়ভাবে তৈরি হবে।
-              প্রতিটি Variant-এর SKU আলাদা হতে হবে।
+              Slug backend-এ স্বয়ংক্রিয়ভাবে তৈরি হবে। প্রতিটি Variant-এর SKU
+              আলাদা হতে হবে।
             </p>
           </div>
 
