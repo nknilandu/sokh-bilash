@@ -75,6 +75,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ToastContainer } from "react-toastify";
 import MyOrdersPage from "./pages/order/MyOrdersPage";
+import ProfilePage from "./pages/ProfilePage";
+import ProfileProtectedRoute from "./routes/ProfileProtectedRoute";
+import { WishlistProvider } from "./providers/WishlistProvider";
 
 // ========================================
 // REACT QUERY CLIENT
@@ -172,7 +175,14 @@ const router = createBrowserRouter([
         path: "my-orders",
         element: <MyOrdersPage />,
       },
-
+      {
+        path: "profile",
+        element: (
+          <ProfileProtectedRoute>
+            <ProfilePage />
+          </ProfileProtectedRoute>
+        ),
+      },
       {
         path: "*",
         element: <ErrorPage />,
@@ -255,7 +265,10 @@ const router = createBrowserRouter([
         path: "products/edit/:productId",
         element: <AdminProductFormPage />,
       },
-
+      {
+        path: "profile/:id",
+        element: <ProfilePage />,
+      },
       {
         path: "*",
         element: <ErrorPage />,
@@ -272,11 +285,12 @@ createRoot(document.getElementById("root")).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <CartProvider>
-          <RouterProvider router={router} />
-
-          <ToastContainer position="top-right" autoClose={2500} />
-        </CartProvider>
+        <WishlistProvider>
+          <CartProvider>
+            <RouterProvider router={router} />
+            <ToastContainer position="top-right" autoClose={2500} />
+          </CartProvider>
+        </WishlistProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

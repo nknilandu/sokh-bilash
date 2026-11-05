@@ -1,4 +1,11 @@
-import { createContext, useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   createUserWithEmailAndPassword,
@@ -20,16 +27,28 @@ const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3000"
 ).replace(/\/$/, "");
 
+// ========================================
+// INITIAL ROLE STATE
+// ========================================
+
+const initialRoleState = {
+  uid: null,
+  role: null,
+  status: null,
+  checking: true,
+};
+
+// ========================================
+// AUTH PROVIDER
+// ========================================
+
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [roleState, setRoleState] = useState({
-    uid: null,
-    role: null,
-    status: null,
-    checking: true,
-  });
+  const [profileVersion, setProfileVersion] = useState(0);
+
+  const [roleState, setRoleState] = useState(initialRoleState);
 
   const roleRequestId = useRef(0);
 
@@ -37,119 +56,58 @@ const AuthProvider = ({ children }) => {
   // FIREBASE AUTHENTICATION
   // ========================================
 
-  const createUser = (email, password) =>
-    createUserWithEmailAndPassword(auth, email, password);
+  const createUser = (email, password) => {
+    return createUserWithEmailAndPassword(auth, email, password);
+  };
 
-  const loginUser = (email, password) =>
-    signInWithEmailAndPassword(auth, email, password);
+  const loginUser = (email, password) => {
+    return signInWithEmailAndPassword(auth, email, password);
+  };
 
-  const forgotPassword = (email) => sendPasswordResetEmail(auth, email);
+  const forgotPassword = (email) => {
+    return sendPasswordResetEmail(auth, email);
+  };
 
-  const logOut = () => signOut(auth);
-
-  const updateUserProfile = async (profileData) => {
-    if (!auth.currentUser) {
-      throw new Error("No authenticated user found");
-    }
-
-    await updateProfile(auth.currentUser, profileData);
-
-    setUser(auth.currentUser);
+  const logOut = () => {
+    return signOut(auth);
   };
 
   // ========================================
-  // CENTRALIZED USER ROLE
+  // UPDATE FIREBASE PROFILE
   // ========================================
 
-  const refreshRole = useCallback(async (firebaseUser = auth.currentUser) => {
-    const requestId = ++roleRequestId.current;
+  const updateUserProfile = async (profileData) => {
+    const currentUser = auth.currentUser;
 
-    if (!firebaseUser) {
-      setRoleState({
-        uid: null,
-        role: null,
-        status: null,
-        checking: false,
-      });
-
-      return null;
+    if (!currentUser) {
+      throw new Error("No authenticated user found");
     }
 
-    const uid = firebaseUser.uid;
+    await updateProfile(currentUser, profileData);
 
-    // Prevent using a previous account's role.
-    setRoleState({
-      uid,
-      role: null,
-      status: null,
-      checking: true,
-    });
+    if (auth.currentUser?.uid === currentUser.uid) {
+      setUser(auth.currentUser);
 
-    try {
-      const token = await firebaseUser.getIdToken();
-
-      const response = await fetch(`${API_URL}/users/role`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get user role (${response.status})`);
-      }
-
-      const data = await response.json();
-
-      if (data?.success !== true || typeof data.role !== "string") {
-        throw new Error("Invalid role response");
-      }
-
-      // Ignore outdated requests.
-      if (
-        roleRequestId.current === requestId &&
-        auth.currentUser?.uid === uid
-      ) {
-        setRoleState({
-          uid,
-          role: data.role,
-          status: data.status || null,
-          checking: false,
-        });
-      }
-
-      return data.role;
-    } catch (error) {
-      console.error("Role Fetch Error:", error.message);
-
-      if (
-        roleRequestId.current === requestId &&
-        auth.currentUser?.uid === uid
-      ) {
-        setRoleState({
-          uid,
-          role: null,
-          status: null,
-          checking: false,
-        });
-      }
-
-      return null;
+      // Notify components when Firebase User
+      // object reference stays unchanged.
+      setProfileVersion((previous) => previous + 1);
     }
-  }, []);
+  };
 
   // ========================================
-  // AUTH OBSERVER
+  // REFRESH USER ROLE
+  //
+  // IMPORTANT FIX:
+  // Existing role is NOT cleared during
+  // background refresh for the same user.
   // ========================================
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+  const refreshRole = useCallback(
+    async (firebaseUser = auth.currentUser) => {
+      const requestId = ++roleRequestId.current;
 
-      if (!currentUser) {
-        ++roleRequestId.current;
-
+      // User logged out
+      if (!firebaseUser) {
         setRoleState({
           uid: null,
           role: null,
@@ -157,11 +115,154 @@ const AuthProvider = ({ children }) => {
           checking: false,
         });
 
-        return;
+        return null;
       }
 
-      void refreshRole(currentUser);
-    });
+      const uid = firebaseUser.uid;
+
+      // ====================================
+      // FIX: PRESERVE EXISTING ROLE
+      // ====================================
+
+      setRoleState((previous) => {
+        const sameUser = previous.uid === uid;
+
+        // Same authenticated user already
+        // has a loaded role.
+        // Keep it while fetching in background.
+        if (
+          sameUser &&
+          previous.role !== null &&
+          previous.checking === false
+        ) {
+          return previous;
+        }
+
+        // First login or different user:
+        // initial role verification required.
+        return {
+          uid,
+          role: null,
+          status: null,
+          checking: true,
+        };
+      });
+
+      try {
+        const token = await firebaseUser.getIdToken();
+
+        const response = await fetch(
+          `${API_URL}/users/role`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to get user role (${response.status})`
+          );
+        }
+
+        const data = await response.json();
+
+        if (
+          data?.success !== true ||
+          typeof data.role !== "string"
+        ) {
+          throw new Error("Invalid role response");
+        }
+
+        // Ignore stale requests and
+        // responses for another account.
+        if (
+          roleRequestId.current !== requestId ||
+          auth.currentUser?.uid !== uid
+        ) {
+          return null;
+        }
+
+        // ====================================
+        // UPDATE ROLE AFTER FETCH COMPLETES
+        // ====================================
+
+        setRoleState({
+          uid,
+          role: data.role,
+          status: data.status || null,
+          checking: false,
+        });
+
+        return data.role;
+      } catch (error) {
+        console.error("Role Fetch Error:", error);
+
+        if (
+          roleRequestId.current !== requestId ||
+          auth.currentUser?.uid !== uid
+        ) {
+          return null;
+        }
+
+        setRoleState((previous) => {
+          // Preserve an already verified role
+          // during a temporary network failure.
+          // Server must still verify permissions.
+          if (
+            previous.uid === uid &&
+            previous.role !== null &&
+            previous.checking === false
+          ) {
+            return previous;
+          }
+
+          // Initial role verification failed.
+          return {
+            uid,
+            role: null,
+            status: null,
+            checking: false,
+          };
+        });
+
+        return null;
+      }
+    },
+    []
+  );
+
+  // ========================================
+  // AUTH STATE OBSERVER
+  // ========================================
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+
+        if (!currentUser) {
+          ++roleRequestId.current;
+
+          setRoleState({
+            uid: null,
+            role: null,
+            status: null,
+            checking: false,
+          });
+
+          return;
+        }
+
+        // Fetch user's role after login.
+        void refreshRole(currentUser);
+      }
+    );
 
     return () => {
       ++roleRequestId.current;
@@ -171,13 +272,21 @@ const AuthProvider = ({ children }) => {
 
   // ========================================
   // REFRESH ROLE ON WINDOW FOCUS
+  //
+  // FIXED:
+  // Returning from File Picker will not
+  // reset the existing user's role.
   // ========================================
 
   useEffect(() => {
     const handleFocus = () => {
-      if (auth.currentUser) {
-        void refreshRole(auth.currentUser);
-      }
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) return;
+
+      // Background refresh.
+      // Does NOT clear existing role.
+      void refreshRole(currentUser);
     };
 
     window.addEventListener("focus", handleFocus);
@@ -188,19 +297,36 @@ const AuthProvider = ({ children }) => {
   }, [refreshRole]);
 
   // ========================================
-  // ROLE STATE FOR CURRENT USER ONLY
+  // CURRENT USER ROLE
   // ========================================
 
-  const role = user?.uid === roleState.uid ? roleState.role : null;
+  const sameUser =
+    Boolean(user?.uid) &&
+    roleState.uid === user.uid;
 
-  const accountStatus = user?.uid === roleState.uid ? roleState.status : null;
+  const role = sameUser ? roleState.role : null;
+
+  const accountStatus = sameUser
+    ? roleState.status
+    : null;
+
+  // Only block the UI when:
+  // - Firebase auth is initially loading
+  // - Role for the current UID is missing
+  // - Initial role verification is running
+  //
+  // Background refresh does NOT show loading.
 
   const roleLoading =
     loading ||
-    (Boolean(user) && (roleState.uid !== user.uid || roleState.checking));
+    (Boolean(user) &&
+      (
+        !sameUser ||
+        roleState.checking
+      ));
 
   // ========================================
-  // CONTEXT
+  // CONTEXT VALUES
   // ========================================
 
   const authData = {
@@ -213,15 +339,19 @@ const AuthProvider = ({ children }) => {
     accountStatus,
     refreshRole,
 
+    profileVersion,
+
     createUser,
     loginUser,
     forgotPassword,
     logOut,
-    updateUserProfile,
+    updateUserProfile, 
   };
 
   return (
-    <AuthContext.Provider value={authData}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={authData}>
+      {children}
+    </AuthContext.Provider>
   );
 };
 

@@ -1,64 +1,140 @@
-import { Heart } from "lucide-react";
-import { GoHeartFill } from "react-icons/go";
-import { HiUsers } from "react-icons/hi";
-import { MdFamilyRestroom, MdMosque } from "react-icons/md";
-import { RiCake2Fill, RiHandHeartFill } from "react-icons/ri";
+
+import { useState } from "react";
+import { Heart, Gift, ArrowRight } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-const occasions = [
-  {
-    name: "জন্মদিন",
-    subtitle: "Birthday Special",
-    icon: RiCake2Fill,
-    gradient: "from-amber-100 to-yellow-100",
-    iconColor: "text-amber-600",
-    slug: "birthday",
-  },
-  {
-    name: "বিবাহবার্ষিকী",
-    subtitle: "Anniversary Gift",
-    icon: GoHeartFill,
-    gradient: "from-pink-100 to-rose-100",
-    iconColor: "text-rose-600",
-    slug: "anniversary",
-  },
-  {
-    name: "বিয়ে ও নিকাহ",
-    subtitle: "Wedding Keepsakes",
-    icon: RiHandHeartFill,
-    gradient: "from-purple-100 to-fuchsia-100",
-    iconColor: "text-purple-700",
-    slug: "wedding",
-  },
-  {
-    name: "কাপল গিফট",
-    subtitle: "Couple Matching",
-    icon: HiUsers,
-    gradient: "from-sky-100 to-indigo-100",
-    iconColor: "text-indigo-600",
-    slug: "couple-gifts",
-  },
-  {
-    name: "ইসলামিক উপহার",
-    subtitle: "Barakah & Dua",
-    icon: MdMosque,
-    slug: "islamic",
-  },
-  {
-    name: "বাবা ও মা",
-    subtitle: "Parents Tribute",
-    icon: MdFamilyRestroom,
-    gradient: "from-emerald-100 to-teal-100",
-    iconColor: "text-teal-700",
-    slug: "parent",
-  },
-];
+import { GoHeartFill } from "react-icons/go";
+import { HiUsers } from "react-icons/hi";
+import {
+  MdFamilyRestroom,
+  MdMosque,
+} from "react-icons/md";
+import {
+  RiCake2Fill,
+  RiHandHeartFill,
+} from "react-icons/ri";
+
+// ========================================
+// API CONFIGURATION
+// ========================================
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/$/, "");
+
+// ========================================
+// FALLBACK ICONS
+// ========================================
+
+const occasionIcons = {
+  birthday: RiCake2Fill,
+  anniversary: GoHeartFill,
+  "wedding-nikah": RiHandHeartFill,
+  "love-romance": HiUsers,
+  islamic: MdMosque,
+  "parents-day": MdFamilyRestroom,
+  congratulations: RiHandHeartFill,
+  surprise: Gift,
+};
+
+// ========================================
+// FETCH OCCASIONS
+// ========================================
+
+const fetchOccasions = async ({ signal }) => {
+  const res = await fetch(`${API_URL}/occasions`, {
+    signal,
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.success) {
+    throw new Error(
+      data.message || "Failed to fetch occasions"
+    );
+  }
+
+  return data;
+};
+
+// ========================================
+// OCCASION ICON
+// ========================================
+
+const OccasionIcon = ({ occasion }) => {
+  const [failedUrl, setFailedUrl] = useState(null);
+
+  const Icon = occasionIcons[occasion.id] || Gift;
+
+  if (
+    occasion.iconUrl &&
+    failedUrl !== occasion.iconUrl
+  ) {
+    return (
+      <img
+        src={occasion.iconUrl}
+        alt={occasion.name}
+        loading="lazy"
+        className="size-10 object-contain transition duration-300 group-hover:scale-110"
+        onError={() => setFailedUrl(occasion.iconUrl)}
+      />
+    );
+  }
+
+  return (
+    <Icon
+      size={30}
+      className="text-primary transition duration-300 group-hover:text-base-100"
+    />
+  );
+};
+
+// ========================================
+// MAIN COMPONENT
+// ========================================
 
 const OccasionGifts = () => {
+  const queryClient = useQueryClient();
+
+  // ========================================
+  // REACT QUERY
+  // ========================================
+
+  const {
+    data: occasionData,
+    isPending,
+    isError,
+  } = useQuery({
+    queryKey: ["catalogOccasions"],
+    queryFn: fetchOccasions,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const occasions = Array.isArray(occasionData?.occasions)
+    ? occasionData.occasions
+    : [];
+
+  // ========================================
+  // REFRESH DATA
+  // ========================================
+
+  const refreshOccasions = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["catalogOccasions"],
+    });
+  };
+
   return (
     <section className="section-bg section-padding sm:pb-16">
       <div className="page-container">
         <div className="rounded-3xl border border-base-300/70 bg-gradient-to-br from-secondary/15 to-secondary/10 p-5 sm:p-8 lg:p-10">
+
+          {/* ================================= */}
+          {/* SECTION HEADER */}
+          {/* ================================= */}
+
           <div className="mb-7 text-center">
             <span className="badge-soft">
               <Heart size={13} />
@@ -70,39 +146,124 @@ const OccasionGifts = () => {
             </h2>
 
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted">
-              ছোট্ট একটি উপহারও হয়ে উঠুক প্রিয় মানুষের জীবনের সুন্দর একটি
-              স্মৃতি।
+              ছোট্ট একটি উপহারও হয়ে উঠুক প্রিয় মানুষের
+              জীবনের সুন্দর একটি স্মৃতি।
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {occasions.map((occasion) => {
-              const Icon = occasion.icon;
+          {/* ================================= */}
+          {/* LOADING STATE */}
+          {/* ================================= */}
 
-              return (
+          {isPending ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from(
+                { length: 8 },
+                (_, index) => (
+                  <div
+                    key={index}
+                    className="flex h-36 animate-pulse flex-col items-center justify-center gap-4 rounded-2xl bg-base-100 p-4"
+                  >
+                    <div className="size-12 rounded-xl bg-base-200" />
+                    <div className="h-4 w-24 rounded bg-base-200" />
+                  </div>
+                )
+              )}
+            </div>
+
+          ) : isError ? (
+
+            /* ================================= */
+            /* ERROR STATE */
+            /* ================================= */
+
+            <div className="rounded-2xl bg-base-100 px-5 py-10 text-center">
+              <p className="text-sm text-muted">
+                উপলক্ষ লোড করা যায়নি।
+              </p>
+
+              <button
+                type="button"
+                onClick={refreshOccasions}
+                className="btn-outline-brand mt-4"
+              >
+                আবার চেষ্টা করুন
+              </button>
+            </div>
+
+          ) : occasions.length > 0 ? (
+
+            /* ================================= */
+            /* OCCASION GRID */
+            /* ================================= */
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {occasions.map((occasion) => (
                 <Link
-                  key={occasion.slug}
-                  to={`/shop?occasion=${occasion.slug}`}
-                  className="group rounded-2xl border-none bg-base-100 px-4 py-6 text-center transition duration-300 hover:bg-secondary"
+                  key={occasion.id}
+                  to={`/shop?occasions=${encodeURIComponent(
+                    occasion.id
+                  )}`}
+                  className="group flex min-w-0 flex-col items-center justify-center rounded-2xl border border-transparent bg-base-100 px-4 py-6 text-center transition duration-300 hover:-translate-y-1 hover:bg-secondary hover:shadow-md"
                 >
-                  <div className="flex justify-center items-center mb-2">
-                    <Icon
-                      size={27}
-                      className="text-primary group-hover:text-base-100"
+
+                  {/* OCCASION ICON */}
+
+                  <div className=" flex size-14 items-center justify-center">
+                    <OccasionIcon
+                      occasion={occasion}
                     />
                   </div>
 
-                  <h3 className="text-sm font-bold text-primary group-hover:text-base-100">
+                  {/* OCCASION NAME */}
+
+                  <h3 className="text-sm font-bold leading-5 text-primary transition duration-300 group-hover:text-base-100">
                     {occasion.name}
                   </h3>
 
-                  <p className="mt-1 text-xs text-muted  group-hover:text-base-200">
-                    {occasion.subtitle}
-                  </p>
+                  {/* VIEW LINK */}
+
+                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-secondary transition duration-300 group-hover:text-base-100">
+                    উপহার দেখুন
+                    <ArrowRight size={12} />
+                  </span>
+
                 </Link>
-              );
-            })}
+              ))}
+            </div>
+
+          ) : (
+
+            /* ================================= */
+            /* EMPTY STATE */
+            /* ================================= */
+
+            <div className="rounded-2xl bg-base-100 px-5 py-10 text-center">
+              <Gift
+                size={32}
+                className="mx-auto text-secondary"
+              />
+
+              <p className="mt-3 text-sm text-muted">
+                কোনো উপলক্ষ পাওয়া যায়নি।
+              </p>
+            </div>
+          )}
+
+          {/* ================================= */}
+          {/* VIEW ALL */}
+          {/* ================================= */}
+
+          <div className="mt-7 flex justify-center">
+            <Link
+              to="/categories#occasions"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-secondary transition hover:text-primary"
+            >
+              সব উপলক্ষ দেখুন
+              <ArrowRight size={16} />
+            </Link>
           </div>
+
         </div>
       </div>
     </section>

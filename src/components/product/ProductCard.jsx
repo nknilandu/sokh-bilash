@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import Swal from "sweetalert2";
 
 import {
   Heart,
@@ -9,9 +10,10 @@ import {
   Gift,
   Layers,
   Package,
+  LoaderCircle,
 } from "lucide-react";
 
-const WISHLIST_KEY = "sokhbilash-wishlist";
+import { useWishlist } from "../../providers/WishlistProvider";
 
 // =====================================
 // HELPERS
@@ -29,19 +31,9 @@ const toPositivePrice = (value) => {
   return Number.isFinite(price) && price > 0 ? price : null;
 };
 
-const readWishlist = () => {
-  try {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    const data = JSON.parse(localStorage.getItem(WISHLIST_KEY) || "[]");
-
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-};
+// =====================================
+// PRODUCT IMAGE URL
+// =====================================
 
 const getProductImage = (product) => {
   const image = product.images?.[0];
@@ -56,30 +48,24 @@ const getProductImage = (product) => {
 // =====================================
 
 const getProductPricing = (product) => {
-  // ================= REGULAR PRICE =================
+  // REGULAR PRICE
 
   const regularPrice = toPositivePrice(product.regularPrice) || 0;
 
-  // ================= SALE PRICE =================
+  // SALE PRICE
 
   const salePrice = toPositivePrice(product.salePrice);
-
-  // Product has a valid offer when
-  // salePrice is lower than regularPrice.
 
   const hasSale =
     salePrice !== null && regularPrice > 0 && salePrice < regularPrice;
 
-  // ================= BASE PRICE =================
+  // BASE PRICE
 
   const basePrice = hasSale ? salePrice : regularPrice;
 
-  // ================= VARIANTS =================
+  // VARIANT PRICES
 
   const variantsEnabled = product.variantsEnabled === true;
-
-  // Full variant data is available in
-  // Product Details / Related Products API.
 
   const variantPrices =
     variantsEnabled && Array.isArray(product.variants)
@@ -89,58 +75,36 @@ const getProductPricing = (product) => {
           .filter((price) => price !== null)
       : [];
 
-  // ================= API PRICES =================
-  //
-  // GET /products:
-  //
-  // price = lowest variant price
-  // maxPrice = highest variant price
+  // API PRICES
 
   const apiLowestPrice = toPositivePrice(product.price);
 
   const apiHighestPrice = toPositivePrice(product.maxPrice);
 
-  // ================= LOWEST / HIGHEST =================
+  // LOWEST / HIGHEST
 
   let lowestPrice = basePrice;
   let highestPrice = basePrice;
 
   if (variantsEnabled) {
     if (apiLowestPrice !== null) {
-      // Public listing API already calculated
-      // the lowest available variant price.
-
       lowestPrice = apiLowestPrice;
 
       highestPrice =
         apiHighestPrice ??
         (variantPrices.length ? Math.max(...variantPrices) : apiLowestPrice);
     } else if (variantPrices.length) {
-      // Fallback for Related Products API.
-
       lowestPrice = Math.min(...variantPrices);
-
       highestPrice = Math.max(...variantPrices);
     }
   } else {
-    // Normal product has no variant range.
-
     lowestPrice = apiLowestPrice ?? basePrice;
-
     highestPrice = lowestPrice;
   }
 
   highestPrice = Math.max(highestPrice, lowestPrice);
 
-  // =====================================
-  // PRICE RANGE DISPLAY
-  // =====================================
-  //
-  // Show highest price only when:
-  //
-  // 1. Variants are enabled
-  // 2. Highest > Lowest
-  // 3. Highest <= Regular Price
+  // PRICE RANGE
 
   const hasDifferentPrices =
     variantsEnabled && highestPrice > lowestPrice + 0.009;
@@ -150,40 +114,13 @@ const getProductPricing = (product) => {
 
   const showPriceRange = hasDifferentPrices && highestWithinRegularPrice;
 
-  // =====================================
   // DISCOUNT CALCULATION
-  // =====================================
-  //
-  // Discount is always calculated from:
-  //
-  // regularPrice - salePrice
-  //
-  // NOT from the lowest variant price.
-  //
-  // Example:
-  //
-  // Regular: 1100
-  // Sale: 999
-  // Lowest Variant: 750
-  // Highest Variant: 999
-  //
-  // Discount: 9%
+  // Based on regularPrice and salePrice,
+  // NOT on the lowest variant price.
 
   const discount = hasSale
     ? Math.round(((regularPrice - salePrice) / regularPrice) * 100)
     : 0;
-
-  // =====================================
-  // UPDATED DISCOUNT BADGE LOGIC
-  // =====================================
-  //
-  // IMPORTANT:
-  //
-  // The lowest variant price does NOT
-  // need to equal the sale price.
-  //
-  // If product has a valid base offer,
-  // display the product-level discount.
 
   const showDiscountBadge = hasSale && discount > 0;
 
@@ -202,7 +139,7 @@ const getProductPricing = (product) => {
 };
 
 // =====================================
-// PRODUCT IMAGE
+// PRODUCT IMAGE COMPONENT
 // =====================================
 
 function ProductImage({ image, name }) {
@@ -291,55 +228,75 @@ export default function ProductCard({ product, showWishlist = true }) {
   const image = getProductImage(product);
 
   // =====================================
-  // WISHLIST
+  // WISHLIST - GUEST + CUSTOMER
   // =====================================
 
-  const [wishlist, setWishlist] = useState(readWishlist);
+  const {
+    isFavorite,
+    toggleWishlist,
+    ready: wishlistReady,
+    canWishlist,
+    savingId,
+  } = useWishlist();
 
-  const favorite = wishlist.includes(productId);
+  // Check saved wishlist from provider.
+  // Guest => localStorage
+  // Customer => MongoDB
 
-  useEffect(() => {
-    const syncWishlist = () => {
-      setWishlist(readWishlist());
-    };
+  const favorite = isFavorite(productId);
 
-    window.addEventListener("storage", syncWishlist);
+  const wishlistSaving = savingId === productId;
 
-    window.addEventListener("sokhbilash-wishlist-updated", syncWishlist);
-
-    return () => {
-      window.removeEventListener("storage", syncWishlist);
-
-      window.removeEventListener("sokhbilash-wishlist-updated", syncWishlist);
-    };
-  }, []);
+  const wishlistBusy = Boolean(savingId);
 
   // =====================================
   // TOGGLE WISHLIST
   // =====================================
 
-  const toggleFavorite = () => {
-    if (!productId) return;
-
-    const saved = readWishlist();
-
-    const next = saved.includes(productId)
-      ? saved.filter((id) => id !== productId)
-      : [...saved, productId];
+  const handleWishlist = async () => {
+    if (!productId || !wishlistReady || !canWishlist || wishlistBusy) {
+      return;
+    }
 
     try {
-      localStorage.setItem(WISHLIST_KEY, JSON.stringify(next));
+      // Provider automatically decides:
+      // Guest => localStorage
+      // Customer => MongoDB
 
-      setWishlist(next);
+      const added = await toggleWishlist(productId);
 
-      window.dispatchEvent(new Event("sokhbilash-wishlist-updated"));
+      if (typeof added !== "boolean") {
+        return;
+      }
+
+      Swal.fire({
+        title: added
+          ? "পছন্দের তালিকায় যোগ হয়েছে"
+          : "পছন্দের তালিকা থেকে সরানো হয়েছে",
+        icon: "success",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1500,
+        timerProgressBar: true,
+      });
     } catch (error) {
-      console.error("Wishlist Save Error:", error);
+      console.error("Wishlist Update Error:", error);
+
+      Swal.fire({
+        title: "Wishlist আপডেট করা যায়নি",
+        text: error?.message || "আবার চেষ্টা করুন।",
+        icon: "error",
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2500,
+      });
     }
   };
 
   // =====================================
-  // PRICE & DISCOUNT
+  // PRICE AND DISCOUNT
   // =====================================
 
   const {
@@ -410,23 +367,31 @@ export default function ProductCard({ product, showWishlist = true }) {
         </div>
 
         {/* ========================= */}
-        {/* WISHLIST                */}
+        {/* WISHLIST HEART BUTTON   */}
         {/* ========================= */}
 
-        {showWishlist && (
+        {showWishlist && canWishlist && (
           <button
             type="button"
-            onClick={toggleFavorite}
+            onClick={handleWishlist}
+            disabled={!wishlistReady || wishlistBusy}
             aria-label={
               favorite ? "পছন্দের তালিকা থেকে সরান" : "পছন্দের তালিকায় যোগ করুন"
             }
             aria-pressed={favorite}
-            className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white/95 text-primary shadow-sm transition hover:scale-110"
+            title={favorite ? "Wishlist থেকে সরান" : "Wishlist-এ যোগ করুন"}
+            className={`absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white/95 shadow-sm transition hover:scale-110 disabled:cursor-not-allowed disabled:opacity-60 ${
+              favorite ? "text-rose-500" : "text-primary"
+            }`}
           >
-            <Heart
-              size={16}
-              className={favorite ? "fill-rose-500 text-rose-500" : ""}
-            />
+            {wishlistSaving ? (
+              <LoaderCircle size={16} className="animate-spin text-secondary" />
+            ) : (
+              <Heart
+                size={16}
+                className={favorite ? "fill-rose-500 text-rose-500" : ""}
+              />
+            )}
           </button>
         )}
       </div>
@@ -467,7 +432,7 @@ export default function ProductCard({ product, showWishlist = true }) {
               {formatPrice(lowestPrice)}
             </span>
 
-            {/* CONDITIONAL HIGHEST PRICE */}
+            {/* HIGHEST PRICE */}
 
             {showPriceRange && (
               <>

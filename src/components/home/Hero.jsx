@@ -67,11 +67,11 @@ const Hero = () => {
               </Link>
 
               <Link
-                to="/gift-box"
+                to="/categories"
                 className="btn shadow-none min-h-14 rounded-full border border-white/20 bg-white/15 px-6 text-base font-semibold text-white backdrop-blur-sm transition-all duration-200 ease-out hover:bg-white/30 hover:text-accent hover:-translate-y-px"
               >
                 <Sparkles size={18} className="text-gold-soft" />
-                নিজের গিফট তৈরি করুন
+                ক্যাটাগরি অনুযায়ী দেখুন
               </Link>
             </div>
 

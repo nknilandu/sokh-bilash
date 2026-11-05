@@ -75,7 +75,7 @@ const GiftBuilderSteps = () => {
             </div>
 
             <Link
-              to="/gift-box"
+              to="/shop"
               className="btn-gold w-full shrink-0 sm:w-auto"
             >
               <Gift size={17} />

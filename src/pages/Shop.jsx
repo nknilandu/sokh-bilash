@@ -1,15 +1,6 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-
-import {
-  Link,
-  useLocation,
-} from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -26,12 +17,10 @@ import {
 } from "lucide-react";
 import ProductCard from "../components/product/ProductCard";
 
-
 // Adjust ProductCard import path to your project.
 
 const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:3000"
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
 ).replace(/\/$/, "");
 
 const PRODUCTS_PER_PAGE = 12;
@@ -84,14 +73,10 @@ const fetchJSON = async (url, signal) => {
     signal,
   });
 
-  const data = await response
-    .json()
-    .catch(() => ({}));
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.message || "Data fetch failed"
-    );
+    throw new Error(data.message || "Data fetch failed");
   }
 
   return data;
@@ -101,19 +86,14 @@ const fetchJSON = async (url, signal) => {
 // FILTER SECTION
 // =========================================
 
-function FilterSection({
-  title,
-  children,
-}) {
+function FilterSection({ title, children }) {
   const [open, setOpen] = useState(true);
 
   return (
     <section className="border-b border-base-300/70 py-4 last:border-b-0">
       <button
         type="button"
-        onClick={() =>
-          setOpen((value) => !value)
-        }
+        onClick={() => setOpen((value) => !value)}
         className="flex w-full items-center justify-between text-sm font-bold text-primary"
         aria-expanded={open}
       >
@@ -121,17 +101,11 @@ function FilterSection({
 
         <ChevronDown
           size={16}
-          className={`transition-transform ${
-            open ? "" : "-rotate-90"
-          }`}
+          className={`transition-transform ${open ? "" : "-rotate-90"}`}
         />
       </button>
 
-      {open && (
-        <div className="mt-3 space-y-2.5">
-          {children}
-        </div>
-      )}
+      {open && <div className="mt-3 space-y-2.5">{children}</div>}
     </section>
   );
 }
@@ -140,12 +114,7 @@ function FilterSection({
 // FILTER CHECKBOX
 // =========================================
 
-function FilterCheckbox({
-  label,
-  checked,
-  onChange,
-  count,
-}) {
+function FilterCheckbox({ label, checked, onChange, count }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/80 hover:text-secondary">
       <input
@@ -155,9 +124,7 @@ function FilterCheckbox({
         className="checkbox checkbox-sm checkbox-secondary rounded"
       />
 
-      <span className="min-w-0 flex-1">
-        {label}
-      </span>
+      <span className="min-w-0 flex-1">{label}</span>
 
       {count !== undefined && (
         <span className="rounded-full bg-secondary/10 px-2 py-0.5 text-[10px] text-secondary">
@@ -172,26 +139,16 @@ function FilterCheckbox({
 // PAGINATION NUMBERS
 // =========================================
 
-function getPageNumbers(
-  currentPage,
-  totalPages
-) {
+function getPageNumbers(currentPage, totalPages) {
   const pages = [];
 
-  for (
-    let page = 1;
-    page <= totalPages;
-    page++
-  ) {
+  for (let page = 1; page <= totalPages; page++) {
     if (
       page === 1 ||
       page === totalPages ||
       Math.abs(page - currentPage) <= 1
     ) {
-      if (
-        pages.length > 0 &&
-        page - pages[pages.length - 1] > 1
-      ) {
+      if (pages.length > 0 && page - pages[pages.length - 1] > 1) {
         pages.push("...");
       }
 
@@ -202,12 +159,42 @@ function getPageNumbers(
   return pages;
 }
 
+// Read a category/occasion selected on another page.
+// Supports both ?categories=... and older ?category=... URLs.
+const readShopUrl = (urlSearch) => {
+  const params = new URLSearchParams(urlSearch);
+  const readIds = (plural, singular) => [
+    ...new Set(
+      (params.get(plural) || params.get(singular) || "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => /^[a-z0-9_-]{1,60}$/i.test(value)),
+    ),
+  ];
+  const requestedSort = params.get("sort") || "featured";
+  return {
+    search: params.get("search") || "",
+    categories: readIds("categories", "category"),
+    occasions: readIds("occasions", "occasion"),
+    sort: ["featured", "newest", "price-low", "price-high"].includes(
+      requestedSort,
+    )
+      ? requestedSort
+      : "featured",
+  };
+};
+
 // =========================================
 // MAIN SHOP PAGE
 // =========================================
 
 export default function Shop() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const urlValues = useMemo(
+    () => readShopUrl(location.search),
+    [location.search],
+  );
 
   const searchInputRef = useRef(null);
 
@@ -215,21 +202,35 @@ export default function Shop() {
   // STATES
   // =====================================
 
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] =
-    useState("");
-
-  const [sort, setSort] = useState("featured");
-
-  const [filters, setFilters] = useState(
-    createInitialFilters
+  const [search, setSearch] = useState(urlValues.search);
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    urlValues.search.trim(),
   );
 
-  const [filterOpen, setFilterOpen] =
-    useState(false);
+  const [sort, setSort] = useState(urlValues.sort);
 
-  const [currentPage, setCurrentPage] =
-    useState(1);
+  const [filters, setFilters] = useState(() => ({
+    ...createInitialFilters(),
+    categories: urlValues.categories,
+    occasions: urlValues.occasions,
+  }));
+
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Sync filters when the URL changes, including browser Back/Forward.
+  useEffect(() => {
+    setSearch(urlValues.search);
+    setDebouncedSearch(urlValues.search.trim());
+    setFilters({
+      ...createInitialFilters(),
+      categories: urlValues.categories,
+      occasions: urlValues.occasions,
+    });
+    setSort(urlValues.sort);
+    setCurrentPage(1);
+  }, [urlValues]);
 
   // =====================================
   // NAVBAR SEARCH FOCUS
@@ -254,10 +255,7 @@ export default function Shop() {
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [
-    location.key,
-    location.state?.focusSearch,
-  ]);
+  }, [location.key, location.state?.focusSearch]);
 
   // =====================================
   // SEARCH DEBOUNCE
@@ -265,9 +263,7 @@ export default function Shop() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      setDebouncedSearch(
-        search.trim()
-      );
+      setDebouncedSearch(search.trim());
     }, 350);
 
     return () => clearTimeout(timeout);
@@ -277,16 +273,11 @@ export default function Shop() {
   // CATEGORY API
   // =====================================
 
-  const {
-    data: categories = [],
-  } = useQuery({
+  const { data: categories = [] } = useQuery({
     queryKey: ["public-categories"],
 
     queryFn: async ({ signal }) => {
-      const data = await fetchJSON(
-        `${API_URL}/categories`,
-        signal
-      );
+      const data = await fetchJSON(`${API_URL}/categories`, signal);
 
       return data.categories || [];
     },
@@ -298,16 +289,11 @@ export default function Shop() {
   // OCCASION API
   // =====================================
 
-  const {
-    data: occasions = [],
-  } = useQuery({
+  const { data: occasions = [] } = useQuery({
     queryKey: ["public-occasions"],
 
     queryFn: async ({ signal }) => {
-      const data = await fetchJSON(
-        `${API_URL}/occasions`,
-        signal
-      );
+      const data = await fetchJSON(`${API_URL}/occasions`, signal);
 
       return data.occasions || [];
     },
@@ -323,106 +309,58 @@ export default function Shop() {
     const params = new URLSearchParams();
 
     if (debouncedSearch) {
-      params.set(
-        "search",
-        debouncedSearch
-      );
+      params.set("search", debouncedSearch);
     }
 
     if (filters.categories.length) {
-      params.set(
-        "categories",
-        filters.categories.join(",")
-      );
+      params.set("categories", filters.categories.join(","));
     }
 
     if (filters.occasions.length) {
-      params.set(
-        "occasions",
-        filters.occasions.join(",")
-      );
+      params.set("occasions", filters.occasions.join(","));
     }
 
     if (filters.features.length) {
-      params.set(
-        "features",
-        filters.features.join(",")
-      );
+      params.set("features", filters.features.join(","));
     }
 
     if (filters.minPrice !== "") {
-      params.set(
-        "minPrice",
-        String(filters.minPrice)
-      );
+      params.set("minPrice", String(filters.minPrice));
     }
 
     if (filters.maxPrice !== "") {
-      params.set(
-        "maxPrice",
-        String(filters.maxPrice)
-      );
+      params.set("maxPrice", String(filters.maxPrice));
     }
 
     if (filters.rating > 0) {
-      params.set(
-        "rating",
-        String(filters.rating)
-      );
+      params.set("rating", String(filters.rating));
     }
 
-    if (
-      filters.availability !== "all"
-    ) {
-      params.set(
-        "availability",
-        filters.availability
-      );
+    if (filters.availability !== "all") {
+      params.set("availability", filters.availability);
     }
 
     params.set("sort", sort);
 
-    params.set(
-      "page",
-      String(currentPage)
-    );
+    params.set("page", String(currentPage));
 
     return params.toString();
-  }, [
-    debouncedSearch,
-    filters,
-    sort,
-    currentPage,
-  ]);
+  }, [debouncedSearch, filters, sort, currentPage]);
 
   // =====================================
   // FETCH PRODUCTS FROM BACKEND
   // =====================================
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: [
-      "public-shop-products",
-      queryString,
-    ],
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ["public-shop-products", queryString],
 
     queryFn: async ({ signal }) => {
-      return fetchJSON(
-        `${API_URL}/products?${queryString}`,
-        signal
-      );
+      return fetchJSON(`${API_URL}/products?${queryString}`, signal);
     },
 
     staleTime: 30 * 1000,
 
-    placeholderData: (previousData) =>
-      previousData,
+    placeholderData: (previousData) => previousData,
   });
 
   // =====================================
@@ -440,8 +378,7 @@ export default function Shop() {
     hasPreviousPage: false,
   };
 
-  const categoryCounts =
-    data?.categoryCounts || {};
+  const categoryCounts = data?.categoryCounts || {};
 
   const totalProducts = pagination.total;
 
@@ -452,18 +389,10 @@ export default function Shop() {
   // =====================================
 
   useEffect(() => {
-    if (
-      !isFetching &&
-      totalPages > 0 &&
-      currentPage > totalPages
-    ) {
+    if (!isFetching && totalPages > 0 && currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
-  }, [
-    isFetching,
-    totalPages,
-    currentPage,
-  ]);
+  }, [isFetching, totalPages, currentPage]);
 
   // =====================================
   // UPDATE FILTER
@@ -488,9 +417,7 @@ export default function Shop() {
       ...previous,
 
       [key]: previous[key].includes(value)
-        ? previous[key].filter(
-            (item) => item !== value
-          )
+        ? previous[key].filter((item) => item !== value)
         : [...previous[key], value],
     }));
 
@@ -503,12 +430,11 @@ export default function Shop() {
 
   const clearFilters = () => {
     setFilters(createInitialFilters());
-
     setSearch("");
     setDebouncedSearch("");
-
     setSort("featured");
     setCurrentPage(1);
+    if (location.search) navigate("/shop", { replace: true });
   };
 
   // =====================================
@@ -520,32 +446,21 @@ export default function Shop() {
     filters.occasions.length +
     filters.features.length +
     (filters.rating > 0 ? 1 : 0) +
-    (filters.minPrice !== "" ||
-    filters.maxPrice !== ""
-      ? 1
-      : 0) +
-    (filters.availability !== "all"
-      ? 1
-      : 0);
+    (filters.minPrice !== "" || filters.maxPrice !== "" ? 1 : 0) +
+    (filters.availability !== "all" ? 1 : 0);
 
   // =====================================
   // FILTER LABELS
   // =====================================
 
   const getCategoryName = (id) =>
-    categories.find(
-      (category) => category.id === id
-    )?.name || id;
+    categories.find((category) => category.id === id)?.name || id;
 
   const getOccasionName = (id) =>
-    occasions.find(
-      (occasion) => occasion.id === id
-    )?.name || id;
+    occasions.find((occasion) => occasion.id === id)?.name || id;
 
   const getFeatureName = (id) =>
-    featureOptions.find(
-      (feature) => feature.id === id
-    )?.name || id;
+    featureOptions.find((feature) => feature.id === id)?.name || id;
 
   // =====================================
   // FILTER CONTENT
@@ -577,25 +492,14 @@ export default function Shop() {
           <FilterCheckbox
             key={category.id}
             label={category.name}
-            checked={filters.categories.includes(
-              category.id
-            )}
-            onChange={() =>
-              toggleArrayFilter(
-                "categories",
-                category.id
-              )
-            }
-            count={
-              categoryCounts[category.id] || 0
-            }
+            checked={filters.categories.includes(category.id)}
+            onChange={() => toggleArrayFilter("categories", category.id)}
+            count={categoryCounts[category.id] || 0}
           />
         ))}
 
         {!categories.length && (
-          <p className="text-xs text-muted">
-            কোনো ক্যাটাগরি পাওয়া যায়নি।
-          </p>
+          <p className="text-xs text-muted">কোনো ক্যাটাগরি পাওয়া যায়নি।</p>
         )}
       </FilterSection>
 
@@ -604,9 +508,7 @@ export default function Shop() {
       <FilterSection title="বাজেট (৳)">
         <div className="flex items-center gap-2">
           <label className="min-w-0 flex-1">
-            <span className="mb-1 block text-xs text-muted">
-              সর্বনিম্ন
-            </span>
+            <span className="mb-1 block text-xs text-muted">সর্বনিম্ন</span>
 
             <input
               type="number"
@@ -618,12 +520,7 @@ export default function Shop() {
                   "minPrice",
                   event.target.value === ""
                     ? ""
-                    : Math.max(
-                        0,
-                        Number(
-                          event.target.value
-                        ) || 0
-                      )
+                    : Math.max(0, Number(event.target.value) || 0),
                 )
               }
               className="input input-bordered input-sm w-full rounded-lg"
@@ -631,9 +528,7 @@ export default function Shop() {
           </label>
 
           <label className="min-w-0 flex-1">
-            <span className="mb-1 block text-xs text-muted">
-              সর্বোচ্চ
-            </span>
+            <span className="mb-1 block text-xs text-muted">সর্বোচ্চ</span>
 
             <input
               type="number"
@@ -645,12 +540,7 @@ export default function Shop() {
                   "maxPrice",
                   event.target.value === ""
                     ? ""
-                    : Math.max(
-                        0,
-                        Number(
-                          event.target.value
-                        ) || 0
-                      )
+                    : Math.max(0, Number(event.target.value) || 0),
                 )
               }
               className="input input-bordered input-sm w-full rounded-lg"
@@ -666,19 +556,10 @@ export default function Shop() {
           value={
             filters.maxPrice === ""
               ? 5000
-              : Math.max(
-                  500,
-                  Math.min(
-                    Number(filters.maxPrice),
-                    5000
-                  )
-                )
+              : Math.max(500, Math.min(Number(filters.maxPrice), 5000))
           }
           onChange={(event) =>
-            updateFilter(
-              "maxPrice",
-              Number(event.target.value)
-            )
+            updateFilter("maxPrice", Number(event.target.value))
           }
           aria-label="সর্বোচ্চ বাজেট"
           className="range range-secondary range-xs mt-2"
@@ -690,8 +571,7 @@ export default function Shop() {
         </div>
 
         <p className="text-xs leading-5 text-muted">
-          খালি রাখলে মূল্য অনুযায়ী কোনো সীমা
-          থাকবে না।
+          খালি রাখলে মূল্য অনুযায়ী কোনো সীমা থাকবে না।
         </p>
       </FilterSection>
 
@@ -702,22 +582,13 @@ export default function Shop() {
           <FilterCheckbox
             key={occasion.id}
             label={occasion.name}
-            checked={filters.occasions.includes(
-              occasion.id
-            )}
-            onChange={() =>
-              toggleArrayFilter(
-                "occasions",
-                occasion.id
-              )
-            }
+            checked={filters.occasions.includes(occasion.id)}
+            onChange={() => toggleArrayFilter("occasions", occasion.id)}
           />
         ))}
 
         {!occasions.length && (
-          <p className="text-xs text-muted">
-            কোনো উপলক্ষ পাওয়া যায়নি।
-          </p>
+          <p className="text-xs text-muted">কোনো উপলক্ষ পাওয়া যায়নি।</p>
         )}
       </FilterSection>
 
@@ -728,15 +599,8 @@ export default function Shop() {
           <FilterCheckbox
             key={feature.id}
             label={feature.name}
-            checked={filters.features.includes(
-              feature.id
-            )}
-            onChange={() =>
-              toggleArrayFilter(
-                "features",
-                feature.id
-              )
-            }
+            checked={filters.features.includes(feature.id)}
+            onChange={() => toggleArrayFilter("features", feature.id)}
           />
         ))}
       </FilterSection>
@@ -765,16 +629,8 @@ export default function Shop() {
             <input
               type="radio"
               name="availability"
-              checked={
-                filters.availability ===
-                option.id
-              }
-              onChange={() =>
-                updateFilter(
-                  "availability",
-                  option.id
-                )
-              }
+              checked={filters.availability === option.id}
+              onChange={() => updateFilter("availability", option.id)}
               className="radio radio-secondary radio-sm"
             />
 
@@ -794,34 +650,22 @@ export default function Shop() {
             <input
               type="radio"
               name="rating"
-              checked={
-                filters.rating === rating
-              }
-              onChange={() =>
-                updateFilter(
-                  "rating",
-                  rating
-                )
-              }
+              checked={filters.rating === rating}
+              onChange={() => updateFilter("rating", rating)}
               className="radio radio-secondary radio-sm"
             />
 
             <span className="flex items-center gap-1 text-amber-500">
               {"★".repeat(rating)}
 
-              <span className="text-muted">
-                {" "}
-                ও তার বেশি
-              </span>
+              <span className="text-muted"> ও তার বেশি</span>
             </span>
           </label>
         ))}
 
         <button
           type="button"
-          onClick={() =>
-            updateFilter("rating", 0)
-          }
+          onClick={() => updateFilter("rating", 0)}
           className="text-xs text-secondary hover:underline"
         >
           সব রেটিং
@@ -832,9 +676,7 @@ export default function Shop() {
 
       <button
         type="button"
-        onClick={() =>
-          setFilterOpen(false)
-        }
+        onClick={() => setFilterOpen(false)}
         className="btn-brand mt-4 w-full lg:hidden"
       >
         {totalProducts}টি পণ্য দেখুন
@@ -846,28 +688,15 @@ export default function Shop() {
   // PAGINATION
   // =====================================
 
-  const pageNumbers = getPageNumbers(
-    currentPage,
-    totalPages
-  );
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
 
   const startItem =
-    totalProducts > 0
-      ? (currentPage - 1) *
-          PRODUCTS_PER_PAGE +
-        1
-      : 0;
+    totalProducts > 0 ? (currentPage - 1) * PRODUCTS_PER_PAGE + 1 : 0;
 
-  const endItem = Math.min(
-    currentPage * PRODUCTS_PER_PAGE,
-    totalProducts
-  );
+  const endItem = Math.min(currentPage * PRODUCTS_PER_PAGE, totalProducts);
 
   const changePage = (nextPage) => {
-    if (
-      nextPage < 1 ||
-      nextPage > totalPages
-    ) {
+    if (nextPage < 1 || nextPage > totalPages) {
       return;
     }
 
@@ -886,24 +715,16 @@ export default function Shop() {
   return (
     <main className="page-bg min-h-screen">
       <div className="page-container py-6 sm:py-8">
-
         {/* BREADCRUMB */}
 
         <nav className="mb-5 text-xs text-muted sm:text-sm">
-          <Link
-            to="/"
-            className="hover:text-secondary"
-          >
+          <Link to="/" className="hover:text-secondary">
             হোম
           </Link>
 
-          <span className="mx-2">
-            /
-          </span>
+          <span className="mx-2">/</span>
 
-          <span className="font-semibold text-primary">
-            সব উপহার
-          </span>
+          <span className="font-semibold text-primary">সব উপহার</span>
         </nav>
 
         {/* PAGE HEADING */}
@@ -919,9 +740,8 @@ export default function Shop() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-            প্রিয় মানুষের বিশেষ মুহূর্তকে আরও
-            সুন্দর করে তুলুন আমাদের বাছাই
-            করা উপহারের সংগ্রহ দিয়ে।
+            প্রিয় মানুষের বিশেষ মুহূর্তকে আরও সুন্দর করে তুলুন আমাদের বাছাই করা
+            উপহারের সংগ্রহ দিয়ে।
           </p>
         </div>
 
@@ -929,19 +749,14 @@ export default function Shop() {
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row">
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-base-300 bg-base-100 px-4 shadow-sm transition focus-within:border-secondary focus-within:ring-2 focus-within:ring-secondary/10">
-            <Search
-              size={19}
-              className="shrink-0 text-secondary"
-            />
+            <Search size={19} className="shrink-0 text-secondary" />
 
             <input
               ref={searchInputRef}
               type="search"
               value={search}
               onChange={(event) => {
-                setSearch(
-                  event.target.value
-                );
+                setSearch(event.target.value);
 
                 setCurrentPage(1);
               }}
@@ -973,14 +788,11 @@ export default function Shop() {
 
           <button
             type="button"
-            onClick={() =>
-              setFilterOpen(true)
-            }
+            onClick={() => setFilterOpen(true)}
             className="btn-outline-brand relative w-full rounded-2xl px-4 py-3 sm:w-auto lg:hidden"
           >
             <SlidersHorizontal size={17} />
             ফিল্টার
-
             {activeFilterCount > 0 && (
               <span className="flex size-5 items-center justify-center rounded-full bg-gold-soft text-xs text-primary">
                 {activeFilterCount}
@@ -992,7 +804,6 @@ export default function Shop() {
         {/* MAIN LAYOUT */}
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[270px_minmax(0,1fr)]">
-
           {/* DESKTOP FILTER SIDEBAR */}
 
           <aside className="hidden h-fit rounded-2xl border border-base-300/80 bg-base-100 p-4 shadow-sm lg:sticky lg:top-24 lg:block">
@@ -1002,31 +813,24 @@ export default function Shop() {
           {/* PRODUCT AREA */}
 
           <section className="min-w-0">
-
             {/* RESULT COUNT AND SORT */}
 
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-primary">
                   সব উপহার
-
                   <span className="ml-2 font-normal text-muted">
                     ({totalProducts}টি পণ্য)
                   </span>
                 </p>
 
                 {search && (
-                  <p className="mt-1 text-xs text-muted">
-                    “{search}” এর ফলাফল
-                  </p>
+                  <p className="mt-1 text-xs text-muted">“{search}” এর ফলাফল</p>
                 )}
               </div>
 
               <label className="flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3">
-                <ArrowUpDown
-                  size={15}
-                  className="shrink-0 text-secondary"
-                />
+                <ArrowUpDown size={15} className="shrink-0 text-secondary" />
 
                 <span className="hidden text-xs text-muted sm:inline">
                   সাজান:
@@ -1035,143 +839,103 @@ export default function Shop() {
                 <select
                   value={sort}
                   onChange={(event) => {
-                    setSort(
-                      event.target.value
-                    );
+                    setSort(event.target.value);
 
                     setCurrentPage(1);
                   }}
                   className="select select-ghost select-sm max-w-40 text-xs font-medium text-primary focus:outline-none"
                   aria-label="পণ্য সাজান"
                 >
-                  <option value="featured">
-                    ফিচার্ড
-                  </option>
+                  <option value="featured">ফিচার্ড</option>
 
-                  <option value="newest">
-                    নতুন প্রোডাক্ট
-                  </option>
+                  <option value="newest">নতুন প্রোডাক্ট</option>
 
-                  <option value="price-low">
-                    দাম: কম থেকে বেশি
-                  </option>
+                  <option value="price-low">দাম: কম থেকে বেশি</option>
 
-                  <option value="price-high">
-                    দাম: বেশি থেকে কম
-                  </option>
+                  <option value="price-high">দাম: বেশি থেকে কম</option>
 
-                  <option value="rating">
-                    সর্বোচ্চ রেটিং
-                  </option>
+                  <option value="rating">সর্বোচ্চ রেটিং</option>
                 </select>
               </label>
             </div>
 
             {/* ACTIVE FILTER CHIPS */}
 
-            {(activeFilterCount > 0 ||
-              search) && (
+            {(activeFilterCount > 0 || search) && (
               <div className="mb-4 flex flex-wrap items-center gap-2">
-
                 {/* CATEGORY CHIPS */}
 
-                {filters.categories.map(
-                  (id) => (
-                    <span
-                      key={`category-${id}`}
-                      className="badge-soft gap-1.5 py-1.5"
-                    >
-                      {getCategoryName(id)}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleArrayFilter(
-                            "categories",
-                            id
-                          )
-                        }
-                        aria-label="ক্যাটাগরি ফিল্টার সরান"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )
-                )}
-
-                {/* OCCASION CHIPS */}
-
-                {filters.occasions.map(
-                  (id) => (
-                    <span
-                      key={`occasion-${id}`}
-                      className="badge-soft gap-1.5 py-1.5"
-                    >
-                      {getOccasionName(id)}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleArrayFilter(
-                            "occasions",
-                            id
-                          )
-                        }
-                        aria-label="উপলক্ষ ফিল্টার সরান"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )
-                )}
-
-                {/* FEATURE CHIPS */}
-
-                {filters.features.map(
-                  (id) => (
-                    <span
-                      key={`feature-${id}`}
-                      className="badge-soft gap-1.5 py-1.5"
-                    >
-                      {getFeatureName(id)}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleArrayFilter(
-                            "features",
-                            id
-                          )
-                        }
-                        aria-label="ফিচার ফিল্টার সরান"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )
-                )}
-
-                {/* PRICE CHIP */}
-
-                {(filters.minPrice !== "" ||
-                  filters.maxPrice !== "") && (
-                  <span className="badge-soft gap-1.5 py-1.5">
-                    ৳{filters.minPrice || 0}
-                    –
-                    {filters.maxPrice === ""
-                      ? "যেকোনো"
-                      : `৳${filters.maxPrice}`}
+                {filters.categories.map((id) => (
+                  <span
+                    key={`category-${id}`}
+                    className="badge-soft gap-1.5 py-1.5"
+                  >
+                    {getCategoryName(id)}
 
                     <button
                       type="button"
+                      onClick={() => toggleArrayFilter("categories", id)}
+                      aria-label="ক্যাটাগরি ফিল্টার সরান"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+
+                {/* OCCASION CHIPS */}
+
+                {filters.occasions.map((id) => (
+                  <span
+                    key={`occasion-${id}`}
+                    className="badge-soft gap-1.5 py-1.5"
+                  >
+                    {getOccasionName(id)}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleArrayFilter("occasions", id)}
+                      aria-label="উপলক্ষ ফিল্টার সরান"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+
+                {/* FEATURE CHIPS */}
+
+                {filters.features.map((id) => (
+                  <span
+                    key={`feature-${id}`}
+                    className="badge-soft gap-1.5 py-1.5"
+                  >
+                    {getFeatureName(id)}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleArrayFilter("features", id)}
+                      aria-label="ফিচার ফিল্টার সরান"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+
+                {/* PRICE CHIP */}
+
+                {(filters.minPrice !== "" || filters.maxPrice !== "") && (
+                  <span className="badge-soft gap-1.5 py-1.5">
+                    ৳{filters.minPrice || 0}–
+                    {filters.maxPrice === ""
+                      ? "যেকোনো"
+                      : `৳${filters.maxPrice}`}
+                    <button
+                      type="button"
                       onClick={() => {
-                        setFilters(
-                          (previous) => ({
-                            ...previous,
-                            minPrice: "",
-                            maxPrice: "",
-                          })
-                        );
+                        setFilters((previous) => ({
+                          ...previous,
+                          minPrice: "",
+                          maxPrice: "",
+                        }));
 
                         setCurrentPage(1);
                       }}
@@ -1187,15 +951,9 @@ export default function Shop() {
                 {filters.rating > 0 && (
                   <span className="badge-soft gap-1.5 py-1.5">
                     {filters.rating}★+
-
                     <button
                       type="button"
-                      onClick={() =>
-                        updateFilter(
-                          "rating",
-                          0
-                        )
-                      }
+                      onClick={() => updateFilter("rating", 0)}
                       aria-label="রেটিং ফিল্টার সরান"
                     >
                       <X size={12} />
@@ -1213,12 +971,7 @@ export default function Shop() {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        updateFilter(
-                          "availability",
-                          "all"
-                        )
-                      }
+                      onClick={() => updateFilter("availability", "all")}
                       aria-label="উপলব্ধতা ফিল্টার সরান"
                     >
                       <X size={12} />
@@ -1244,24 +997,21 @@ export default function Shop() {
 
             {isLoading ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
-                {Array.from(
-                  { length: PRODUCTS_PER_PAGE },
-                  (_, index) => (
-                    <div
-                      key={index}
-                      className="overflow-hidden rounded-2xl border border-base-300 bg-base-100"
-                    >
-                      <div className="aspect-square animate-pulse bg-base-200" />
+                {Array.from({ length: PRODUCTS_PER_PAGE }, (_, index) => (
+                  <div
+                    key={index}
+                    className="overflow-hidden rounded-2xl border border-base-300 bg-base-100"
+                  >
+                    <div className="aspect-square animate-pulse bg-base-200" />
 
-                      <div className="space-y-3 p-4">
-                        <div className="h-3 w-20 animate-pulse rounded bg-base-200" />
-                        <div className="h-4 w-full animate-pulse rounded bg-base-200" />
-                        <div className="h-4 w-3/4 animate-pulse rounded bg-base-200" />
-                        <div className="h-9 animate-pulse rounded-xl bg-base-200" />
-                      </div>
+                    <div className="space-y-3 p-4">
+                      <div className="h-3 w-20 animate-pulse rounded bg-base-200" />
+                      <div className="h-4 w-full animate-pulse rounded bg-base-200" />
+                      <div className="h-4 w-3/4 animate-pulse rounded bg-base-200" />
+                      <div className="h-9 animate-pulse rounded-xl bg-base-200" />
                     </div>
-                  )
-                )}
+                  </div>
+                ))}
               </div>
             ) : isError ? (
               /* ========================= */
@@ -1278,8 +1028,7 @@ export default function Shop() {
                 </h2>
 
                 <p className="mt-2 max-w-sm text-sm text-muted">
-                  {error?.message ||
-                    "পণ্য লোড করার সময় সমস্যা হয়েছে।"}
+                  {error?.message || "পণ্য লোড করার সময় সমস্যা হয়েছে।"}
                 </p>
 
                 <button
@@ -1299,20 +1048,13 @@ export default function Shop() {
 
                 <div
                   className={`grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3 ${
-                    isFetching
-                      ? "opacity-70"
-                      : ""
+                    isFetching ? "opacity-70" : ""
                   }`}
                   aria-busy={isFetching}
                 >
-                  {products.map(
-                    (product) => (
-                      <ProductCard
-                        key={product._id}
-                        product={product}
-                      />
-                    )
-                  )}
+                  {products.map((product) => (
+                    <ProductCard key={product._id} product={product} />
+                  ))}
                 </div>
 
                 {/* ========================= */}
@@ -1322,25 +1064,17 @@ export default function Shop() {
                 {totalPages > 1 && (
                   <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-base-300/70 bg-base-100 px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs text-muted sm:text-sm">
-                      {startItem}–{endItem} টি
-                      পণ্য দেখানো হচ্ছে, মোট{" "}
+                      {startItem}–{endItem} টি পণ্য দেখানো হচ্ছে, মোট{" "}
                       {totalProducts} টি
                     </p>
 
                     <div className="flex items-center justify-center gap-1.5">
-
                       {/* PREVIOUS */}
 
                       <button
                         type="button"
-                        disabled={
-                          currentPage <= 1
-                        }
-                        onClick={() =>
-                          changePage(
-                            currentPage - 1
-                          )
-                        }
+                        disabled={currentPage <= 1}
+                        onClick={() => changePage(currentPage - 1)}
                         aria-label="আগের পৃষ্ঠা"
                         className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary transition hover:bg-secondary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
@@ -1349,50 +1083,39 @@ export default function Shop() {
 
                       {/* PAGE NUMBERS */}
 
-                      {pageNumbers.map(
-                        (page, index) =>
-                          page === "..." ? (
-                            <span
-                              key={`dots-${index}`}
-                              className="px-1 text-muted"
-                            >
-                              ...
-                            </span>
-                          ) : (
-                            <button
-                              key={page}
-                              type="button"
-                              onClick={() =>
-                                changePage(page)
-                              }
-                              aria-current={
-                                currentPage === page
-                                  ? "page"
-                                  : undefined
-                              }
-                              className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition ${
-                                currentPage === page
-                                  ? "bg-secondary text-white shadow-sm"
-                                  : "bg-base-200 text-primary hover:bg-secondary/10"
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          )
+                      {pageNumbers.map((page, index) =>
+                        page === "..." ? (
+                          <span
+                            key={`dots-${index}`}
+                            className="px-1 text-muted"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => changePage(page)}
+                            aria-current={
+                              currentPage === page ? "page" : undefined
+                            }
+                            className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition ${
+                              currentPage === page
+                                ? "bg-secondary text-white shadow-sm"
+                                : "bg-base-200 text-primary hover:bg-secondary/10"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ),
                       )}
 
                       {/* NEXT */}
 
                       <button
                         type="button"
-                        disabled={
-                          currentPage >= totalPages
-                        }
-                        onClick={() =>
-                          changePage(
-                            currentPage + 1
-                          )
-                        }
+                        disabled={currentPage >= totalPages}
+                        onClick={() => changePage(currentPage + 1)}
                         aria-label="পরের পৃষ্ঠা"
                         className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary transition hover:bg-secondary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
@@ -1402,52 +1125,56 @@ export default function Shop() {
                   </div>
                 )}
 
-                {/* ========================= */}
-                {/* CUSTOM GIFT BANNER      */}
-                {/* ========================= */}
+                
+{/* ========================= */}
+{/* PERSONALIZED GIFT BANNER  */}
+{/* ========================= */}
 
-                <section className="relative mt-7 overflow-hidden rounded-2xl bg-gradient-to-r from-[#310039] via-[#76258a] to-[#4b174d] p-5 text-white shadow-md sm:mt-8 sm:p-7">
-                  <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+<section className="relative mt-7 overflow-hidden rounded-2xl bg-gradient-to-r from-[#310039] via-[#76258A] to-[#4b174d] p-5 text-white shadow-md sm:mt-8 sm:p-7">
 
-                    {/* ICON */}
+  {/* Background Decoration */}
+  <div className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full bg-white/10 blur-2xl" />
 
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-gold-soft">
-                      <Gift size={26} />
-                    </div>
+  <div className="pointer-events-none absolute -bottom-20 left-1/3 size-40 rounded-full bg-gold-soft/10 blur-2xl" />
 
-                    {/* CONTENT */}
+  <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
 
-                    <div className="min-w-0 flex-1">
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gold-soft">
-                        <Sparkles size={13} />
-                        বড় কিছু গিফট করার
-                      </span>
+    {/* ICON */}
+    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-gold-soft">
+      <Sparkles size={26} />
+    </div>
 
-                      <h2 className="mt-1 text-lg font-extrabold leading-snug sm:text-xl">
-                        আপনার নিজস্ব কোনো বিশেষ ভাবনা
-                        বা পরিকল্পনা আছে?
-                      </h2>
+    {/* CONTENT */}
+    <div className="min-w-0 flex-1">
 
-                      <p className="mt-2 max-w-2xl text-xs leading-5 text-white/80 sm:text-sm">
-                        নিজের পছন্দমতো রং নির্বাচন
-                        করুন, প্রিয় উপহারগুলো যোগ
-                        করুন এবং ভালোবাসায় সাজিয়ে
-                        প্রিয় মানুষকে উপহার দিন।
-                      </p>
-                    </div>
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gold-soft">
+        <Gift size={13} />
+        আপনার উপহার, আপনার মতো
+      </span>
 
-                    {/* CTA */}
+      <h2 className="mt-1 text-lg font-bold leading-snug sm:text-xl">
+        প্রিয়জনের জন্য একটু আলাদা কিছু খুঁজছেন?
+      </h2>
 
-                    <Link
-                      to="/gift-box"
-                      className="btn-gold w-full shrink-0 rounded-full px-5 py-3 text-sm sm:w-auto"
-                    >
-                      গিফট বক্স ডিজাইন -এ যান
+      <p className="mt-2 max-w-2xl text-xs leading-6 text-white/80 sm:text-sm">
+        প্রিয় ছবি, নাম কিংবা বিশেষ বার্তায় সাজিয়ে নিন
+        একান্ত নিজের মতো উপহার। ছোট্ট একটি উপহারেই
+        তৈরি হোক আজীবনের সুন্দর স্মৃতি।
+      </p>
+    </div>
 
-                      <ArrowRight size={16} />
-                    </Link>
-                  </div>
-                </section>
+    {/* CTA BUTTON */}
+    <Link
+      to="/shop?categories=personalized"
+      className="btn-gold inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold sm:w-auto"
+    >
+      কাস্টমাইজড উপহার দেখুন
+      <ArrowRight size={16} />
+    </Link>
+
+  </div>
+</section>
+
               </>
             ) : (
               /* ========================= */
@@ -1464,8 +1191,7 @@ export default function Shop() {
                 </h2>
 
                 <p className="mt-2 max-w-sm text-sm text-muted">
-                  অন্য নামে সার্চ করো অথবা ফিল্টার
-                  পরিবর্তন করে দেখো।
+                  অন্য নামে সার্চ করো অথবা ফিল্টার পরিবর্তন করে দেখো।
                 </p>
 
                 <button
@@ -1488,15 +1214,12 @@ export default function Shop() {
 
       {filterOpen && (
         <div className="fixed inset-0 z-[100] lg:hidden">
-
           {/* BACKDROP */}
 
           <button
             type="button"
             aria-label="ফিল্টার বন্ধ করুন"
-            onClick={() =>
-              setFilterOpen(false)
-            }
+            onClick={() => setFilterOpen(false)}
             className="absolute inset-0 bg-black/45"
           />
 
@@ -1509,15 +1232,11 @@ export default function Shop() {
             className="absolute inset-y-0 left-0 flex w-[min(88%,340px)] flex-col bg-base-100 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-base-300 px-4 py-4">
-              <span className="font-bold text-primary">
-                পণ্য ফিল্টার
-              </span>
+              <span className="font-bold text-primary">পণ্য ফিল্টার</span>
 
               <button
                 type="button"
-                onClick={() =>
-                  setFilterOpen(false)
-                }
+                onClick={() => setFilterOpen(false)}
                 aria-label="বন্ধ করুন"
                 className="rounded-full bg-base-200 p-2 text-primary"
               >

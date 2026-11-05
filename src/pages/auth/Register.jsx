@@ -459,6 +459,8 @@ const Register = () => {
         throw new Error(data.message || "Failed to save user in MongoDB");
       }
 
+      await auth.refreshRole(firebaseUser);
+
       // STEP 5: Trigger Guest Cart synchronization
       retrySync();
 

@@ -31,6 +31,7 @@ import {
 import useCart from "../hooks/useCart";
 import CartItemEditor from "../components/cart/CartItemEditor";
 import { AuthContext } from "../providers/AuthProvider";
+import ProductCard from "../components/product/ProductCard";
 
 // ==========================================
 // CONFIGURATION
@@ -1615,10 +1616,14 @@ export default function CartPage() {
           </aside>
         </div>
 
-        {/* RECOMMENDED PRODUCTS */}
+        {/* ======================================== */}
+        {/* RECOMMENDED PRODUCTS - EXISTING CARD     */}
+        {/* ======================================== */}
 
         {(recommendationsLoading || recommendedProducts.length > 0) && (
           <section className="mt-12 sm:mt-16">
+            {/* SECTION HEADER */}
+
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-secondary">
@@ -1634,26 +1639,36 @@ export default function CartPage() {
                 </p>
               </div>
 
+              {/* DESKTOP VIEW ALL */}
+
               <Link
                 to="/shop"
-                className="hidden items-center gap-1 text-sm font-semibold text-secondary hover:underline sm:flex"
+                className="hidden items-center gap-1 text-sm font-semibold text-secondary transition hover:text-primary sm:flex"
               >
                 সব দেখুন
                 <ArrowRight size={16} />
               </Link>
             </div>
 
+            {/* PRODUCT GRID */}
+
             {recommendationsLoading ? (
-              <div className="flex min-h-36 items-center justify-center">
+              <div className="flex min-h-40 items-center justify-center">
                 <Loader2 size={26} className="animate-spin text-secondary" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
                 {recommendedProducts.map((product) => (
-                  <RecommendedProductCard key={product._id} product={product} />
+                  <ProductCard
+                    key={product._id}
+                    product={product}
+                    showWishlist={true}
+                  />
                 ))}
               </div>
             )}
+
+            {/* MOBILE VIEW ALL */}
 
             <div className="mt-5 sm:hidden">
               <Link to="/shop" className="btn-outline-brand w-full">

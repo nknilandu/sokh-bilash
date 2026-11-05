@@ -28,6 +28,8 @@ import ProductCard from "../components/product/ProductCard";
 import useCart from "../hooks/useCart";
 import { AuthContext } from "../providers/AuthProvider";
 
+import { useWishlist } from "../providers/WishlistProvider";
+
 // ========================================
 // CONFIGURATION
 // ========================================
@@ -36,7 +38,6 @@ const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3000"
 ).replace(/\/$/, "");
 
-const WISHLIST_KEY = "sokhbilash-wishlist";
 const MAX_PHOTOS = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -84,16 +85,6 @@ const getBasePrice = (product) => {
   return salePrice !== null && salePrice < regularPrice
     ? salePrice
     : regularPrice;
-};
-
-const readWishlist = () => {
-  try {
-    const data = JSON.parse(localStorage.getItem(WISHLIST_KEY) || "[]");
-
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
 };
 
 const getColorCode = (label) => {
@@ -268,42 +259,49 @@ function ProductDetailsContent({ product, relatedProducts }) {
   }, [product.description, descriptionExpanded]);
 
   // ========================================
-  // WISHLIST
+  // WISHLIST - GUEST + CUSTOMER + MONGODB
   // ========================================
 
-  const [favorite, setFavorite] = useState(() =>
-    readWishlist().includes(product._id),
-  );
+  const {
+    isFavorite,
+    toggleWishlist: changeWishlist,
+    ready: wishlistReady,
+    canWishlist,
+    savingId,
+  } = useWishlist();
 
-  useEffect(() => {
-    const syncWishlist = () => {
-      setFavorite(readWishlist().includes(product._id));
-    };
+  // Get current product wishlist status
+  const favorite = isFavorite(product._id);
 
-    window.addEventListener("storage", syncWishlist);
-    window.addEventListener("sokhbilash-wishlist-updated", syncWishlist);
+  // Check if wishlist action is in progress
+  const wishlistSaving = savingId === String(product._id);
 
-    return () => {
-      window.removeEventListener("storage", syncWishlist);
-      window.removeEventListener("sokhbilash-wishlist-updated", syncWishlist);
-    };
-  }, [product._id]);
+  const wishlistBusy = Boolean(savingId);
 
-  const toggleWishlist = () => {
-    const saved = readWishlist();
-    const existed = saved.includes(product._id);
+  // ========================================
+  // ADD / REMOVE WISHLIST
+  // ========================================
 
-    const updated = existed
-      ? saved.filter((id) => id !== product._id)
-      : [...new Set([...saved, product._id])];
+  const handleWishlist = async () => {
+    if (!wishlistReady || !canWishlist || wishlistBusy) {
+      return;
+    }
 
-    localStorage.setItem(WISHLIST_KEY, JSON.stringify(updated));
+    try {
+      const added = await changeWishlist(product._id);
 
-    setFavorite(!existed);
+      if (typeof added !== "boolean") {
+        return;
+      }
 
-    window.dispatchEvent(new Event("sokhbilash-wishlist-updated"));
+      showToast(
+        added ? "পছন্দের তালিকায় যোগ হয়েছে" : "পছন্দের তালিকা থেকে সরানো হয়েছে",
+      );
+    } catch (error) {
+      console.error("Wishlist Error:", error);
 
-    showToast(existed ? "Wishlist থেকে সরানো হয়েছে" : "Wishlist-এ যোগ হয়েছে");
+      showToast(error?.message || "Wishlist আপডেট করা যায়নি", "error");
+    }
   };
 
   // ========================================
@@ -836,25 +834,46 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   </span>
                 )}
 
-                {/* WISHLIST */}
+                {/* ====================================== */}
+                {/* WISHLIST - GUEST + CUSTOMER            */}
+                {/* ====================================== */}
 
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    toggleWishlist();
-                  }}
-                  aria-label={
-                    favorite ? "Wishlist থেকে সরান" : "Wishlist-এ যোগ করুন"
-                  }
-                  aria-pressed={favorite}
-                  className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105 sm:right-5 sm:top-5"
-                >
-                  <Heart
-                    size={19}
-                    className={favorite ? "fill-rose-500 text-rose-500" : ""}
-                  />
-                </button>
+                {canWishlist && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleWishlist();
+                    }}
+                    disabled={!wishlistReady || wishlistBusy}
+                    aria-label={
+                      favorite ? "Wishlist থেকে সরান" : "Wishlist-এ যোগ করুন"
+                    }
+                    aria-pressed={favorite}
+                    title={
+                      favorite
+                        ? "পছন্দের তালিকা থেকে সরান"
+                        : "পছন্দের তালিকায় যোগ করুন"
+                    }
+                    className={`absolute right-3 top-3 flex size-10 items-center justify-center rounded-full bg-white shadow-md transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 sm:right-5 sm:top-5 ${
+                      favorite ? "text-rose-500" : "text-primary"
+                    }`}
+                  >
+                    {wishlistSaving ? (
+                      <Loader2
+                        size={19}
+                        className="animate-spin text-secondary"
+                      />
+                    ) : (
+                      <Heart
+                        size={19}
+                        className={
+                          favorite ? "fill-rose-500 text-rose-500" : ""
+                        }
+                      />
+                    )}
+                  </button>
+                )}
 
                 <span className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/95 px-3 py-2 text-xs text-primary shadow-sm">
                   <ZoomIn size={14} />

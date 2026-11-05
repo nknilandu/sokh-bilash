@@ -1,301 +1,527 @@
-
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
 import {
   ArrowRight,
-  Baby,
   BookOpen,
   Cake,
   Gift,
   Heart,
   HeartHandshake,
+  PartyPopper,
   Search,
   Sparkles,
-  UsersRound,
   X,
+  RotateCcw,
 } from "lucide-react";
 
-// ============================================
-// CATEGORY DATA
-// Replace images with your actual product images
-// ============================================
+// ==========================================
+// API CONFIGURATION
+// ==========================================
 
-const categories = [
-  {
-    id: "photo-frame",
-    title: "ফটোফ্রেম ও মেমোরি কিপসেক",
-    description:
-      "স্মৃতি ধরে রাখার জন্য প্রিয় ফটোফ্রেম। ছবি ও ডিজাইন দিয়ে কাস্টমাইজ করুন।",
-    image: "/images/categories/photo-frame.jpg",
-    productCount: 148,
-    startingPrice: 850,
-    badges: ["১৪৮+ প্রোডাক্ট", "বেস্টসেলার"],
-    tags: [
-      "এনগ্রেভড ফ্রেম",
-      "ফটো ফ্রেম",
-      "কাস্টমাইজড",
-      "কাপল গিফট",
-    ],
-    slug: "photo-frame",
-  },
-  {
-    id: "nikah",
-    title: "নিকাহ ও ওয়েডিং কালেকশন",
-    description:
-      "জীবনের সবচেয়ে সুন্দর বন্ধন। নিকাহ, বিবাহ ও বিশেষ দিনের স্মরণীয় উপহার।",
-    image: "/images/categories/nikah.jpg",
-    productCount: 82,
-    startingPrice: 1450,
-    badges: ["৮২+ প্রোডাক্ট", "বেস্টসেলার"],
-    tags: [
-      "ওয়েডিং গিফট",
-      "নিকাহ ফ্রেম",
-      "ইসলামিক",
-      "কাস্টমাইজড",
-    ],
-    slug: "nikah-wedding",
-  },
-  {
-    id: "luxury-gift",
-    title: "লাক্সারি গিফট হ্যাম্পার",
-    description:
-      "পছন্দের উপহার সাজিয়ে প্রিয়জনকে চমকে দিন। খাবার, কার্ড ও পার্সোনালাইজড গিফট।",
-    image: "/images/categories/luxury-gift.jpg",
-    productCount: 56,
-    startingPrice: 2200,
-    badges: ["৫৬+ প্রোডাক্ট"],
-    tags: [
-      "চকলেট গিফট",
-      "প্রিমিয়াম",
-      "কাস্টমাইজড",
-      "গিফট বক্স",
-    ],
-    slug: "luxury-gift",
-  },
-  {
-    id: "couple",
-    title: "পার্সোনালাইজড কাপল ও ঘড়ি",
-    description:
-      "যুগল ও প্রিয়জনের জন্য রোমান্টিক উপহার। নামসহ কাস্টমাইজ ও এনগ্রেভিং।",
-    image: "/images/categories/couple-watch.jpg",
-    productCount: 78,
-    startingPrice: 1200,
-    badges: ["৭৮+ প্রোডাক্ট"],
-    tags: [
-      "কাপল গিফট",
-      "ঘড়ি",
-      "নাম এনগ্রেভ",
-      "কাস্টমাইজড",
-    ],
-    slug: "couple-gifts",
-  },
-  {
-    id: "islamic",
-    title: "ইসলামিক বরকত ও সাজসজ্জা",
-    description:
-      "পবিত্র স্মৃতি ও সুন্দর উপহার। আয়াতুল কুরসি, তাসবিহ ও ঘরের সাজ।",
-    image: "/images/categories/islamic.jpg",
-    productCount: 96,
-    startingPrice: 950,
-    badges: ["৯৬+ প্রোডাক্ট", "জনপ্রিয়"],
-    tags: [
-      "ইসলামিক ফ্রেম",
-      "ক্যালিগ্রাফি",
-      "তাসবিহ",
-      "হোম ডেকর",
-    ],
-    slug: "islamic",
-  },
-  {
-    id: "flowers",
-    title: "চকলেট, কেক ও ফুল",
-    description:
-      "ভালোবাসা, রোমান্স ও মিষ্টি মুহূর্তের জন্য ফুল, চকলেট ও বিশেষ উপহার।",
-    image: "/images/categories/flowers.jpg",
-    productCount: 64,
-    startingPrice: 1100,
-    badges: ["৬৪+ প্রোডাক্ট"],
-    tags: [
-      "ফুলের তোড়া",
-      "চকলেট",
-      "কেক",
-      "রোমান্টিক",
-    ],
-    slug: "flowers-chocolate",
-  },
-];
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/$/, "");
 
-// ============================================
-// OCCASIONS
-// ============================================
+// ==========================================
+// OCCASION ICON FALLBACK
+// ==========================================
 
-const occasions = [
-  {
-    id: "birthday",
-    title: "জন্মদিন",
-    count: "৭২+ বিশেষ উপহার",
-    icon: Cake,
-    bg: "bg-pink-100",
-    color: "text-pink-600",
-  },
-  {
-    id: "anniversary",
-    title: "বিবাহবার্ষিকী",
-    count: "৪৫+ বিশেষ গিফট",
-    icon: Heart,
-    bg: "bg-fuchsia-100",
-    color: "text-fuchsia-600",
-  },
-  {
-    id: "wedding",
-    title: "বিবাহ ও বিয়ে",
-    count: "৬৮+ স্মরণীয় উপহার",
-    icon: Sparkles,
-    bg: "bg-gold-soft",
-    color: "text-primary",
-  },
-  {
-    id: "love",
-    title: "কাপল ও প্রেম",
-    count: "১২৮+ রোমান্টিক গিফট",
-    icon: UsersRound,
-    bg: "bg-secondary/10",
-    color: "text-secondary",
-  },
-  {
-    id: "islamic",
-    title: "ইসলামিক বরকত",
-    count: "৯৫+ আইটেম",
-    icon: BookOpen,
-    bg: "bg-fuchsia-100",
-    color: "text-fuchsia-600",
-  },
-  {
-    id: "parents",
-    title: "বাবা-মা শ্রদ্ধা",
-    count: "১০২+ বিশেষ উপহার",
-    icon: HeartHandshake,
-    bg: "bg-amber-100",
-    color: "text-amber-700",
-  },
+const occasionIcons = {
+  birthday: Cake,
+  anniversary: Heart,
+  "wedding-nikah": Sparkles,
+  "love-romance": Heart,
+  islamic: BookOpen,
+  "parents-day": HeartHandshake,
+  congratulations: PartyPopper,
+  surprise: Gift,
+};
+
+const occasionColors = [
+  "bg-pink-100 text-pink-600",
+  "bg-fuchsia-100 text-fuchsia-600",
+  "bg-amber-100 text-amber-700",
+  "bg-secondary/10 text-secondary",
+  "bg-violet-100 text-violet-600",
+  "bg-orange-100 text-orange-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-rose-100 text-rose-600",
 ];
 
 const popularSearches = [
-  "নিকাহ ফ্রেম",
-  "কাপল গিফট",
-  "কাস্টমাইজড",
+  "ফটো ফ্রেম ও স্মৃতির উপহার",
+  "গিফট কম্বো ও হ্যাম্পার",
+  "ফুল ও বুকেট",
 ];
 
-const formatPrice = (value) =>
-  `৳${Number(value).toLocaleString("bn-BD")}`;
+// ==========================================
+// PUBLIC API FETCH FUNCTION
+// ==========================================
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
+const fetchPublicData = async (endpoint, signal) => {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    signal,
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || "তথ্য লোড করা যায়নি");
+  }
+
+  return data;
+};
+
+// ==========================================
+// SEARCH MATCHING FUNCTION
+// ==========================================
+
+const normalizeSearch = (value) =>
+  String(value ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .trim();
+
+const matchesTaxonomy = (item, keyword) => {
+  if (!keyword) return true;
+
+  const searchValues = [
+    item.id,
+    item.name,
+    item.description,
+    ...(Array.isArray(item.searchKeywords) ? item.searchKeywords : []),
+  ];
+
+  return searchValues.some((value) => normalizeSearch(value).includes(keyword));
+};
+
+// ==========================================
+// PRODUCT COUNT FORMATTER
+// ==========================================
+
+const hasProductCount = (item) =>
+  typeof item.productCount === "number" && Number.isFinite(item.productCount);
+
+const formatProductCount = (count) => Number(count).toLocaleString("bn-BD");
+
+// ==========================================
+// TAXONOMY ICON
+// Uses MongoDB iconUrl when available.
+// Falls back to Lucide icon.
+// ==========================================
+
+function TaxonomyIcon({ iconUrl, FallbackIcon = Gift, className = "size-6" }) {
+  const [failedUrl, setFailedUrl] = useState(null);
+
+  if (iconUrl && failedUrl !== iconUrl) {
+    return (
+      <img
+        src={iconUrl}
+        alt=""
+        loading="lazy"
+        className={`${className} object-contain`}
+        onError={() => setFailedUrl(iconUrl)}
+      />
+    );
+  }
+
+  return <FallbackIcon className={className} />;
+}
+
+// ==========================================
+// LOADING SKELETON
+// ==========================================
+
+function CategorySkeleton() {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div
+          key={index}
+          className="overflow-hidden rounded-2xl border border-base-300 bg-base-100"
+        >
+          <div className="aspect-[1.55] animate-pulse bg-base-200" />
+
+          <div className="space-y-3 p-5">
+            <div className="h-5 w-3/4 animate-pulse rounded bg-base-200" />
+            <div className="h-3 w-full animate-pulse rounded bg-base-200" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-base-200" />
+          </div>
+
+          <div className="h-12 animate-pulse bg-base-200/70" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OccasionSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+      {Array.from({ length: 8 }, (_, index) => (
+        <div
+          key={index}
+          className="h-40 animate-pulse rounded-2xl bg-base-200"
+        />
+      ))}
+    </div>
+  );
+}
+
+// ==========================================
+// EMPTY / ERROR STATE
+// ==========================================
+
+function EmptyState({
+  title,
+  description,
+  onRetry,
+  buttonText = "আবার চেষ্টা করুন",
+}) {
+  return (
+    <div className="rounded-2xl border border-base-300 bg-base-200/50 px-5 py-14 text-center">
+      <Search size={32} className="mx-auto text-secondary" />
+
+      <h3 className="mt-4 text-lg font-bold text-primary">{title}</h3>
+
+      <p className="mt-2 text-sm text-muted">{description}</p>
+
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="btn-outline-brand mt-5 inline-flex items-center gap-2"
+        >
+          <RotateCcw size={15} />
+          {buttonText}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// CATEGORY CARD
+// ==========================================
+
+function CategoryCard({ category }) {
+  const shopLink = `/shop?categories=${encodeURIComponent(category.id)}`;
+
+  return (
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-base-300/70 bg-base-100 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg">
+      {/* IMAGE */}
+      <Link
+        to={shopLink}
+        className="relative block aspect-[1.55] overflow-hidden bg-base-200"
+        aria-label={`${category.name} কালেকশন দেখুন`}
+      >
+        <div className="absolute inset-0 flex items-center justify-center text-secondary/25">
+          <Gift size={48} />
+        </div>
+
+        {category.imageUrl && (
+          <img
+            src={category.imageUrl}
+            alt={category.name}
+            loading="lazy"
+            className="relative size-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        )}
+
+        {/* PRODUCT COUNT */}
+        {hasProductCount(category) && (
+          <span className="absolute left-3 top-3 rounded-full bg-secondary px-3 py-1 text-[11px] font-semibold text-white shadow-sm">
+            {formatProductCount(category.productCount)}টি প্রোডাক্ট
+          </span>
+        )}
+
+        {/* CATEGORY ICON */}
+        <div className="absolute bottom-3 right-3 flex size-11 items-center justify-center rounded-xl border border-white/70 bg-white/95 p-2 shadow-md">
+          <TaxonomyIcon
+            iconUrl={category.iconUrl}
+            FallbackIcon={Gift}
+            className="size-6 text-secondary"
+          />
+        </div>
+      </Link>
+
+      {/* CONTENT */}
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <Link to={shopLink} className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-bold leading-6 text-primary transition group-hover:text-secondary sm:text-lg">
+            {category.name}
+          </h3>
+
+          <ArrowRight
+            size={18}
+            className="mt-1 shrink-0 text-secondary transition-transform group-hover:translate-x-1"
+          />
+        </Link>
+
+        <p className="mt-2 line-clamp-2 text-xs leading-6 text-muted sm:text-sm">
+          {category.description ||
+            "পছন্দের উপহার বেছে নিতে আমাদের এই কালেকশনটি ঘুরে দেখুন।"}
+        </p>
+
+        {/* OPTIONAL CATEGORY TAGS */}
+        {Array.isArray(category.tags) && category.tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {category.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md bg-secondary/5 px-2.5 py-1 text-[11px] font-medium text-secondary"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER */}
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 bg-secondary/5 px-4 py-3 sm:px-5">
+        <span className="text-xs text-muted">
+          {hasProductCount(category)
+            ? `${formatProductCount(category.productCount)}টি উপহার`
+            : "বিশেষ উপহার কালেকশন"}
+        </span>
+
+        <Link
+          to={shopLink}
+          className="inline-flex items-center gap-1 text-xs font-bold text-secondary hover:text-primary"
+        >
+          উপহার দেখুন
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+// ==========================================
+// OCCASION CARD
+// ==========================================
+
+function OccasionCard({ occasion, index }) {
+  const Icon = occasionIcons[occasion.id] || Gift;
+
+  const color = occasionColors[index % occasionColors.length];
+
+  const shopLink = `/shop?occasions=${encodeURIComponent(occasion.id)}`;
+
+  return (
+    <Link
+      to={shopLink}
+      className="group flex flex-col items-center rounded-2xl border border-base-300/60 bg-base-100 p-4 text-center shadow-sm transition duration-300 hover:-translate-y-1 hover:border-secondary/30 hover:shadow-md sm:p-5"
+    >
+      {/* OCCASION ICON */}
+      <div
+        className={`flex size-14 items-center justify-center rounded-2xl ${color}`}
+      >
+        <TaxonomyIcon
+          iconUrl={occasion.iconUrl}
+          FallbackIcon={Icon}
+          className="size-7"
+        />
+      </div>
+
+      <h3 className="mt-4 text-sm font-bold leading-6 text-primary transition group-hover:text-secondary">
+        {occasion.name}
+      </h3>
+
+      <p className="mt-1 text-[11px] text-muted">
+        {hasProductCount(occasion)
+          ? `${formatProductCount(occasion.productCount)}টি বিশেষ উপহার`
+          : "বিশেষ উপহার কালেকশন"}
+      </p>
+
+      <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-secondary">
+        কালেকশন দেখুন
+        <ArrowRight size={13} />
+      </span>
+    </Link>
+  );
+}
+
+// ==========================================
+// MAIN GIFT CATEGORIES PAGE
+// ==========================================
 
 export default function GiftCategoriesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
 
-  const filteredCategories = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+  // ========================================
+  // CATEGORY QUERY
+  // PUBLIC: Guest / Customer / Admin
+  // ========================================
 
+  const {
+    data: categoryData,
+    isPending: loadingCategories,
+    isError: categoryError,
+  } = useQuery({
+    queryKey: ["catalogCategories"],
+
+    queryFn: ({ signal }) => fetchPublicData("/categories", signal),
+
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const categories = useMemo(
+    () =>
+      Array.isArray(categoryData?.categories) ? categoryData.categories : [],
+    [categoryData],
+  );
+
+  // ========================================
+  // OCCASION QUERY
+  // PUBLIC: Guest / Customer / Admin
+  // ========================================
+
+  const {
+    data: occasionData,
+    isPending: loadingOccasions,
+    isError: occasionError,
+  } = useQuery({
+    queryKey: ["catalogOccasions"],
+
+    queryFn: ({ signal }) => fetchPublicData("/occasions", signal),
+
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const occasions = useMemo(
+    () =>
+      Array.isArray(occasionData?.occasions) ? occasionData.occasions : [],
+    [occasionData],
+  );
+
+  // ========================================
+  // SEARCH FILTER
+  // Bangla + English + Banglish keywords
+  // ========================================
+
+  const keyword = normalizeSearch(search);
+
+  const filteredCategories = useMemo(() => {
     if (!keyword) return categories;
 
-    return categories.filter((category) => {
-      const searchableText = [
-        category.title,
-        category.description,
-        ...category.tags,
-      ]
-        .join(" ")
-        .toLowerCase();
+    return categories.filter((category) => matchesTaxonomy(category, keyword));
+  }, [categories, keyword]);
 
-      return searchableText.includes(keyword);
+  const filteredOccasions = useMemo(() => {
+    if (!keyword) return occasions;
+
+    return occasions.filter((occasion) => matchesTaxonomy(occasion, keyword));
+  }, [occasions, keyword]);
+
+  // ========================================
+  // QUERY CLIENT REFRESH
+  // ========================================
+
+  const refreshCategories = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["catalogCategories"],
     });
-  }, [search]);
+  };
 
-  const handleSearch = (event) => {
+  const refreshOccasions = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["catalogOccasions"],
+    });
+  };
+
+  // ========================================
+  // SEARCH NAVIGATION TO SHOP
+  // ========================================
+
+  const searchShop = (event) => {
     event.preventDefault();
 
-    const keyword = search.trim();
+    const value = search.trim();
 
-    if (!keyword) return;
+    if (!value) {
+      navigate("/shop");
+      return;
+    }
 
-    navigate(
-      `/shop?search=${encodeURIComponent(keyword)}`
-    );
+    navigate(`/shop?search=${encodeURIComponent(value)}`);
   };
 
-  const handlePopularSearch = (keyword) => {
-    setSearch(keyword);
+  const handlePopularSearch = (value) => {
+    setSearch(value);
 
-    navigate(
-      `/shop?search=${encodeURIComponent(keyword)}`
-    );
+    navigate(`/shop?search=${encodeURIComponent(value)}`);
   };
+
+  // ========================================
+  // JSX
+  // ========================================
 
   return (
     <main className="min-h-screen bg-base-100 text-base-content">
-
-      {/* ===================================== */}
+      {/* ==================================== */}
       {/* HERO SECTION */}
-      {/* ===================================== */}
+      {/* ==================================== */}
 
       <section className="relative overflow-hidden bg-gradient-to-r from-primary via-primary to-[#471333] text-white">
-
-        {/* Decorative Effects */}
         <div className="pointer-events-none absolute -right-20 -top-24 size-80 rounded-full bg-secondary/20 blur-3xl" />
 
         <div className="pointer-events-none absolute bottom-0 left-1/3 size-52 rounded-full bg-secondary/10 blur-3xl" />
 
         <div className="page-container relative py-12 sm:py-16 lg:py-20">
-
           <div className="grid items-center gap-8 lg:grid-cols-[1.4fr_0.8fr] lg:gap-14">
-
             {/* LEFT CONTENT */}
             <div>
-
               <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-gold-soft">
                 <Sparkles size={13} />
-                ৬টি উপহার কালেকশন
+
+                {loadingCategories
+                  ? "উপহার কালেকশন লোড হচ্ছে"
+                  : `${formatProductCount(categories.length)}টি উপহার কালেকশন`}
               </span>
 
-              <h1 className="mt-4 max-w-2xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
+              <h1 className="mt-4 max-w-2xl text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
                 ক্যাটাগরি অনুযায়ী{" "}
-                <span className="text-gold-soft">
-                  অনন্য উপহার খুঁজুন
-                </span>
+                <span className="text-gold-soft">অনন্য উপহার খুঁজুন</span>
               </h1>
 
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
-                প্রতিটি সম্পর্কের অনুভূতি ও প্রতিটি বিশেষ
-                মুহূর্তের জন্য আমাদের যত্নে নির্বাচিত
-                উপহার। আপনার প্রিয়জনের জন্য উপযুক্ত
-                ক্যাটাগরি বেছে নিন।
+                প্রতিটি সম্পর্কের অনুভূতি ও প্রতিটি বিশেষ মুহূর্তের জন্য আমাদের
+                যত্নে নির্বাচিত উপহার। আপনার প্রিয়জনের জন্য উপযুক্ত ক্যাটাগরি
+                বেছে নিন।
               </p>
             </div>
 
             {/* RIGHT SEARCH */}
             <div className="w-full">
-
-              <label className="mb-3 block text-sm font-bold text-gold-soft">
+              <label
+                htmlFor="gift-category-search"
+                className="mb-3 block text-sm font-bold text-gold-soft"
+              >
                 ক্যাটাগরি বা উপহার নির্বাচন করুন
               </label>
 
               <form
-                onSubmit={handleSearch}
+                onSubmit={searchShop}
                 className="flex items-center gap-2 rounded-full bg-white p-1.5 shadow-lg"
               >
-
                 <input
+                  id="gift-category-search"
                   type="search"
                   value={search}
-                  onChange={(event) =>
-                    setSearch(event.target.value)
-                  }
-                  placeholder="যেমন: ফ্রেম, নিকাহ গিফট, চকলেট..."
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="যেমন: photo, jonmodin, চকলেট..."
                   className="min-w-0 flex-1 bg-transparent px-4 py-2 text-sm text-primary outline-none placeholder:text-muted"
                 />
 
@@ -319,21 +545,18 @@ export default function GiftCategoriesPage() {
                 </button>
               </form>
 
-              {/* Popular Search */}
+              {/* POPULAR SEARCHES */}
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-white/70">
-
                 <span>জনপ্রিয়:</span>
 
-                {popularSearches.map((keyword) => (
+                {popularSearches.map((value) => (
                   <button
-                    key={keyword}
+                    key={value}
                     type="button"
-                    onClick={() =>
-                      handlePopularSearch(keyword)
-                    }
+                    onClick={() => handlePopularSearch(value)}
                     className="underline underline-offset-2 transition hover:text-gold-soft"
                   >
-                    {keyword}
+                    {value}
                   </button>
                 ))}
               </div>
@@ -342,223 +565,103 @@ export default function GiftCategoriesPage() {
         </div>
       </section>
 
-      {/* ===================================== */}
-      {/* FEATURED CATEGORIES */}
-      {/* ===================================== */}
+      {/* ==================================== */}
+      {/* CATEGORY SECTION */}
+      {/* ==================================== */}
 
       <section className="page-container section-padding">
-
-        {/* Section Header */}
+        {/* HEADER */}
         <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-
           <div>
-
             <p className="text-xs font-bold tracking-wide text-secondary">
               ক্যাটাগরি পছন্দ করুন
             </p>
 
-            <h2 className="mt-1 text-2xl font-extrabold text-primary sm:text-3xl">
+            <h2 className="mt-1 text-2xl font-bold text-primary sm:text-3xl">
               মূল ক্যাটাগরি সমূহ
             </h2>
           </div>
 
           <p className="max-w-md text-xs leading-6 text-muted sm:text-sm">
-            কাস্টমাইজড হাতে বানানো উপহার থেকে তৈরি
-            গিফট কম্বো—সবই পাবেন আমাদের বিশেষ
-            কালেকশনে।
+            কাস্টমাইজড হাতে বানানো উপহার থেকে তৈরি গিফট কম্বো—সবই পাবেন আমাদের
+            বিশেষ কালেকশনে।
           </p>
         </div>
 
-        {/* Category Grid */}
-        {filteredCategories.length > 0 ? (
+        {/* CATEGORY CONTENT */}
+
+        {loadingCategories ? (
+          <CategorySkeleton />
+        ) : categoryError ? (
+          <EmptyState
+            title="ক্যাটাগরি লোড করা যায়নি"
+            description="সার্ভারের সাথে সংযোগে সমস্যা হয়েছে।"
+            onRetry={refreshCategories}
+          />
+        ) : filteredCategories.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-
             {filteredCategories.map((category) => (
-              <article
-                key={category.id}
-                className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-base-300/70 bg-base-100 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
-              >
-
-                {/* IMAGE */}
-                <Link
-                  to={`/shop?category=${encodeURIComponent(category.slug)}`}
-                  className="relative block aspect-[1.55] overflow-hidden bg-base-200"
-                >
-
-                  <img
-                    src={category.image}
-                    alt={category.title}
-                    loading="lazy"
-                    className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    onError={(event) => {
-                      event.currentTarget.style.display =
-                        "none";
-                    }}
-                  />
-
-                  {/* Badges */}
-                  <div className="absolute left-3 top-3 flex max-w-[85%] flex-wrap gap-2">
-
-                    {category.badges.map((badge, index) => (
-                      <span
-                        key={badge}
-                        className={
-                          index === 0
-                            ? "badge-soft bg-secondary px-3 py-1 text-[10px] text-white shadow-sm"
-                            : "badge-gold px-3 py-1 text-[10px] shadow-sm"
-                        }
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
-                </Link>
-
-                {/* CONTENT */}
-                <div className="flex flex-1 flex-col p-4 sm:p-5">
-
-                  <Link
-                    to={`/shop?category=${encodeURIComponent(category.slug)}`}
-                    className="flex items-start justify-between gap-3"
-                  >
-
-                    <h3 className="text-base font-extrabold leading-6 text-primary transition group-hover:text-secondary sm:text-lg">
-                      {category.title}
-                    </h3>
-
-                    <ArrowRight
-                      size={18}
-                      className="mt-1 shrink-0 text-secondary transition-transform group-hover:translate-x-1"
-                    />
-                  </Link>
-
-                  <p className="mt-2 line-clamp-2 text-xs leading-6 text-muted sm:text-sm">
-                    {category.description}
-                  </p>
-
-                  {/* TAGS */}
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-
-                    {category.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-md bg-secondary/5 px-2.5 py-1 text-[11px] font-medium text-secondary"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* FOOTER */}
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 bg-secondary/5 px-4 py-3 sm:px-5">
-
-                  <span className="text-xs text-muted">
-                    শুরু:{" "}
-                    <strong className="text-secondary">
-                      {formatPrice(category.startingPrice)}
-                      {" "}থেকে
-                    </strong>
-                  </span>
-
-                  <Link
-                    to={`/shop?category=${encodeURIComponent(category.slug)}`}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-secondary hover:text-primary"
-                  >
-                    উপহার দেখুন
-                    <ArrowRight size={13} />
-                  </Link>
-                </div>
-              </article>
+              <CategoryCard key={category.id} category={category} />
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-base-300 bg-base-200/50 px-5 py-14 text-center">
-
-            <Search
-              size={32}
-              className="mx-auto text-secondary"
-            />
-
-            <h3 className="mt-4 text-lg font-bold text-primary">
-              কোনো ক্যাটাগরি পাওয়া যায়নি
-            </h3>
-
-            <p className="mt-2 text-sm text-muted">
-              অন্য নামে সার্চ করে দেখতে পারেন।
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              className="btn-outline-brand mt-5"
-            >
-              সব ক্যাটাগরি দেখুন
-            </button>
-          </div>
+          <EmptyState
+            title="কোনো ক্যাটাগরি পাওয়া যায়নি"
+            description="অন্য নামে সার্চ করে দেখতে পারেন।"
+            onRetry={search ? () => setSearch("") : undefined}
+            buttonText="সব ক্যাটাগরি দেখুন"
+          />
         )}
       </section>
 
-      {/* ===================================== */}
-      {/* OCCASION CATEGORIES */}
-      {/* ===================================== */}
+      {/* ==================================== */}
+      {/* OCCASION SECTION */}
+      {/* ==================================== */}
 
       <section className="section-bg py-12 sm:py-16">
-
         <div className="page-container">
-
-          {/* Header */}
+          {/* HEADER */}
           <div className="mb-8 text-center">
+            <p className="text-xs font-bold text-secondary">উপলক্ষ অনুযায়ী</p>
 
-            <p className="text-xs font-bold text-secondary">
-              উপলক্ষ অনুযায়ী
-            </p>
-
-            <h2 className="mt-2 text-2xl font-extrabold text-primary sm:text-3xl">
+            <h2 className="mt-2 text-2xl font-bold text-primary sm:text-3xl">
               উপলক্ষ অনুযায়ী উপহার
             </h2>
 
             <p className="mx-auto mt-3 max-w-xl text-xs leading-6 text-muted sm:text-sm">
-              প্রতিটি উপলক্ষের জন্য রয়েছে সুন্দর
-              ও স্মরণীয় উপহারের বিশেষ কালেকশন।
+              প্রতিটি উপলক্ষের জন্য রয়েছে সুন্দর ও স্মরণীয় উপহারের বিশেষ
+              কালেকশন।
             </p>
           </div>
 
-          {/* Occasion Grid */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+          {/* OCCASION CONTENT */}
 
-            {occasions.map((occasion) => {
-              const Icon = occasion.icon;
-
-              return (
-                <Link
+          {loadingOccasions ? (
+            <OccasionSkeleton />
+          ) : occasionError ? (
+            <EmptyState
+              title="উপলক্ষ লোড করা যায়নি"
+              description="সার্ভারের সাথে সংযোগে সমস্যা হয়েছে।"
+              onRetry={refreshOccasions}
+            />
+          ) : filteredOccasions.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+              {filteredOccasions.map((occasion, index) => (
+                <OccasionCard
                   key={occasion.id}
-                  to={`/shop?occasion=${encodeURIComponent(occasion.id)}`}
-                  className="group flex flex-col items-center rounded-2xl border border-base-300/60 bg-white p-4 text-center shadow-sm transition duration-300 hover:-translate-y-1 hover:border-secondary/30 hover:shadow-md sm:p-5"
-                >
-
-                  <div
-                    className={`flex size-12 items-center justify-center rounded-2xl ${occasion.bg} ${occasion.color}`}
-                  >
-                    <Icon size={22} />
-                  </div>
-
-                  <h3 className="mt-4 text-sm font-bold text-primary group-hover:text-secondary">
-                    {occasion.title}
-                  </h3>
-
-                  <p className="mt-1 text-[11px] text-muted">
-                    {occasion.count}
-                  </p>
-
-                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-secondary">
-                    কালেকশন দেখুন
-                    <ArrowRight size={13} />
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
+                  occasion={occasion}
+                  index={index}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="কোনো উপলক্ষ পাওয়া যায়নি"
+              description="অন্য নামে সার্চ করে দেখতে পারেন।"
+              onRetry={search ? () => setSearch("") : undefined}
+              buttonText="সব উপলক্ষ দেখুন"
+            />
+          )}
         </div>
       </section>
     </main>
