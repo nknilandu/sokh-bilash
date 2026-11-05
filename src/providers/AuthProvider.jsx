@@ -1,12 +1,4 @@
-
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
+import { createContext, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createUserWithEmailAndPassword,
@@ -17,9 +9,10 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
+
 import { app } from "../../firebase/firebase.config";
 
-export const AuthContext = createContext();
+export const AuthContext = createContext(null);
 
 const auth = getAuth(app);
 
@@ -31,29 +24,28 @@ const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [role, setRole] = useState(null);
-  const [accountStatus, setAccountStatus] = useState(null);
-  const [roleLoading, setRoleLoading] = useState(true);
+  const [roleState, setRoleState] = useState({
+    uid: null,
+    role: null,
+    status: null,
+    checking: true,
+  });
 
   const roleRequestId = useRef(0);
 
-  // ================= Firebase Authentication =================
+  // ========================================
+  // FIREBASE AUTHENTICATION
+  // ========================================
 
-  const createUser = (email, password) => {
-    return createUserWithEmailAndPassword(auth, email, password);
-  };
+  const createUser = (email, password) =>
+    createUserWithEmailAndPassword(auth, email, password);
 
-  const loginUser = (email, password) => {
-    return signInWithEmailAndPassword(auth, email, password);
-  };
+  const loginUser = (email, password) =>
+    signInWithEmailAndPassword(auth, email, password);
 
-  const forgotPassword = (email) => {
-    return sendPasswordResetEmail(auth, email);
-  };
+  const forgotPassword = (email) => sendPasswordResetEmail(auth, email);
 
-  const logOut = () => {
-    return signOut(auth);
-  };
+  const logOut = () => signOut(auth);
 
   const updateUserProfile = async (profileData) => {
     if (!auth.currentUser) {
@@ -61,18 +53,37 @@ const AuthProvider = ({ children }) => {
     }
 
     await updateProfile(auth.currentUser, profileData);
-    setUser({ ...auth.currentUser });
+
+    setUser(auth.currentUser);
   };
 
-  // ================= Fetch User Role =================
+  // ========================================
+  // CENTRALIZED USER ROLE
+  // ========================================
+
   const refreshRole = useCallback(async (firebaseUser = auth.currentUser) => {
     const requestId = ++roleRequestId.current;
 
     if (!firebaseUser) {
-      setRole(null);
-      setAccountStatus(null);
+      setRoleState({
+        uid: null,
+        role: null,
+        status: null,
+        checking: false,
+      });
+
       return null;
     }
+
+    const uid = firebaseUser.uid;
+
+    // Prevent using a previous account's role.
+    setRoleState({
+      uid,
+      role: null,
+      status: null,
+      checking: true,
+    });
 
     try {
       const token = await firebaseUser.getIdToken();
@@ -81,40 +92,56 @@ const AuthProvider = ({ children }) => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        cache: "no-store",
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to get user role: ${response.status}`);
+        throw new Error(`Failed to get user role (${response.status})`);
       }
 
       const data = await response.json();
 
+      if (data?.success !== true || typeof data.role !== "string") {
+        throw new Error("Invalid role response");
+      }
+
+      // Ignore outdated requests.
       if (
-        requestId === roleRequestId.current &&
-        auth.currentUser?.uid === firebaseUser.uid
+        roleRequestId.current === requestId &&
+        auth.currentUser?.uid === uid
       ) {
-        setRole(data.role);
-        setAccountStatus(data.status);
+        setRoleState({
+          uid,
+          role: data.role,
+          status: data.status || null,
+          checking: false,
+        });
       }
 
       return data.role;
-
     } catch (error) {
       console.error("Role Fetch Error:", error.message);
 
       if (
-        requestId === roleRequestId.current &&
-        auth.currentUser?.uid === firebaseUser.uid
+        roleRequestId.current === requestId &&
+        auth.currentUser?.uid === uid
       ) {
-        setRole(null);
-        setAccountStatus(null);
+        setRoleState({
+          uid,
+          role: null,
+          status: null,
+          checking: false,
+        });
       }
 
       return null;
     }
   }, []);
 
-  // ================= Firebase Auth Observer =================
+  // ========================================
+  // AUTH OBSERVER
+  // ========================================
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -123,29 +150,33 @@ const AuthProvider = ({ children }) => {
       if (!currentUser) {
         ++roleRequestId.current;
 
-        setRole(null);
-        setAccountStatus(null);
-        setRoleLoading(false);
+        setRoleState({
+          uid: null,
+          role: null,
+          status: null,
+          checking: false,
+        });
+
         return;
       }
 
-      setRoleLoading(true);
-
-      refreshRole(currentUser).finally(() => {
-        if (auth.currentUser?.uid === currentUser.uid) {
-          setRoleLoading(false);
-        }
-      });
+      void refreshRole(currentUser);
     });
 
-    return unsubscribe;
+    return () => {
+      ++roleRequestId.current;
+      unsubscribe();
+    };
   }, [refreshRole]);
 
-  // Refresh role when returning to the website
+  // ========================================
+  // REFRESH ROLE ON WINDOW FOCUS
+  // ========================================
+
   useEffect(() => {
     const handleFocus = () => {
       if (auth.currentUser) {
-        refreshRole(auth.currentUser);
+        void refreshRole(auth.currentUser);
       }
     };
 
@@ -156,7 +187,21 @@ const AuthProvider = ({ children }) => {
     };
   }, [refreshRole]);
 
-  // ================= Context Data =================
+  // ========================================
+  // ROLE STATE FOR CURRENT USER ONLY
+  // ========================================
+
+  const role = user?.uid === roleState.uid ? roleState.role : null;
+
+  const accountStatus = user?.uid === roleState.uid ? roleState.status : null;
+
+  const roleLoading =
+    loading ||
+    (Boolean(user) && (roleState.uid !== user.uid || roleState.checking));
+
+  // ========================================
+  // CONTEXT
+  // ========================================
 
   const authData = {
     user,
@@ -176,9 +221,7 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={authData}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={authData}>{children}</AuthContext.Provider>
   );
 };
 

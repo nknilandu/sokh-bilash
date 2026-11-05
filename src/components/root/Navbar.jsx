@@ -12,7 +12,6 @@ import {
   House,
   Gift,
   LayoutGrid,
-  PackagePlus,
   LayoutDashboard,
   CreditCard,
   ClipboardList,
@@ -31,18 +30,18 @@ const customerNavLinks = [
   { name: "হোম", path: "/", icon: House },
   { name: "সব উপহার", path: "/shop", icon: Gift },
   { name: "ক্যাটাগরি", path: "/categories", icon: LayoutGrid },
-  { name: "কাস্টম গিফট", path: "/gift-box", icon: PackagePlus },
+  { name: "অর্ডারগুলি", path: "/my-orders", icon: ClipboardList },
 ];
 
 const customerDesktopLinks = [
   ...customerNavLinks,
-  { name: "কার্ট", path: "/cart", icon: ShoppingBag },
+  { name: "শপিং কার্ট", path: "/cart", icon: ShoppingBag },
 ];
 
 const customerMobileLinks = [
   ...customerNavLinks,
   { name: "উইশলিস্ট", path: "/wishlist", icon: Heart },
-  { name: "আমার কার্ট", path: "/cart", icon: ShoppingBag },
+  { name: "শপিং কার্ট", path: "/cart", icon: ShoppingBag },
 ];
 
 // ================= Admin Navigation =================

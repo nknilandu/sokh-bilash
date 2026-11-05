@@ -1,5 +1,4 @@
-
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useContext, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import Swal from "sweetalert2";
@@ -24,8 +23,10 @@ import {
   Loader2,
   ImageOff,
 } from "lucide-react";
-import ProductCard from "../components/product/ProductCard";
 
+import ProductCard from "../components/product/ProductCard";
+import useCart from "../hooks/useCart";
+import { AuthContext } from "../providers/AuthProvider";
 
 // ========================================
 // CONFIGURATION
@@ -35,9 +36,7 @@ const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3000"
 ).replace(/\/$/, "");
 
-const CART_KEY = "sokhbilash-cart";
 const WISHLIST_KEY = "sokhbilash-wishlist";
-
 const MAX_PHOTOS = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -45,18 +44,15 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 // HELPERS
 // ========================================
 
-const formatPrice = (value) =>
-  `৳${Number(value || 0).toLocaleString("en-US")}`;
+const formatPrice = (value) => `৳${Number(value || 0).toLocaleString("en-US")}`;
 
 const generateId = () =>
   globalThis.crypto?.randomUUID?.() ||
-  `${Date.now()}-${Math.random()}`;
+  `skb-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 
 const validImageUrl = (url) => {
   try {
-    return ["https:", "http:"].includes(
-      new URL(String(url)).protocol
-    );
+    return ["https:", "http:"].includes(new URL(String(url)).protocol);
   } catch {
     return false;
   }
@@ -66,66 +62,33 @@ const getImageUrls = (images) => {
   if (!Array.isArray(images)) return [];
 
   return images
-    .map((image) =>
-      typeof image === "string" ? image : image?.url
-    )
+    .map((image) => (typeof image === "string" ? image : image?.url))
     .filter(validImageUrl);
 };
 
 const toPositivePrice = (value) => {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
+  if (value === null || value === undefined || value === "") {
     return null;
   }
 
   const price = Number(value);
 
-  return Number.isFinite(price) && price > 0
-    ? price
-    : null;
+  return Number.isFinite(price) && price > 0 ? price : null;
 };
 
 const getBasePrice = (product) => {
-  const regularPrice =
-    toPositivePrice(product?.regularPrice) || 0;
+  const regularPrice = toPositivePrice(product?.regularPrice) || 0;
 
-  const salePrice = toPositivePrice(
-    product?.salePrice
-  );
+  const salePrice = toPositivePrice(product?.salePrice);
 
-  const hasValidSale =
-    salePrice !== null &&
-    regularPrice > salePrice;
-
-  return hasValidSale
+  return salePrice !== null && salePrice < regularPrice
     ? salePrice
     : regularPrice;
 };
 
-const readCart = () => {
-  try {
-    if (typeof window === "undefined") return [];
-
-    const data = JSON.parse(
-      localStorage.getItem(CART_KEY) || "[]"
-    );
-
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-};
-
 const readWishlist = () => {
   try {
-    if (typeof window === "undefined") return [];
-
-    const data = JSON.parse(
-      localStorage.getItem(WISHLIST_KEY) || "[]"
-    );
+    const data = JSON.parse(localStorage.getItem(WISHLIST_KEY) || "[]");
 
     return Array.isArray(data) ? data : [];
   } catch {
@@ -149,50 +112,81 @@ const getColorCode = (label) => {
 };
 
 const getFirstVariant = (product) => {
-  if (
-    !product?.variantsEnabled ||
-    !Array.isArray(product.variants)
-  ) {
+  if (!product?.variantsEnabled || !Array.isArray(product.variants)) {
     return null;
   }
 
   return (
-    product.variants.find(
-      (variant) => variant.available !== false
-    ) ||
+    product.variants.find((variant) => variant.available !== false) ||
     product.variants[0] ||
     null
   );
 };
 
+const showToast = (title, icon = "success") =>
+  Swal.fire({
+    title,
+    icon,
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 2000,
+    timerProgressBar: true,
+  });
+
 // ========================================
 // PRODUCT DETAILS CONTENT
 // ========================================
 
-function ProductDetailsContent({
-  product,
-  relatedProducts,
-}) {
+function ProductDetailsContent({ product, relatedProducts }) {
   const navigate = useNavigate();
   const descriptionRef = useRef(null);
+
+  // ========================================
+  // CUSTOMER SHOPPING PERMISSION
+  // ========================================
+
+  const { user, loading, role, roleLoading, accountStatus } =
+    useContext(AuthContext);
+
+  const checkingRole = loading || (Boolean(user) && roleLoading);
+
+  const isAdmin = Boolean(user) && role === "admin";
+
+  const canShop =
+    !checkingRole &&
+    (!user || (role === "customer" && accountStatus === "active"));
+
+  const {
+    cartItems,
+    addToCart,
+    isInCart,
+    cartReady,
+    cartLoading,
+    cartError,
+    retrySync,
+  } = useCart();
 
   // ========================================
   // VARIANTS
   // ========================================
 
-  const [selectedVariantKey, setSelectedVariantKey] =
-    useState(
-      () => getFirstVariant(product)?.key || ""
-    );
+  const [selectedVariantKey, setSelectedVariantKey] = useState(
+    () => getFirstVariant(product)?.key || "",
+  );
 
   const variants = useMemo(
     () =>
-      product.variantsEnabled &&
-      Array.isArray(product.variants)
+      product.variantsEnabled && Array.isArray(product.variants)
         ? product.variants
         : [],
-    [product]
+    [product],
   );
+
+  const selectedVariant =
+    variants.find((variant) => variant.key === selectedVariantKey) || null;
+
+  const selectedOptions = selectedVariant?.options || {};
 
   const optionGroups = useMemo(() => {
     if (!product.variantsEnabled) return [];
@@ -200,74 +194,50 @@ function ProductDetailsContent({
     return ["size", "color", "type"]
       .map((type) => ({
         type,
-        enabled:
-          product.options?.[type]?.enabled === true,
-        values:
-          product.options?.[type]?.values || [],
+        enabled: product.options?.[type]?.enabled === true,
+        values: product.options?.[type]?.values || [],
       }))
       .filter(
         (group) =>
           group.enabled &&
           Array.isArray(group.values) &&
-          group.values.length > 0
+          group.values.length > 0,
       );
   }, [product]);
-
-  const gallery = useMemo(
-    () => getImageUrls(product.images),
-    [product]
-  );
-
-  const selectedVariant =
-    variants.find(
-      (variant) => variant.key === selectedVariantKey
-    ) || null;
-
-  const selectedOptions =
-    selectedVariant?.options || {};
-
-  const variantImage = validImageUrl(
-    selectedVariant?.imageUrl
-  )
-    ? selectedVariant.imageUrl
-    : "";
 
   // ========================================
   // GALLERY
   // ========================================
 
-  const [selectedImage, setSelectedImage] =
-    useState(() => {
-      const first = getFirstVariant(product);
+  const gallery = useMemo(() => getImageUrls(product.images), [product.images]);
 
-      return validImageUrl(first?.imageUrl)
-        ? first.imageUrl
-        : getImageUrls(product.images)[0] || "";
-    });
+  const variantImage = validImageUrl(selectedVariant?.imageUrl)
+    ? selectedVariant.imageUrl
+    : "";
+
+  const [selectedImage, setSelectedImage] = useState(() => {
+    const first = getFirstVariant(product);
+
+    return validImageUrl(first?.imageUrl)
+      ? first.imageUrl
+      : getImageUrls(product.images)[0] || "";
+  });
 
   const thumbnails = useMemo(
-    () => [
-      ...new Set([
-        ...(variantImage ? [variantImage] : []),
-        ...gallery,
-      ]),
-    ],
-    [variantImage, gallery]
+    () => [...new Set([...(variantImage ? [variantImage] : []), ...gallery])],
+    [variantImage, gallery],
   );
+
+  const [zoom, setZoom] = useState(false);
+  const [zoomPosition, setZoomPosition] = useState("50% 50%");
 
   // ========================================
   // DESCRIPTION
   // ========================================
 
-  const [
-    descriptionExpanded,
-    setDescriptionExpanded,
-  ] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
-  const [
-    hasLongDescription,
-    setHasLongDescription,
-  ] = useState(false);
+  const [hasLongDescription, setHasLongDescription] = useState(false);
 
   useEffect(() => {
     if (descriptionExpanded) return;
@@ -277,14 +247,10 @@ function ProductDetailsContent({
     if (!element) return;
 
     const checkOverflow = () => {
-      setHasLongDescription(
-        element.scrollHeight >
-          element.clientHeight + 2
-      );
+      setHasLongDescription(element.scrollHeight > element.clientHeight + 2);
     };
 
-    const frame =
-      window.requestAnimationFrame(checkOverflow);
+    const frame = requestAnimationFrame(checkOverflow);
 
     const observer =
       typeof ResizeObserver !== "undefined"
@@ -292,20 +258,12 @@ function ProductDetailsContent({
         : null;
 
     observer?.observe(element);
-
-    window.addEventListener(
-      "resize",
-      checkOverflow
-    );
+    window.addEventListener("resize", checkOverflow);
 
     return () => {
-      window.cancelAnimationFrame(frame);
+      cancelAnimationFrame(frame);
       observer?.disconnect();
-
-      window.removeEventListener(
-        "resize",
-        checkOverflow
-      );
+      window.removeEventListener("resize", checkOverflow);
     };
   }, [product.description, descriptionExpanded]);
 
@@ -313,296 +271,128 @@ function ProductDetailsContent({
   // WISHLIST
   // ========================================
 
-  const [favorite, setFavorite] = useState(
-    () => readWishlist().includes(product._id)
+  const [favorite, setFavorite] = useState(() =>
+    readWishlist().includes(product._id),
   );
 
   useEffect(() => {
     const syncWishlist = () => {
-      setFavorite(
-        readWishlist().includes(product._id)
-      );
+      setFavorite(readWishlist().includes(product._id));
     };
 
-    window.addEventListener(
-      "storage",
-      syncWishlist
-    );
-
-    window.addEventListener(
-      "sokhbilash-wishlist-updated",
-      syncWishlist
-    );
+    window.addEventListener("storage", syncWishlist);
+    window.addEventListener("sokhbilash-wishlist-updated", syncWishlist);
 
     return () => {
-      window.removeEventListener(
-        "storage",
-        syncWishlist
-      );
-
-      window.removeEventListener(
-        "sokhbilash-wishlist-updated",
-        syncWishlist
-      );
+      window.removeEventListener("storage", syncWishlist);
+      window.removeEventListener("sokhbilash-wishlist-updated", syncWishlist);
     };
   }, [product._id]);
 
   const toggleWishlist = () => {
-    const wishlist = readWishlist();
+    const saved = readWishlist();
+    const existed = saved.includes(product._id);
 
-    const isFavorite = wishlist.includes(product._id);
+    const updated = existed
+      ? saved.filter((id) => id !== product._id)
+      : [...new Set([...saved, product._id])];
 
-    const nextWishlist = isFavorite
-      ? wishlist.filter(
-          (item) => item !== product._id
-        )
-      : [...new Set([...wishlist, product._id])];
+    localStorage.setItem(WISHLIST_KEY, JSON.stringify(updated));
 
-    localStorage.setItem(
-      WISHLIST_KEY,
-      JSON.stringify(nextWishlist)
-    );
+    setFavorite(!existed);
 
-    setFavorite(!isFavorite);
+    window.dispatchEvent(new Event("sokhbilash-wishlist-updated"));
 
-    window.dispatchEvent(
-      new Event("sokhbilash-wishlist-updated")
-    );
-
-    Swal.fire({
-      title: isFavorite
-        ? "Wishlist থেকে সরানো হয়েছে"
-        : "Wishlist-এ যোগ হয়েছে",
-      icon: "success",
-      toast: true,
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 1600,
-    });
+    showToast(existed ? "Wishlist থেকে সরানো হয়েছে" : "Wishlist-এ যোগ হয়েছে");
   };
 
   // ========================================
-  // CUSTOMIZATION STATES
+  // CONFIGURATION STATES
   // ========================================
 
   const [quantity, setQuantity] = useState(1);
 
   const [customText, setCustomText] = useState("");
   const [customDate, setCustomDate] = useState("");
-  const [customMessage, setCustomMessage] =
-    useState("");
+  const [customMessage, setCustomMessage] = useState("");
   const [customNote, setCustomNote] = useState("");
 
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [fileError, setFileError] = useState("");
-  const [uploadProgress, setUploadProgress] =
-    useState("");
+  const [uploadProgress, setUploadProgress] = useState("");
 
-  const [packaging, setPackaging] =
-    useState("regular");
-
-  const [surpriseBox, setSurpriseBox] =
-    useState(false);
-
-  // ========================================
-  // CART STATES
-  // ========================================
-
-  const [cartItems, setCartItems] = useState(
-    readCart
-  );
-
+  const [packaging, setPackaging] = useState("regular");
   const [adding, setAdding] = useState(false);
 
   // ========================================
-  // IMAGE ZOOM
+  // PRICING
   // ========================================
 
-  const [zoom, setZoom] = useState(false);
+  const regularPrice = toPositivePrice(product.regularPrice) || 0;
 
-  const [zoomPosition, setZoomPosition] =
-    useState("50% 50%");
+  const salePrice = toPositivePrice(product.salePrice);
 
-  // ========================================
-  // CART SYNC
-  // ========================================
+  const hasSale = salePrice !== null && salePrice < regularPrice;
 
-  useEffect(() => {
-    const syncCart = () => {
-      setCartItems(readCart());
-    };
-
-    window.addEventListener(
-      "storage",
-      syncCart
-    );
-
-    window.addEventListener(
-      "sokhbilash-cart-updated",
-      syncCart
-    );
-
-    return () => {
-      window.removeEventListener(
-        "storage",
-        syncCart
-      );
-
-      window.removeEventListener(
-        "sokhbilash-cart-updated",
-        syncCart
-      );
-    };
-  }, []);
-
-  // ========================================
-  // CHANGE VARIANT
-  // ========================================
-
-  const chooseOption = (type, label) => {
-    const matching = variants.filter(
-      (variant) =>
-        variant.options?.[type] === label &&
-        variant.available !== false
-    );
-
-    const nextVariant =
-      matching.find((variant) =>
-        optionGroups.every(
-          (group) =>
-            group.type === type ||
-            variant.options?.[group.type] ===
-              selectedOptions[group.type]
-        )
-      ) || matching[0];
-
-    if (!nextVariant) return;
-
-    setSelectedVariantKey(nextVariant.key);
-
-    const nextImage = validImageUrl(
-      nextVariant.imageUrl
-    )
-      ? nextVariant.imageUrl
-      : gallery[0] || "";
-
-    setSelectedImage(nextImage);
-    setZoom(false);
-  };
-
-  // ========================================
-  // UPDATED PRICE LOGIC
-  // ========================================
-
-  // Admin's original and offer prices
-  const regularPrice =
-    toPositivePrice(product.regularPrice) || 0;
-
-  const salePrice = toPositivePrice(
-    product.salePrice
-  );
-
-  const hasSale =
-    salePrice !== null &&
-    regularPrice > salePrice;
-
-  // Product-level selling price
   const productPrice = getBasePrice(product);
 
-  // Selected variant's selling price
   const variantPrice = product.variantsEnabled
-    ? toPositivePrice(selectedVariant?.price) ??
-      productPrice
+    ? (toPositivePrice(selectedVariant?.price) ?? productPrice)
     : productPrice;
 
-  // Optional packaging
-  const premiumBoxPrice = Math.max(
-    0,
-    Number(product.premiumBoxPrice || 0)
-  );
+  const premiumBoxPrice = Math.max(0, Number(product.premiumBoxPrice || 0));
 
-  const packagingExtra =
-    packaging === "premium"
-      ? premiumBoxPrice
-      : 0;
+  const packagingExtra = packaging === "premium" ? premiumBoxPrice : 0;
 
-  // Unit price including packaging
   const price = variantPrice + packagingExtra;
-
-  // Cart total
   const total = price * quantity;
 
-  // Product-level sale cannot automatically
-  // be applied to unrelated variant prices.
-  const selectedUsesSale =
-    hasSale &&
-    Math.abs(variantPrice - salePrice) < 0.01;
+  const selectedUsesSale = hasSale && Math.abs(variantPrice - salePrice) < 0.01;
 
-  const comparisonRegularPrice =
-    regularPrice + packagingExtra;
+  const comparisonRegularPrice = regularPrice + packagingExtra;
 
-  const showOriginalPrice =
-    selectedUsesSale &&
-    comparisonRegularPrice > price;
+  const showOriginalPrice = selectedUsesSale && comparisonRegularPrice > price;
 
   const discount = showOriginalPrice
     ? Math.round(
-        ((comparisonRegularPrice - price) /
-          comparisonRegularPrice) *
-          100
+        ((comparisonRegularPrice - price) / comparisonRegularPrice) * 100,
       )
     : 0;
 
   const purchasable =
     product.available === true &&
     (!product.variantsEnabled ||
-      (selectedVariant !== null &&
-        selectedVariant.available !== false)) &&
+      (selectedVariant !== null && selectedVariant.available !== false)) &&
     price > 0;
 
   // ========================================
-  // CUSTOMIZATION MODE
+  // CUSTOMIZATION MODES
   // ========================================
 
   const frameMode =
-    product.customizable === true &&
-    product.customerFieldType === "frame";
+    product.customizable === true && product.customerFieldType === "frame";
 
   const noteMode =
-    product.customizable === true &&
-    product.customerFieldType === "note";
+    product.customizable === true && product.customerFieldType === "note";
 
   const photoLimit = Math.min(
     MAX_PHOTOS,
     Math.max(
       1,
       Number(
-        product.customerFields?.find(
-          (field) => field.key === "photos"
-        )?.maxFiles || MAX_PHOTOS
-      ) || MAX_PHOTOS
-    )
+        product.customerFields?.find((field) => field.key === "photos")
+          ?.maxFiles || MAX_PHOTOS,
+      ) || MAX_PHOTOS,
+    ),
   );
 
-  // ========================================
-  // CART CONFIGURATION
-  // ========================================
-
   const currentCustomization = {
-    mode: frameMode
-      ? "frame"
-      : noteMode
-        ? "note"
-        : "none",
+    mode: frameMode ? "frame" : noteMode ? "note" : "none",
 
     name: frameMode ? customText.trim() : "",
     date: frameMode ? customDate : "",
-
-    message: frameMode
-      ? customMessage.trim()
-      : "",
-
+    message: frameMode ? customMessage.trim() : "",
     note: noteMode ? customNote.trim() : "",
 
     photos: frameMode
@@ -615,131 +405,167 @@ function ProductDetailsContent({
       : [],
   };
 
-  const currentPhotoUrls =
-    currentCustomization.photos.map(
-      (photo) => photo.url
-    );
+  // ========================================
+  // CART CONFIGURATION — FROM CONTEXT
+  // ========================================
 
-  const isSameCartConfiguration = (item) => {
-    if (
-      (item.productId || item.id) !== product._id
-    ) {
-      return false;
+  const alreadyInCart = isInCart({
+    productId: product._id,
+    variantKey: selectedVariant?.key || "",
+    packaging,
+    customization: currentCustomization,
+  });
+
+  // ========================================
+  // RESTORE SAVED CART CONFIGURATION
+  // AFTER REFRESH / RETURN TO PRODUCT
+  // ========================================
+
+  const restoredProductRef = useRef(null);
+
+  useEffect(() => {
+    if (!cartReady) return;
+
+    // Restore only once for this product.
+    // Otherwise changing fields manually
+    // would trigger unwanted resets.
+    if (restoredProductRef.current === product._id) {
+      return;
     }
 
-    const custom = item.customization || {};
+    restoredProductRef.current = product._id;
 
-    const savedPhotoUrls = (
-      custom.photos || []
-    ).map((photo) => photo.url);
-
-    return (
-      (item.variantKey || "") ===
-        (selectedVariant?.key || "") &&
-      (item.packaging || "regular") ===
-        packaging &&
-      Boolean(item.surpriseBox) ===
-        Boolean(
-          product.surpriseBox && surpriseBox
-        ) &&
-      (custom.mode || "none") ===
-        currentCustomization.mode &&
-      (custom.name || "") ===
-        currentCustomization.name &&
-      (custom.date || "") ===
-        currentCustomization.date &&
-      (custom.message || "") ===
-        currentCustomization.message &&
-      (custom.note || "") ===
-        currentCustomization.note &&
-      JSON.stringify(savedPhotoUrls) ===
-        JSON.stringify(currentPhotoUrls)
+    const savedItem = cartItems.find(
+      (item) => String(item.productId || item.id) === String(product._id),
     );
-  };
 
-  const alreadyInCart = cartItems.some(
-    isSameCartConfiguration
+    if (!savedItem) return;
+
+    // Restore variant
+    const savedVariant = variants.find(
+      (variant) => variant.key === savedItem.variantKey,
+    );
+
+    if (savedVariant) {
+      setSelectedVariantKey(savedVariant.key);
+    }
+
+    // Restore product image
+    setSelectedImage(
+      savedVariant?.imageUrl || savedItem.image || gallery[0] || "",
+    );
+
+    // Restore quantity
+    setQuantity(Math.min(10, Math.max(1, Number(savedItem.quantity) || 1)));
+
+    // Restore packaging and surprise option
+    setPackaging(savedItem.packaging === "premium" ? "premium" : "regular");
+
+    // Restore customization
+    const savedCustom = savedItem.customization || {};
+
+    setCustomText(savedCustom.name || "");
+    setCustomDate(savedCustom.date || "");
+    setCustomMessage(savedCustom.message || "");
+    setCustomNote(savedCustom.note || "");
+
+    // Restore uploaded images
+    setPhotos(
+      Array.isArray(savedCustom.photos)
+        ? savedCustom.photos.map((photo) => ({ ...photo }))
+        : [],
+    );
+  }, [cartReady, cartItems, product._id, variants, gallery]);
+
+  // Product-level state:
+  // Shows whether any configuration of this
+  // product exists in the cart.
+  const productInCart = cartItems.some(
+    (item) => String(item.productId || item.id) === String(product._id),
   );
 
   // ========================================
-  // IMGBB PHOTO UPLOAD
+  // CHANGE VARIANT
+  // ========================================
+
+  const chooseOption = (type, label) => {
+    const matching = variants.filter(
+      (variant) =>
+        variant.options?.[type] === label && variant.available !== false,
+    );
+
+    const nextVariant =
+      matching.find((variant) =>
+        optionGroups.every(
+          (group) =>
+            group.type === type ||
+            variant.options?.[group.type] === selectedOptions[group.type],
+        ),
+      ) || matching[0];
+
+    if (!nextVariant) return;
+
+    setSelectedVariantKey(nextVariant.key);
+    setSelectedImage(
+      validImageUrl(nextVariant.imageUrl)
+        ? nextVariant.imageUrl
+        : gallery[0] || "",
+    );
+
+    setZoom(false);
+  };
+
+  // ========================================
+  // IMGBB UPLOAD
   // ========================================
 
   const handleFileChange = async (event) => {
-    const incoming = Array.from(
-      event.target.files || []
-    );
+    const incoming = Array.from(event.target.files || []);
 
     event.target.value = "";
     setFileError("");
 
     if (!incoming.length || uploading) return;
 
-    const apiKey =
-      import.meta.env.VITE_IMGBB_API_KEY;
+    const apiKey = import.meta.env.VITE_IMGBB_API_KEY;
 
     if (!apiKey) {
-      setFileError(
-        "Image Upload API Key পাওয়া যায়নি।"
-      );
+      setFileError("Image Upload API Key পাওয়া যায়নি।");
       return;
     }
 
-    const remaining =
-      photoLimit - photos.length;
+    const remaining = photoLimit - photos.length;
 
     if (remaining <= 0) {
-      setFileError(
-        `সর্বোচ্চ ${photoLimit}টি ছবি দেওয়া যাবে।`
-      );
+      setFileError(`সর্বোচ্চ ${photoLimit}টি ছবি দেওয়া যাবে।`);
       return;
     }
 
     const accepted = [];
     const errors = [];
 
-    const seen = new Set(
-      photos.map(
-        (photo) =>
-          `${photo.name}-${photo.size}`
-      )
-    );
+    const seen = new Set(photos.map((photo) => `${photo.name}-${photo.size}`));
 
     for (const file of incoming) {
-      if (
-        ![
-          "image/jpeg",
-          "image/png",
-          "image/webp",
-        ].includes(file.type)
-      ) {
-        errors.push(
-          `${file.name}: শুধু JPG, PNG, WebP দিন।`
-        );
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        errors.push(`${file.name}: শুধু JPG, PNG, WebP দিন।`);
         continue;
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        errors.push(
-          `${file.name}: সর্বোচ্চ ১০ MB।`
-        );
+        errors.push(`${file.name}: সর্বোচ্চ ১০ MB।`);
         continue;
       }
 
-      const signature =
-        `${file.name}-${file.size}`;
+      const signature = `${file.name}-${file.size}`;
 
       if (seen.has(signature)) {
-        errors.push(
-          `${file.name}: ছবিটি আগে যোগ করা হয়েছে।`
-        );
+        errors.push(`${file.name}: ছবিটি আগে যোগ করা হয়েছে।`);
         continue;
       }
 
       if (accepted.length >= remaining) {
-        errors.push(
-          `সর্বোচ্চ ${photoLimit}টি ছবি দেওয়া যাবে।`
-        );
+        errors.push(`সর্বোচ্চ ${photoLimit}টি ছবি দেওয়া যাবে।`);
         break;
       }
 
@@ -754,20 +580,13 @@ function ProductDetailsContent({
 
     setUploading(true);
 
-    for (
-      let index = 0;
-      index < accepted.length;
-      index++
-    ) {
+    for (let index = 0; index < accepted.length; index++) {
       const file = accepted[index];
 
-      setUploadProgress(
-        `${index + 1}/${accepted.length} আপলোড হচ্ছে...`
-      );
+      setUploadProgress(`${index + 1}/${accepted.length} আপলোড হচ্ছে...`);
 
       try {
         const imageData = new FormData();
-
         imageData.append("image", file);
 
         const response = await fetch(
@@ -775,21 +594,17 @@ function ProductDetailsContent({
           {
             method: "POST",
             body: imageData,
-          }
+          },
         );
 
-        const result = await response
-          .json()
-          .catch(() => ({}));
+        const result = await response.json().catch(() => ({}));
 
         if (
           !response.ok ||
           !result.success ||
           !validImageUrl(result.data?.url)
         ) {
-          throw new Error(
-            "Image upload failed"
-          );
+          throw new Error("Image upload failed");
         }
 
         setPhotos((current) => [
@@ -802,14 +617,9 @@ function ProductDetailsContent({
           },
         ]);
       } catch (error) {
-        console.error(
-          "Image Upload Error:",
-          error
-        );
+        console.error("Image Upload Error:", error);
 
-        errors.push(
-          `${file.name}: আপলোড হয়নি।`
-        );
+        errors.push(`${file.name}: আপলোড হয়নি।`);
       }
     }
 
@@ -819,26 +629,47 @@ function ProductDetailsContent({
   };
 
   const removePhoto = (photoId) => {
-    setPhotos((current) =>
-      current.filter(
-        (photo) => photo.id !== photoId
-      )
-    );
+    setPhotos((current) => current.filter((photo) => photo.id !== photoId));
 
     setFileError("");
   };
 
   // ========================================
-  // ADD TO CART
+  // ADD TO CART — GUEST + MONGODB
   // ========================================
 
   const handleAddToCart = async () => {
+    // Block admin and inactive accounts.
+    if (!canShop) {
+      showToast(
+        isAdmin
+          ? "Admin অ্যাকাউন্ট দিয়ে কেনাকাটা করা যাবে না"
+          : checkingRole
+            ? "অ্যাকাউন্ট যাচাই হচ্ছে"
+            : "কেনাকাটার অনুমতি নেই",
+        "error",
+      );
+
+      return;
+    }
+
+    if (adding) return;
+
     if (alreadyInCart) {
       navigate("/cart");
       return;
     }
 
-    if (!purchasable || uploading || adding) {
+    if (!purchasable || uploading) return;
+
+    if (!cartReady) {
+      Swal.fire({
+        title: "কার্ট প্রস্তুত নয়",
+        text: cartError || "কার্ট সিঙ্ক সম্পন্ন হলে আবার চেষ্টা করুন।",
+        icon: "warning",
+        confirmButtonColor: "#76258A",
+      });
+
       return;
     }
 
@@ -850,83 +681,39 @@ function ProductDetailsContent({
 
         productId: product._id,
         id: product._id,
-        slug: product.slug || "",
 
+        slug: product.slug || "",
         name: product.name,
 
-        sku:
-          selectedVariant?.sku ||
-          product.sku,
-
-        image:
-          variantImage ||
-          gallery[0] ||
-          "",
+        sku: selectedVariant?.sku || product.sku,
+        image: variantImage || gallery[0] || "",
 
         price,
         unitPrice: price,
         quantity,
 
-        variantKey:
-          selectedVariant?.key || "",
+        variantKey: selectedVariant?.key || "",
 
-        selectedOptions:
-          product.variantsEnabled
-            ? { ...selectedOptions }
-            : {},
+        selectedOptions: product.variantsEnabled ? { ...selectedOptions } : {},
 
         packaging,
         premiumBoxPrice: packagingExtra,
 
-        surpriseBox: Boolean(
-          product.surpriseBox && surpriseBox
-        ),
-
         customization: currentCustomization,
-
         addedAt: new Date().toISOString(),
       };
 
-      const existing = readCart();
+      await addToCart(cartItem);
 
-      const updated = [
-        ...existing,
-        cartItem,
-      ];
-
-      localStorage.setItem(
-        CART_KEY,
-        JSON.stringify(updated)
-      );
-
-      setCartItems(updated);
-
-      window.dispatchEvent(
-        new Event("sokhbilash-cart-updated")
-      );
-
-      Swal.fire({
-        title: "পণ্যটি কার্টে যোগ হয়েছে!",
-        icon: "success",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true,
-      });
+      showToast("পণ্যটি কার্টে যোগ হয়েছে!");
     } catch (error) {
-      console.error(
-        "Add To Cart Error:",
-        error
-      );
+      console.error("Add To Cart Error:", error);
 
       Swal.fire({
-        title: "কার্টে যোগ করা যায়নি।",
+        title: "কার্টে যোগ করা যায়নি",
+        text: error?.message || "আবার চেষ্টা করুন।",
         icon: "error",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2500,
+        confirmButtonColor: "#76258A",
       });
     } finally {
       setAdding(false);
@@ -938,22 +725,16 @@ function ProductDetailsContent({
   // ========================================
 
   const handleWhatsApp = () => {
-    const optionText = Object.entries(
-      selectedOptions
-    )
-      .map(
-        ([key, value]) =>
-          `${key}: ${value}`
-      )
+    const optionText = Object.entries(selectedOptions)
+      .map(([key, value]) => `${key}: ${value}`)
       .join(", ");
 
-    const text = [
+    const message = [
       "আসসালামু আলাইকুম, SokhBilash সাপোর্ট।",
       "",
       `প্রোডাক্ট: ${product.name}`,
       `SKU: ${selectedVariant?.sku || product.sku}`,
-      optionText &&
-        `ভ্যারিয়েন্ট: ${optionText}`,
+      optionText && `ভ্যারিয়েন্ট: ${optionText}`,
       `পরিমাণ: ${quantity}`,
       `মোট মূল্য: ${formatPrice(total)}`,
       "",
@@ -963,108 +744,69 @@ function ProductDetailsContent({
       .join("\n");
 
     window.open(
-      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      `https://wa.me/?text=${encodeURIComponent(message)}`,
       "_blank",
-      "noopener,noreferrer"
+      "noopener,noreferrer",
     );
   };
 
   // ========================================
-  // JSX
+  // COMPONENT UI
   // ========================================
 
   return (
     <main className="page-bg min-h-screen pb-12">
       <div className="page-container">
-
         {/* BREADCRUMB */}
 
         <nav
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-2 py-4 text-xs text-muted sm:py-5 sm:text-sm"
         >
-          <Link
-            to="/"
-            className="hover:text-secondary"
-          >
+          <Link to="/" className="hover:text-secondary">
             হোম
           </Link>
 
           <span>/</span>
 
-          <Link
-            to="/shop"
-            className="hover:text-secondary"
-          >
+          <Link to="/shop" className="hover:text-secondary">
             শপ
           </Link>
 
           <span>/</span>
 
-          <span className="font-medium text-primary">
-            {product.name}
-          </span>
+          <span className="font-medium text-primary">{product.name}</span>
         </nav>
 
         {/* MAIN PRODUCT SECTION */}
 
         <section className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:gap-10">
-
-          {/* LEFT: STICKY PRODUCT GALLERY */}
+          {/* LEFT: PRODUCT GALLERY */}
 
           <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-
-            {/* MAIN IMAGE */}
-
             <div className="section-card overflow-hidden">
               <div
                 className={`relative aspect-[4/5] overflow-hidden bg-base-200 sm:aspect-[5/4] lg:aspect-[4.5/5] ${
-                  zoom
-                    ? "cursor-zoom-out"
-                    : "cursor-zoom-in"
+                  zoom ? "cursor-zoom-out" : "cursor-zoom-in"
                 }`}
                 onMouseMove={(event) => {
-                  if (
-                    window.matchMedia(
-                      "(hover: hover)"
-                    ).matches
-                  ) {
-                    const rect =
-                      event.currentTarget.getBoundingClientRect();
+                  if (window.matchMedia("(hover: hover)").matches) {
+                    const rect = event.currentTarget.getBoundingClientRect();
 
-                    const x =
-                      ((event.clientX - rect.left) /
-                        rect.width) *
-                      100;
+                    const x = ((event.clientX - rect.left) / rect.width) * 100;
 
-                    const y =
-                      ((event.clientY - rect.top) /
-                        rect.height) *
-                      100;
+                    const y = ((event.clientY - rect.top) / rect.height) * 100;
 
-                    setZoomPosition(
-                      `${x}% ${y}%`
-                    );
-
+                    setZoomPosition(`${x}% ${y}%`);
                     setZoom(true);
                   }
                 }}
-                onMouseLeave={() =>
-                  setZoom(false)
-                }
-                onClick={() =>
-                  setZoom((value) => !value)
-                }
+                onMouseLeave={() => setZoom(false)}
+                onClick={() => setZoom((value) => !value)}
                 onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" ||
-                    event.key === " "
-                  ) {
+                  if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-
-                    setZoom(
-                      (value) => !value
-                    );
+                    setZoom((value) => !value);
                   }
                 }}
                 role="button"
@@ -1077,23 +819,15 @@ function ProductDetailsContent({
                     alt={product.name}
                     className="h-full w-full object-cover transition-transform duration-200 ease-out"
                     style={{
-                      transform: zoom
-                        ? "scale(1.8)"
-                        : "scale(1)",
-                      transformOrigin:
-                        zoomPosition,
+                      transform: zoom ? "scale(1.8)" : "scale(1)",
+                      transformOrigin: zoomPosition,
                     }}
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
-                    <ImageOff
-                      size={44}
-                      className="text-muted"
-                    />
+                    <ImageOff size={44} className="text-muted" />
                   </div>
                 )}
-
-                {/* PRODUCT BADGE */}
 
                 {product.customizable && (
                   <span className="badge-gold absolute left-3 top-3 shadow-sm sm:left-5 sm:top-5">
@@ -1102,7 +836,7 @@ function ProductDetailsContent({
                   </span>
                 )}
 
-                {/* WISHLIST BUTTON */}
+                {/* WISHLIST */}
 
                 <button
                   type="button"
@@ -1111,24 +845,16 @@ function ProductDetailsContent({
                     toggleWishlist();
                   }}
                   aria-label={
-                    favorite
-                      ? "Wishlist থেকে সরান"
-                      : "Wishlist-এ যোগ করুন"
+                    favorite ? "Wishlist থেকে সরান" : "Wishlist-এ যোগ করুন"
                   }
                   aria-pressed={favorite}
                   className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105 sm:right-5 sm:top-5"
                 >
                   <Heart
                     size={19}
-                    className={
-                      favorite
-                        ? "fill-rose-500 text-rose-500"
-                        : ""
-                    }
+                    className={favorite ? "fill-rose-500 text-rose-500" : ""}
                   />
                 </button>
-
-                {/* ZOOM HINT */}
 
                 <span className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/95 px-3 py-2 text-xs text-primary shadow-sm">
                   <ZoomIn size={14} />
@@ -1137,40 +863,36 @@ function ProductDetailsContent({
               </div>
             </div>
 
-            {/* SMALL PRODUCT THUMBNAILS */}
+            {/* IMAGE THUMBNAILS */}
 
             <div className="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
-              {thumbnails.map(
-                (image, index) => (
-                  <button
-                    type="button"
-                    key={`${image}-${index}`}
-                    onClick={() => {
-                      setSelectedImage(image);
-                      setZoom(false);
-                    }}
-                    aria-label={`প্রোডাক্টের ছবি ${index + 1} দেখুন`}
-                    aria-pressed={
-                      selectedImage === image
-                    }
-                    className={`aspect-square min-w-0 overflow-hidden rounded-lg border-2 bg-base-200 transition sm:rounded-xl ${
-                      selectedImage === image
-                        ? "border-secondary"
-                        : "border-base-300 hover:border-secondary/60"
-                    }`}
-                  >
-                    <img
-                      src={image}
-                      alt={`${product.name} ${index + 1}`}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                )
-              )}
+              {thumbnails.map((image, index) => (
+                <button
+                  type="button"
+                  key={`${image}-${index}`}
+                  onClick={() => {
+                    setSelectedImage(image);
+                    setZoom(false);
+                  }}
+                  aria-label={`প্রোডাক্টের ছবি ${index + 1} দেখুন`}
+                  aria-pressed={selectedImage === image}
+                  className={`aspect-square min-w-0 overflow-hidden rounded-lg border-2 bg-base-200 transition sm:rounded-xl ${
+                    selectedImage === image
+                      ? "border-secondary"
+                      : "border-base-300 hover:border-secondary/60"
+                  }`}
+                >
+                  <img
+                    src={image}
+                    alt={`${product.name} ${index + 1}`}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
             </div>
 
-            {/* FEATURE HIGHLIGHTS */}
+            {/* FEATURES */}
 
             <div className="section-card mt-5 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
               <div className="flex items-start gap-3">
@@ -1207,10 +929,9 @@ function ProductDetailsContent({
             </div>
           </div>
 
-          {/* RIGHT: PRODUCT DETAILS */}
+          {/* RIGHT: PRODUCT INFORMATION */}
 
           <div className="min-w-0">
-
             {/* BADGES */}
 
             <div className="flex flex-wrap gap-2">
@@ -1222,19 +943,15 @@ function ProductDetailsContent({
               )}
 
               {product.featured && (
-                <span className="badge-soft">
-                  ফিচার্ড প্রোডাক্ট
-                </span>
+                <span className="badge-soft">ফিচার্ড প্রোডাক্ট</span>
               )}
 
               {!product.available && (
-                <span className="badge-soft">
-                  বর্তমানে অনুপলব্ধ
-                </span>
+                <span className="badge-soft">বর্তমানে অনুপলব্ধ</span>
               )}
             </div>
 
-            {/* PRODUCT TITLE */}
+            {/* TITLE */}
 
             <h1 className="mt-4 text-2xl font-extrabold leading-snug text-primary sm:text-3xl lg:text-4xl">
               {product.name}
@@ -1251,11 +968,9 @@ function ProductDetailsContent({
                     descriptionExpanded
                       ? {}
                       : {
-                          display:
-                            "-webkit-box",
+                          display: "-webkit-box",
                           WebkitLineClamp: 5,
-                          WebkitBoxOrient:
-                            "vertical",
+                          WebkitBoxOrient: "vertical",
                           overflow: "hidden",
                         }
                   }
@@ -1263,28 +978,14 @@ function ProductDetailsContent({
                   {product.description}
                 </p>
 
-                {hasLongDescription && (
+                {(hasLongDescription || descriptionExpanded) && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setDescriptionExpanded(
-                        (value) => !value
-                      )
-                    }
-                    aria-expanded={
-                      descriptionExpanded
-                    }
+                    onClick={() => setDescriptionExpanded((value) => !value)}
+                    aria-expanded={descriptionExpanded}
                     className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-secondary transition hover:text-primary sm:text-sm"
                   >
-                    {descriptionExpanded
-                      ? "কম দেখুন"
-                      : "আরও দেখুন"}
-
-                    <span>
-                      {descriptionExpanded
-                        ? "↑"
-                        : "↓"}
-                    </span>
+                    {descriptionExpanded ? "কম দেখুন ↑" : "আরও দেখুন ↓"}
                   </button>
                 )}
               </div>
@@ -1301,204 +1002,96 @@ function ProductDetailsContent({
                 {showOriginalPrice && (
                   <>
                     <span className="text-sm text-muted line-through">
-                      {formatPrice(
-                        comparisonRegularPrice
-                      )}
+                      {formatPrice(comparisonRegularPrice)}
                     </span>
 
                     {discount > 0 && (
-                      <span className="badge-gold">
-                        {discount}% ছাড়
-                      </span>
+                      <span className="badge-gold">{discount}% ছাড়</span>
                     )}
                   </>
                 )}
               </div>
 
-              <p className="mt-2 text-xs text-muted">
+              <p className="mt-2 text-xs leading-5 text-muted">
                 {product.variantsEnabled && (
-                  <>
-                    ভ্যারিয়েন্ট মূল্য:{" "}
-                    {formatPrice(variantPrice)}।{" "}
-                  </>
+                  <>ভ্যারিয়েন্ট মূল্য: {formatPrice(variantPrice)}। </>
                 )}
-
                 {hasSale && (
                   <>
-                    বেস অফার মূল্য:{" "}
-                    {formatPrice(salePrice)} ·{" "}
-                    নিয়মিত মূল্য:{" "}
+                    বেস অফার মূল্য: {formatPrice(salePrice)} · নিয়মিত মূল্য:{" "}
                     {formatPrice(regularPrice)}।{" "}
                   </>
                 )}
-
                 {packagingExtra > 0 && (
-                  <>
-                    প্রিমিয়াম বক্স: +
-                    {formatPrice(packagingExtra)}।{" "}
-                  </>
+                  <>প্রিমিয়াম বক্স: +{formatPrice(packagingExtra)}। </>
                 )}
-
                 নির্বাচিত ভ্যারিয়েন্ট ও প্যাকেজিং অনুযায়ী মূল্য পরিবর্তন হবে।
               </p>
             </div>
 
-            {/* DYNAMIC VARIANT OPTIONS */}
+            {/* VARIANT OPTIONS */}
 
-            {optionGroups.map(
-              (group, groupIndex) => (
-                <div
-                  className="mt-6"
-                  key={group.type}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-sm font-bold text-primary sm:text-base">
-                      {groupIndex + 1}.{" "}
-                      {group.type === "size"
-                        ? "সাইজ বেছে নাও"
-                        : group.type === "color"
-                          ? "কালার বেছে নাও"
-                          : "ডিজাইন / টাইপ বেছে নাও"}
-                    </h2>
+            {optionGroups.map((group, groupIndex) => (
+              <div className="mt-6" key={group.type}>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-bold text-primary sm:text-base">
+                    {groupIndex + 1}.{" "}
+                    {group.type === "size"
+                      ? "সাইজ বেছে নাও"
+                      : group.type === "color"
+                        ? "কালার বেছে নাও"
+                        : "ডিজাইন / টাইপ বেছে নাও"}
+                  </h2>
 
-                    <span className="text-xs text-muted">
-                      {group.type.toUpperCase()}
-                    </span>
-                  </div>
-
-                  {/* COLOR OPTION */}
-
-                  {group.type === "color" ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {group.values.map(
-                        (option) => {
-                          const selected =
-                            selectedOptions[
-                              group.type
-                            ] === option.label;
-
-                          const available =
-                            variants.some(
-                              (variant) =>
-                                variant.available !==
-                                  false &&
-                                variant.options?.[
-                                  group.type
-                                ] ===
-                                  option.label
-                            );
-
-                          return (
-                            <button
-                              type="button"
-                              key={option.id}
-                              disabled={
-                                !available
-                              }
-                              onClick={() =>
-                                chooseOption(
-                                  group.type,
-                                  option.label
-                                )
-                              }
-                              aria-pressed={
-                                selected
-                              }
-                              className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition sm:px-4 sm:text-sm ${
-                                selected
-                                  ? "border-secondary bg-secondary/5 text-primary"
-                                  : "border-base-300 text-muted hover:border-secondary/50"
-                              } disabled:cursor-not-allowed disabled:opacity-40`}
-                            >
-                              <span
-                                className="size-4 rounded-full border border-black/10"
-                                style={{
-                                  backgroundColor:
-                                    getColorCode(
-                                      option.label
-                                    ),
-                                }}
-                              />
-
-                              {option.label}
-
-                              {selected && (
-                                <Check
-                                  size={13}
-                                  className="text-secondary"
-                                />
-                              )}
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-                  ) : (
-
-                    /* SIZE / TYPE CARDS */
-
-                    <div className="mt-3 flex flex-wrap gap-2 sm:gap-3">
-                      {group.values.map(
-                        (option) => {
-                          const selected =
-                            selectedOptions[
-                              group.type
-                            ] === option.label;
-
-                          const available =
-                            variants.some(
-                              (variant) =>
-                                variant.available !==
-                                  false &&
-                                variant.options?.[
-                                  group.type
-                                ] ===
-                                  option.label
-                            );
-
-                          return (
-                            <button
-                              type="button"
-                              key={option.id}
-                              disabled={
-                                !available
-                              }
-                              onClick={() =>
-                                chooseOption(
-                                  group.type,
-                                  option.label
-                                )
-                              }
-                              aria-pressed={
-                                selected
-                              }
-                              className={`relative rounded-xl border p-3 text-left transition sm:p-4 ${
-                                selected
-                                  ? "border-secondary bg-secondary/5 ring-1 ring-secondary"
-                                  : "border-base-300 hover:border-secondary/50"
-                              } disabled:cursor-not-allowed disabled:opacity-40`}
-                            >
-                              {selected && (
-                                <Check
-                                  size={15}
-                                  className="absolute right-2 top-2 text-secondary"
-                                />
-                              )}
-
-                              <span className="block pr-3 text-sm font-bold text-primary">
-                                {option.label}
-                              </span>
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-                  )}
+                  <span className="text-xs text-muted">
+                    {group.type.toUpperCase()}
+                  </span>
                 </div>
-              )
-            )}
 
-            {/* VARIANT SKU */}
+                <div className="mt-3 flex flex-wrap gap-2 sm:gap-3">
+                  {group.values.map((option) => {
+                    const selected =
+                      selectedOptions[group.type] === option.label;
+
+                    const available = variants.some(
+                      (variant) =>
+                        variant.available !== false &&
+                        variant.options?.[group.type] === option.label,
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        key={option.id}
+                        disabled={!available}
+                        onClick={() => chooseOption(group.type, option.label)}
+                        aria-pressed={selected}
+                        className={`relative flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-xs font-medium transition sm:px-4 sm:text-sm ${
+                          selected
+                            ? "border-secondary bg-secondary/5 text-primary ring-1 ring-secondary"
+                            : "border-base-300 text-muted hover:border-secondary/50"
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        {group.type === "color" && (
+                          <span
+                            className="size-4 shrink-0 rounded-full border border-black/10"
+                            style={{
+                              backgroundColor: getColorCode(option.label),
+                            }}
+                          />
+                        )}
+
+                        {option.label}
+
+                        {selected && (
+                          <Check size={14} className="text-secondary" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
 
             {product.variantsEnabled && (
               <p className="mt-3 text-xs text-muted">
@@ -1525,7 +1118,7 @@ function ProductDetailsContent({
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h2 className="text-sm font-bold text-primary sm:text-base">
-                        ৩. আপনার ছবি আপলোড করুন
+                        আপনার ছবি আপলোড করুন
                       </h2>
 
                       <p className="mt-1 text-xs text-muted">
@@ -1540,19 +1133,14 @@ function ProductDetailsContent({
 
                   <label
                     className={`mt-3 flex items-center gap-3 rounded-xl border border-dashed p-3 transition sm:p-4 ${
-                      photos.length >=
-                        photoLimit ||
-                      uploading
+                      photos.length >= photoLimit || uploading
                         ? "cursor-not-allowed border-base-300 opacity-60"
                         : "cursor-pointer border-base-300 bg-base-200/60 hover:border-secondary"
                     }`}
                   >
                     <span className="icon-box">
                       {uploading ? (
-                        <Loader2
-                          size={20}
-                          className="animate-spin"
-                        />
+                        <Loader2 size={20} className="animate-spin" />
                       ) : (
                         <ImagePlus size={20} />
                       )}
@@ -1562,8 +1150,7 @@ function ProductDetailsContent({
                       <span className="block text-sm font-bold text-primary">
                         {uploading
                           ? uploadProgress
-                          : photos.length >=
-                              photoLimit
+                          : photos.length >= photoLimit
                             ? "সর্বোচ্চ ছবি নির্বাচন করা হয়েছে"
                             : "ছবি নির্বাচন করুন"}
                       </span>
@@ -1582,14 +1169,8 @@ function ProductDetailsContent({
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       multiple
-                      disabled={
-                        photos.length >=
-                          photoLimit ||
-                        uploading
-                      }
-                      onChange={
-                        handleFileChange
-                      }
+                      disabled={photos.length >= photoLimit || uploading}
+                      onChange={handleFileChange}
                       className="sr-only"
                     />
                   </label>
@@ -1611,7 +1192,7 @@ function ProductDetailsContent({
 
                   {photos.length > 0 && (
                     <div className="mt-4 rounded-xl border border-base-300 p-3 sm:p-4">
-                      <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-bold text-primary">
                           নির্বাচিত ছবিগুলো
                         </p>
@@ -1621,62 +1202,49 @@ function ProductDetailsContent({
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {photos.map(
-                          (photo) => (
-                            <div
-                              key={photo.id}
-                              className="relative min-w-0 overflow-hidden rounded-lg border-2 border-base-300 bg-base-200"
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                        {photos.map((photo) => (
+                          <div
+                            key={photo.id}
+                            className="relative min-w-0 overflow-hidden rounded-lg border border-base-300 bg-base-200"
+                          >
+                            <img
+                              src={photo.url}
+                              alt={photo.name}
+                              className="aspect-square w-full object-cover"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => removePhoto(photo.id)}
+                              aria-label={`${photo.name} সরান`}
+                              className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-white text-red-600 shadow-sm hover:bg-red-50"
                             >
-                              <img
-                                src={photo.url}
-                                alt={photo.name}
-                                className="aspect-square w-full object-cover"
-                              />
+                              <Trash2 size={14} />
+                            </button>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removePhoto(
-                                    photo.id
-                                  )
-                                }
-                                aria-label={`${photo.name} সরান`}
-                                className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-white text-red-600 shadow-sm hover:bg-red-50"
-                              >
-                                <Trash2
-                                  size={14}
-                                />
-                              </button>
+                            <p className="truncate px-1.5 py-1 text-[10px] text-primary">
+                              {photo.name}
+                            </p>
 
-                              <p className="truncate px-1.5 py-1 text-[10px] text-primary">
-                                {photo.name}
-                              </p>
-
-                              <p className="px-1.5 pb-1 text-[10px] text-muted">
-                                {(
-                                  photo.size /
-                                  (1024 * 1024)
-                                ).toFixed(2)}{" "}
-                                MB
-                              </p>
-                            </div>
-                          )
-                        )}
+                            <p className="px-1.5 pb-1 text-[10px] text-muted">
+                              {(photo.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* NAME AND DATE */}
+                {/* NAME + DATE */}
 
                 <div className="mt-6">
                   <h2 className="text-sm font-bold text-primary sm:text-base">
-                    ৪. খোদাইয়ের জন্য নাম ও তারিখ
+                    খোদাইয়ের জন্য নাম ও তারিখ
                   </h2>
 
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-
                     <label className="form-control w-full">
                       <span className="mb-2 text-xs font-semibold text-primary">
                         নাম বা শিরোনাম
@@ -1686,13 +1254,9 @@ function ProductDetailsContent({
                         type="text"
                         maxLength={80}
                         value={customText}
-                        onChange={(event) =>
-                          setCustomText(
-                            event.target.value
-                          )
-                        }
+                        onChange={(event) => setCustomText(event.target.value)}
                         placeholder="যেমন: অর্ণব ও প্রিয়ার গল্প"
-                        className="mt-1 w-full rounded-xl border px-4 py-3 bg-secondary/5 text-sm text-primary outline-none transition-all duration-200 placeholder:text-muted/60 border-secondary/20 hover:border-secondary/50 focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-1 w-full rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm text-primary outline-none transition hover:border-secondary focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10"
                       />
                     </label>
 
@@ -1704,12 +1268,8 @@ function ProductDetailsContent({
                       <input
                         type="date"
                         value={customDate}
-                        onChange={(event) =>
-                          setCustomDate(
-                            event.target.value
-                          )
-                        }
-                        className="mt-1 w-full rounded-xl border px-4 py-3 bg-secondary/5 text-sm text-primary outline-none transition-all duration-200 placeholder:text-muted/60 border-secondary/20 hover:border-secondary/50 focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        onChange={(event) => setCustomDate(event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm text-primary outline-none transition hover:border-secondary focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10"
                       />
                     </label>
                   </div>
@@ -1725,37 +1285,27 @@ function ProductDetailsContent({
 
                     <div>
                       <h2 className="text-sm font-bold text-primary sm:text-base">
-                        ৫. ফ্রেমের নিচের খোদাই বার্তা / উইশ
+                        ফ্রেমের নিচের খোদাই বার্তা / উইশ
                       </h2>
 
                       <p className="mt-1 text-xs leading-5 text-muted">
-                        ফ্রেমের নিচে যে বিশেষ বার্তাটি খোদাই করতে চান, এখানে নোটের মতো লিখুন।
+                        ফ্রেমের নিচে যে বার্তাটি খোদাই করতে চান, এখানে লিখুন।
                       </p>
                     </div>
                   </div>
 
                   <textarea
                     value={customMessage}
-                    onChange={(event) =>
-                      setCustomMessage(
-                        event.target.value
-                      )
-                    }
+                    onChange={(event) => setCustomMessage(event.target.value)}
                     maxLength={300}
                     rows={4}
                     placeholder="যেমন: আমাদের ছোট্ট গল্পটা চিরদিন এমনই সুন্দর থাকুক..."
-                    className="mt-1 w-full min-h-28 resize-none rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm leading-6 text-primary outline-none transition-all duration-200 placeholder:text-muted/60 hover:border-secondary/50 focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-3 w-full min-h-28 resize-none rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm leading-6 text-primary outline-none transition hover:border-secondary focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10"
                   />
 
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <span className="text-xs text-muted">
-                      খোদাইয়ের জন্য আপনার পছন্দের বার্তা লিখুন।
-                    </span>
-
-                    <span className="shrink-0 text-xs text-muted">
-                      {customMessage.length}/300
-                    </span>
-                  </div>
+                  <p className="mt-2 text-right text-xs text-muted">
+                    {customMessage.length}/300
+                  </p>
                 </div>
               </>
             )}
@@ -1782,15 +1332,11 @@ function ProductDetailsContent({
 
                 <textarea
                   value={customNote}
-                  onChange={(event) =>
-                    setCustomNote(
-                      event.target.value
-                    )
-                  }
+                  onChange={(event) => setCustomNote(event.target.value)}
                   maxLength={500}
                   rows={4}
                   placeholder="আপনার বিশেষ নির্দেশনা লিখুন..."
-                  className="mt-3 w-full min-h-28 resize-none rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm leading-6 text-primary outline-none transition-all duration-200 placeholder:text-muted/60 hover:border-secondary/50 focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-3 w-full min-h-28 resize-none rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm leading-6 text-primary outline-none transition hover:border-secondary focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10"
                 />
 
                 <p className="mt-2 text-right text-xs text-muted">
@@ -1807,15 +1353,10 @@ function ProductDetailsContent({
               </h2>
 
               <div className="mt-3 grid grid-cols-2 gap-3">
-
                 <button
                   type="button"
-                  onClick={() =>
-                    setPackaging("regular")
-                  }
-                  aria-pressed={
-                    packaging === "regular"
-                  }
+                  onClick={() => setPackaging("regular")}
+                  aria-pressed={packaging === "regular"}
                   className={`relative rounded-xl border p-3 text-left transition sm:p-4 ${
                     packaging === "regular"
                       ? "border-secondary bg-secondary/5 ring-1 ring-secondary"
@@ -1833,12 +1374,8 @@ function ProductDetailsContent({
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setPackaging("premium")
-                  }
-                  aria-pressed={
-                    packaging === "premium"
-                  }
+                  onClick={() => setPackaging("premium")}
+                  aria-pressed={packaging === "premium"}
                   className={`relative rounded-xl border p-3 text-left transition sm:p-4 ${
                     packaging === "premium"
                       ? "border-secondary bg-secondary/5 ring-1 ring-secondary"
@@ -1856,27 +1393,6 @@ function ProductDetailsContent({
               </div>
             </div>
 
-            {/* SURPRISE BOX */}
-
-            {product.surpriseBox && (
-              <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-xl border border-base-300 bg-base-200/60 p-4">
-                <input
-                  type="checkbox"
-                  checked={surpriseBox}
-                  onChange={(event) =>
-                    setSurpriseBox(
-                      event.target.checked
-                    )
-                  }
-                  className="checkbox checkbox-sm checkbox-secondary"
-                />
-
-                <span className="text-sm font-semibold text-primary">
-                  সারপ্রাইজ বক্স হিসেবে প্রস্তুত করুন
-                </span>
-              </label>
-            )}
-
             {/* QUANTITY */}
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-base-300 p-4">
@@ -1885,22 +1401,14 @@ function ProductDetailsContent({
                   পরিমাণ (Quantity)
                 </h2>
 
-                <p className="mt-1 text-xs text-muted">
-                  সর্বোচ্চ ১০টি
-                </p>
+                <p className="mt-1 text-xs text-muted">সর্বোচ্চ ১০টি</p>
               </div>
 
               <div className="flex items-center rounded-full border border-base-300">
-
                 <button
                   type="button"
                   disabled={quantity <= 1}
-                  onClick={() =>
-                    setQuantity(
-                      (value) =>
-                        Math.max(1, value - 1)
-                    )
-                  }
+                  onClick={() => setQuantity((value) => Math.max(1, value - 1))}
                   aria-label="পরিমাণ কমাও"
                   className="flex size-10 items-center justify-center text-primary disabled:opacity-30"
                 >
@@ -1915,10 +1423,7 @@ function ProductDetailsContent({
                   type="button"
                   disabled={quantity >= 10}
                   onClick={() =>
-                    setQuantity(
-                      (value) =>
-                        Math.min(10, value + 1)
-                    )
+                    setQuantity((value) => Math.min(10, value + 1))
                   }
                   aria-label="পরিমাণ বাড়াও"
                   className="flex size-10 items-center justify-center text-primary disabled:opacity-30"
@@ -1928,9 +1433,7 @@ function ProductDetailsContent({
               </div>
 
               <div className="w-full border-t border-base-300 pt-3 sm:flex sm:items-center sm:justify-between">
-                <span className="text-sm text-muted">
-                  সর্বমোট পণ্যমূল্য
-                </span>
+                <span className="text-sm text-muted">সর্বমোট পণ্যমূল্য</span>
 
                 <span className="text-xl font-extrabold text-primary">
                   {formatPrice(total)}
@@ -1938,53 +1441,86 @@ function ProductDetailsContent({
               </div>
             </div>
 
-            {/* ACTION BUTTONS */}
+            {/* CART SYNC ERROR */}
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {cartError && !cartReady && (
+              <div
+                role="alert"
+                className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"
+              >
+                <p className="text-sm text-amber-900">{cartError}</p>
 
+                <button
+                  type="button"
+                  onClick={retrySync}
+                  className="mt-2 text-xs font-bold text-secondary underline"
+                >
+                  আবার সিঙ্ক করুন
+                </button>
+              </div>
+            )}
+
+            {cartReady && productInCart && (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3">
+                <p className="flex items-center gap-2 text-xs font-semibold text-secondary sm:text-sm">
+                  <Check size={16} />
+                  এই প্রোডাক্টটি ইতিমধ্যে কার্টে আছে
+                </p>
+
+                <Link
+                  to="/cart"
+                  className="text-xs font-bold text-secondary underline"
+                >
+                  কার্ট দেখুন
+                </Link>
+              </div>
+            )}
+
+            {/* ADD TO CART */}
+
+            <div className="mt-5">
               <button
                 type="button"
                 onClick={handleAddToCart}
                 disabled={
-                  !alreadyInCart &&
-                  (!purchasable ||
-                    uploading ||
-                    adding)
+                  !canShop ||
+                  !cartReady ||
+                  adding ||
+                  (!alreadyInCart && (!purchasable || uploading))
                 }
                 className="btn-gold min-h-12 w-full rounded-xl px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {adding ? (
-                  <Loader2
-                    size={18}
-                    className="animate-spin"
-                  />
-                ) : alreadyInCart ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : alreadyInCart && canShop ? (
                   <Check size={18} />
                 ) : (
                   <ShoppingBag size={18} />
                 )}
 
-                {alreadyInCart
-                  ? "Added to Cart"
+                {!canShop
+                  ? isAdmin
+                    ? "Admin অ্যাকাউন্ট দিয়ে অর্ডার করা যাবে না"
+                    : checkingRole
+                      ? "অ্যাকাউন্ট যাচাই হচ্ছে..."
+                      : "কেনাকাটার অনুমতি নেই"
                   : adding
                     ? "যোগ হচ্ছে..."
-                    : uploading
-                      ? "ছবি আপলোড হচ্ছে..."
-                      : !purchasable
-                        ? "অনুপলব্ধ"
-                        : "কার্টে যোগ করুন"}
+                    : !cartReady
+                      ? cartLoading
+                        ? "কার্ট সিঙ্ক হচ্ছে..."
+                        : "কার্ট সংযোগ ব্যর্থ"
+                      : alreadyInCart
+                        ? "ইতিমধ্যে কার্টে আছে"
+                        : uploading
+                          ? "ছবি আপলোড হচ্ছে..."
+                          : !purchasable
+                            ? "অনুপলব্ধ"
+                            : "কার্টে যোগ করুন"}
               </button>
-
-              <Link
-                to="/make-box"
-                className="btn-brand min-h-12 w-full rounded-xl px-4 text-sm"
-              >
-                <Gift size={17} />
-                Make a Box
-              </Link>
             </div>
 
-            {/* WHATSAPP HELP */}
+            {/* WHATSAPP SUPPORT */}
 
             <button
               type="button"
@@ -2001,24 +1537,19 @@ function ProductDetailsContent({
                 </span>
 
                 <span className="mt-1 block text-xs leading-5 text-muted">
-                  প্রোডাক্ট বা কাস্টমাইজেশন নিয়ে সাহায্যের জন্য WhatsApp-এ যোগাযোগ করুন।
+                  প্রোডাক্ট বা কাস্টমাইজেশন নিয়ে সাহায্যের জন্য WhatsApp-এ
+                  যোগাযোগ করুন।
                 </span>
               </span>
 
-              <ArrowRight
-                size={18}
-                className="shrink-0 text-secondary"
-              />
+              <ArrowRight size={18} className="shrink-0 text-secondary" />
             </button>
 
-            {/* DELIVERY INFO */}
+            {/* DELIVERY + SAFETY */}
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex items-start gap-3 rounded-xl bg-base-200 p-4">
-                <Truck
-                  size={20}
-                  className="shrink-0 text-secondary"
-                />
+                <Truck size={20} className="shrink-0 text-secondary" />
 
                 <div>
                   <p className="text-sm font-bold text-primary">
@@ -2032,10 +1563,7 @@ function ProductDetailsContent({
               </div>
 
               <div className="flex items-start gap-3 rounded-xl bg-base-200 p-4">
-                <ShieldCheck
-                  size={20}
-                  className="shrink-0 text-secondary"
-                />
+                <ShieldCheck size={20} className="shrink-0 text-secondary" />
 
                 <div>
                   <p className="text-sm font-bold text-primary">
@@ -2051,15 +1579,13 @@ function ProductDetailsContent({
           </div>
         </section>
 
-        {/* RELATED PRODUCTS - REUSABLE CARD */}
+        {/* RELATED PRODUCTS */}
 
         {relatedProducts.length > 0 && (
           <section className="mt-14 sm:mt-20">
             <div className="mb-6 flex items-end justify-between gap-4">
               <div>
-                <span className="badge-soft">
-                  আপনার জন্য আরও
-                </span>
+                <span className="badge-soft">আপনার জন্য আরও</span>
 
                 <h2 className="mt-3 text-xl font-extrabold text-primary sm:text-2xl">
                   একই ক্যাটাগরির উপহার
@@ -2081,18 +1607,12 @@ function ProductDetailsContent({
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
               {relatedProducts.map((item) => (
-                <ProductCard
-                  key={item._id}
-                  product={item}
-                />
+                <ProductCard key={item._id} product={item} />
               ))}
             </div>
 
             <div className="mt-6 sm:hidden">
-              <Link
-                to="/shop"
-                className="btn-outline-brand w-full"
-              >
+              <Link to="/shop" className="btn-outline-brand w-full">
                 সব উপহার দেখুন
                 <ArrowRight size={16} />
               </Link>
@@ -2105,13 +1625,11 @@ function ProductDetailsContent({
 }
 
 // ========================================
-// MAIN PAGE: FETCH DATA
+// MAIN PAGE: FETCH PRODUCT DATA
 // ========================================
 
 export default function ProductDetails() {
   const { id } = useParams();
-
-  // SINGLE PRODUCT API
 
   const {
     data: product,
@@ -2127,21 +1645,13 @@ export default function ProductDetails() {
     queryFn: async ({ signal }) => {
       const response = await fetch(
         `${API_URL}/products/${encodeURIComponent(id)}`,
-        { signal }
+        { signal },
       );
 
-      const result = await response
-        .json()
-        .catch(() => ({}));
+      const result = await response.json().catch(() => ({}));
 
-      if (
-        !response.ok ||
-        !result.success ||
-        !result.product
-      ) {
-        throw new Error(
-          result.message || "প্রোডাক্ট লোড করা যায়নি।"
-        );
+      if (!response.ok || !result.success || !result.product) {
+        throw new Error(result.message || "প্রোডাক্ট লোড করা যায়নি।");
       }
 
       return result.product;
@@ -2150,7 +1660,9 @@ export default function ProductDetails() {
     staleTime: 30 * 1000,
   });
 
-  // RELATED PRODUCTS API
+  // ========================================
+  // RELATED PRODUCTS
+  // ========================================
 
   const { data: relatedProducts = [] } = useQuery({
     queryKey: ["related-products", product?._id],
@@ -2160,12 +1672,10 @@ export default function ProductDetails() {
     queryFn: async ({ signal }) => {
       const response = await fetch(
         `${API_URL}/products/${product._id}/related`,
-        { signal }
+        { signal },
       );
 
-      const result = await response
-        .json()
-        .catch(() => ({}));
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok || !result.success) {
         return [];
@@ -2177,43 +1687,38 @@ export default function ProductDetails() {
     staleTime: 60 * 1000,
   });
 
+  // ========================================
   // LOADING STATE
+  // ========================================
 
   if (isLoading) {
     return (
       <main className="page-bg flex min-h-[70vh] items-center justify-center">
         <div className="text-center">
-          <Loader2
-            size={34}
-            className="mx-auto animate-spin text-secondary"
-          />
+          <Loader2 size={34} className="mx-auto animate-spin text-secondary" />
 
-          <p className="mt-3 text-sm text-muted">
-            প্রোডাক্ট লোড হচ্ছে...
-          </p>
+          <p className="mt-3 text-sm text-muted">প্রোডাক্ট লোড হচ্ছে...</p>
         </div>
       </main>
     );
   }
 
+  // ========================================
   // ERROR STATE
+  // ========================================
 
   if (isError || !product) {
     return (
       <main className="page-bg flex min-h-[70vh] items-center justify-center px-4">
         <div className="section-card max-w-md p-8 text-center">
-          <ImageOff
-            size={42}
-            className="mx-auto text-secondary"
-          />
+          <ImageOff size={42} className="mx-auto text-secondary" />
 
           <h2 className="mt-4 text-lg font-bold text-primary">
             প্রোডাক্ট পাওয়া যায়নি
           </h2>
 
           <p className="mt-2 text-sm text-muted">
-            {error?.message ||
-              "এই প্রোডাক্টটি পাওয়া যাচ্ছে না।"}
+            {error?.message || "এই প্রোডাক্টটি পাওয়া যাচ্ছে না।"}
           </p>
 
           <button
@@ -2234,8 +1739,6 @@ export default function ProductDetails() {
       </main>
     );
   }
-
-  // PRODUCT DATA READY
 
   return (
     <ProductDetailsContent

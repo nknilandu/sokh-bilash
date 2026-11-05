@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { AuthContext } from "../../providers/AuthProvider";
 import Swal from "sweetalert2";
+import useCart from "../../hooks/useCart";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3000"
@@ -193,6 +194,8 @@ const Register = () => {
 
   // Reuse Firebase account when retrying database save
   const [registeredFirebaseUser, setRegisteredFirebaseUser] = useState(null);
+
+  const { retrySync } = useCart();
 
   // Clean up image preview URLs
   useEffect(() => {
@@ -456,7 +459,10 @@ const Register = () => {
         throw new Error(data.message || "Failed to save user in MongoDB");
       }
 
-      // STEP 5: Registration success
+      // STEP 5: Trigger Guest Cart synchronization
+      retrySync();
+
+      // STEP 6: Registration success
       Swal.fire({
         title: "আপনার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!",
         icon: "success",
