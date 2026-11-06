@@ -78,6 +78,8 @@ import MyOrdersPage from "./pages/order/MyOrdersPage";
 import ProfilePage from "./pages/ProfilePage";
 import ProfileProtectedRoute from "./routes/ProfileProtectedRoute";
 import { WishlistProvider } from "./providers/WishlistProvider";
+import AdminCustomersPage from "./pages/admin/AdminCustomersPage";
+import AdminDeliveryManagementPage from "./pages/admin/AdminDeliveryManagementPage";
 
 // ========================================
 // REACT QUERY CLIENT
@@ -250,10 +252,18 @@ const router = createBrowserRouter([
         path: "payments",
         element: <PaymentVerificationPage />,
       },
+      {
+        path: "customers",
+        element: <AdminCustomersPage />,
+      },
 
       {
         path: "products",
         element: <AdminProductsPage />,
+      },
+      {
+        path: "deliveries",
+        element: <AdminDeliveryManagementPage />,
       },
 
       {

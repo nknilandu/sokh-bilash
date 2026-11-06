@@ -1,5 +1,7 @@
 
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { AuthContext } from "../../providers/AuthProvider";
 import { Link } from "react-router-dom";
 import {
   ShoppingBag,
@@ -7,14 +9,19 @@ import {
   Wallet,
   TrendingUp,
   Truck,
+  Loader2,
+  AlertCircle,
+  RefreshCcw,
   BadgeCheck,
   ShieldCheck,
   PhoneCall,
   Hammer,
   ArrowRight,
   Bell,
-  Package,
   CalendarDays,
+  Eye,
+  UserRound,
+  ImageOff,
 } from "lucide-react";
 
 import {
@@ -33,131 +40,104 @@ import {
 } from "recharts";
 
 // =====================================
-// DEMO DATA
+// REAL DASHBOARD DATA
 // =====================================
 
-const kpis = [
-  {
-    title: "মোট অর্ডার",
-    value: "১৪৮",
-    unit: "টি",
-    change: "↑ ১২.৫% বৃদ্ধি",
-    icon: ShoppingBag,
-    bg: "bg-secondary/10",
-    color: "text-secondary",
-  },
-  {
-    title: "পেন্ডিং অর্ডার",
-    value: "৯",
-    unit: "টি",
-    change: "অপেক্ষমাণ",
-    icon: Clock3,
-    bg: "bg-amber-100",
-    color: "text-amber-700",
-  },
-  {
-    title: "পেমেন্ট ভেরিফিকেশন",
-    value: "৩",
-    unit: "টি",
-    change: "যাচাই প্রয়োজন",
-    icon: Wallet,
-    bg: "bg-fuchsia-100",
-    color: "text-fuchsia-700",
-  },
-  {
-    title: "মোট বিক্রি",
-    value: "৳২,৮৪,৫০০",
-    unit: "",
-    change: "↑ ১৮.৪% বৃদ্ধি",
-    icon: TrendingUp,
-    bg: "bg-yellow-100",
-    color: "text-yellow-700",
-  },
-  {
-    title: "সফল ডেলিভারি",
-    value: "১২৬",
-    unit: "টি",
-    change: "৮৫.১% সফল",
-    icon: BadgeCheck,
-    bg: "bg-green-100",
-    color: "text-green-700",
-  },
-  {
-    title: "বকেয়া / COD ব্যালেন্স",
-    value: "৳৪২,৬০০",
-    unit: "",
-    change: "ডেলিভারির সময় প্রাপ্য",
-    icon: Wallet,
-    bg: "bg-secondary/10",
-    color: "text-secondary",
-  },
-];
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/$/, "");
 
-const salesData = {
-  daily: [
-    { name: "শনি", sales: 12500 },
-    { name: "রবি", sales: 18500 },
-    { name: "সোম", sales: 17000 },
-    { name: "মঙ্গল", sales: 24500 },
-    { name: "বুধ", sales: 31500 },
-    { name: "বৃহস্পতি", sales: 36000 },
-    { name: "শুক্র", sales: 25500 },
-  ],
-  weekly: [
-    { name: "১ম", sales: 65000 },
-    { name: "২য়", sales: 72000 },
-    { name: "৩য়", sales: 61000 },
-    { name: "৪র্থ", sales: 86500 },
-  ],
-  monthly: [
-    { name: "মে", sales: 145000 },
-    { name: "জুন", sales: 165000 },
-    { name: "জুলাই", sales: 195000 },
-    { name: "আগস্ট", sales: 220000 },
-    { name: "সেপ্টে", sales: 248000 },
-    { name: "অক্টো", sales: 284500 },
-  ],
+const STATUS_COLORS = ["#8d389e", "#df72ef", "#ffe16d", "#c73e49"];
+const PAYMENT_COLORS = ["#8d389e", "#ffd700", "#310039"];
+
+const STATUS_MAP = {
+  pending: { label: "পেন্ডিং", color: "bg-amber-50 text-amber-700" },
+  verified: { label: "যাচাইকৃত", color: "bg-blue-50 text-blue-700" },
+  processing: { label: "প্রসেসিং", color: "bg-purple-50 text-purple-700" },
+  shipped: { label: "শিপড", color: "bg-indigo-50 text-indigo-700" },
+  delivered: { label: "ডেলিভার্ড", color: "bg-green-50 text-green-700" },
+  rejected: { label: "রিজেক্টেড", color: "bg-red-50 text-red-700" },
+  cancelled: { label: "বাতিল", color: "bg-red-50 text-red-700" },
 };
 
-const statusData = [
-  { name: "সম্পন্ন", value: 126, color: "#8d389e" },
-  { name: "প্রসেসিং", value: 8, color: "#df72ef" },
-  { name: "পেন্ডিং", value: 9, color: "#ffe16d" },
-  { name: "বাতিল", value: 5, color: "#c73e49" },
-];
+const PAYMENT_MAP = {
+  pending: { label: "যাচাই বাকি", color: "bg-amber-50 text-amber-700" },
+  partially_paid: { label: "আংশিক পরিশোধিত", color: "bg-blue-50 text-blue-700" },
+  verified: { label: "ভেরিফাইড", color: "bg-green-50 text-green-700" },
+  rejected: { label: "রিজেক্টেড", color: "bg-red-50 text-red-700" },
+  cod_pending: { label: "COD বাকি", color: "bg-purple-50 text-purple-700" },
+  cod_collected: { label: "COD সংগৃহীত", color: "bg-green-50 text-green-700" },
+};
 
-const paymentData = [
-  { name: "bKash", amount: 145000, color: "#8d389e" },
-  { name: "Nagad", amount: 86500, color: "#ffd700" },
-  { name: "Rocket", amount: 53000, color: "#310039" },
-];
+const METHOD_NAMES = {
+  bkash: "bKash", nagad: "Nagad", rocket: "Rocket", cod: "Cash on Delivery",
+};
 
-const recentOrders = [
-  {
-    id: "SKB-98432",
-    customer: "রহিম আহমেদ",
-    product: "কাস্টমাইজড ফটো ফ্রেম",
-    amount: 1850,
-    status: "পেমেন্ট পেন্ডিং",
-  },
-  {
-    id: "SKB-98433",
-    customer: "সাদিয়া ইসলাম",
-    product: "প্রিমিয়াম গিফট বক্স",
-    amount: 2650,
-    status: "প্রসেসিং",
-  },
-  {
-    id: "SKB-98434",
-    customer: "মেহেদী হাসান",
-    product: "ইসলামিক ক্যালিগ্রাফি",
-    amount: 1450,
-    status: "ডেলিভারি বাকি",
-  },
-];
+function dateText(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("bn-BD", {
+    timeZone: "Asia/Dhaka",
+    day: "numeric", month: "short", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+}
 
-const money = (n) =>
-  `৳${Number(n).toLocaleString("bn-BD")}`;
+function getQuantity(order) {
+  if (order.itemCount !== undefined && order.itemCount !== null) {
+    return Number(order.itemCount) || 0;
+  }
+  return (order.items || []).reduce(
+    (total, item) => total + (Number(item.quantity) || 0), 0
+  );
+}
+
+function getDue(order) {
+  return Math.max(0, Number(
+    order.payment?.dueAmount ??
+      Number(order.total || 0) - Number(order.payment?.verifiedAmount || 0)
+  ) || 0);
+}
+
+const bn = (value) =>
+  Number(value || 0).toLocaleString("bn-BD", {
+    maximumFractionDigits: 2,
+  });
+
+const money = (value) => `৳${bn(value)}`;
+
+function growthText(value) {
+  if (value === null || value === undefined) {
+    return "আগের সময়ের তুলনা নেই";
+  }
+  const change = Number(value) || 0;
+  if (change === 0) return "আগের ৩০ দিনের সমান";
+  return `${change > 0 ? "↑" : "↓"} ${bn(Math.abs(change))}% ${
+    change > 0 ? "বৃদ্ধি" : "হ্রাস"
+  } (গত ৩০ দিন)`;
+}
+
+async function fetchDashboard(user, signal) {
+  if (!user) throw new Error("Admin login required");
+
+  const token = await user.getIdToken();
+  const response = await fetch(`${API_URL}/admin/dashboard`, {
+    method: "GET",
+    signal,
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success !== true) {
+    throw new Error(data.message || `Dashboard request failed (${response.status})`);
+  }
+  return data;
+}
 
 // =====================================
 // REUSABLE CHART CARD
@@ -181,11 +161,279 @@ function ChartCard({ title, subtitle, children, action }) {
 }
 
 // =====================================
+// ORDER MANAGEMENT STYLE TABLE COMPONENTS
+// =====================================
+
+function Badge({ value, type = "order" }) {
+  const meta = type === "payment" ? PAYMENT_MAP[value] : STATUS_MAP[value];
+
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+        meta?.color || "bg-base-200 text-muted"
+      }`}
+      style={{
+        borderColor: "color-mix(in srgb, currentColor 10%, transparent)",
+      }}
+    >
+      {meta?.label || value || "—"}
+    </span>
+  );
+}
+
+// ========================================
+// PRODUCT THUMBNAIL
+// ========================================
+
+function ProductThumb({ product, size = "md" }) {
+  const [failedUrl, setFailedUrl] = useState("");
+
+  const image = product?.image || "";
+
+  const sizeClass =
+    size === "sm" ? "size-10" : size === "lg" ? "size-16" : "size-12";
+
+  return (
+    <div
+      className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-lg border border-base-300 bg-base-200`}
+    >
+      {image && failedUrl !== image ? (
+        <img
+          src={image}
+          alt={product?.name || "Product"}
+          loading="lazy"
+          onError={() => setFailedUrl(image)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <ImageOff size={size === "sm" ? 16 : 20} className="text-muted" />
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// CUSTOMER PROFILE AVATAR
+// ========================================
+
+function CustomerAvatar({ name, photoUrl }) {
+  const [failedUrl, setFailedUrl] = useState("");
+
+  const showPhoto = Boolean(photoUrl) && failedUrl !== photoUrl;
+
+  return (
+    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-secondary/15 bg-secondary/10 text-secondary">
+      {showPhoto ? (
+        <img
+          src={photoUrl}
+          alt={name || "Customer"}
+          loading="lazy"
+          onError={() => setFailedUrl(photoUrl)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <UserRound size={19} strokeWidth={1.8} />
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// PRODUCT PREVIEW
+// MY ORDERS STYLE
+// ========================================
+
+function OrderProductPreview({ order }) {
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  const products = items.slice(0, 2);
+
+  const quantity = getQuantity(order);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {/* OVERLAPPING PRODUCT IMAGES */}
+
+      <div className="flex shrink-0 items-center">
+        {products.map((product, index) => (
+          <div
+            key={product.cartId || `${product.productId}-${index}`}
+            className={`rounded-lg border-2 border-white ${
+              index > 0 ? "-ml-2" : ""
+            }`}
+          >
+            <ProductThumb product={product} size="sm" />
+          </div>
+        ))}
+
+        {products.length === 0 && (
+          <div className="flex size-10 items-center justify-center rounded-lg bg-base-200 text-secondary">
+            <ShoppingBag size={17} />
+          </div>
+        )}
+      </div>
+
+      {/* PRODUCT INFORMATION */}
+
+      <div className="min-w-0 flex-1">
+        <p
+          title={products[0]?.name || ""}
+          className="w-[145px] truncate text-xs font-semibold text-primary"
+        >
+          {products[0]?.name || "অর্ডারের পণ্য"}
+        </p>
+
+        <p className="mt-1 text-[11px] text-muted">
+          মোট {quantity.toLocaleString("bn-BD")} পিস
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+// =====================================
 // MAIN DASHBOARD
 // =====================================
 
 export default function AdminDashboard() {
   const [period, setPeriod] = useState("daily");
+  const { user, loading, role, roleLoading, accountStatus } =
+    useContext(AuthContext);
+
+  const checking = loading || (Boolean(user) && roleLoading);
+  const allowed =
+    !checking &&
+    Boolean(user) &&
+    role === "admin" &&
+    accountStatus === "active";
+
+  const dashboardQuery = useQuery({
+    queryKey: ["admin-dashboard", user?.uid],
+    enabled: allowed,
+    queryFn: ({ signal }) => fetchDashboard(user, signal),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const dashboard = dashboardQuery.data || {};
+  const metrics = dashboard.kpis || {};
+  const attention = dashboard.attention || {};
+  const salesData = dashboard.salesData || { daily: [], weekly: [], monthly: [] };
+
+  const statusData = (Array.isArray(dashboard.statusData)
+    ? dashboard.statusData : []).map((item, index) => ({
+    ...item,
+    color: item.color || STATUS_COLORS[index % STATUS_COLORS.length],
+  }));
+
+  const paymentData = (Array.isArray(dashboard.paymentData)
+    ? dashboard.paymentData : []).map((item, index) => ({
+    ...item,
+    color: item.color || PAYMENT_COLORS[index % PAYMENT_COLORS.length],
+  }));
+
+  const statusTotal = Number(dashboard.statusTotal || 0);
+  const attentionTotal =
+    Number(attention.paymentPending || 0) +
+    Number(attention.codUnconfirmed || 0) +
+    Number(attention.customProcessing || 0);
+
+  const recentOrders = Array.isArray(dashboard.recentOrders)
+    ? dashboard.recentOrders
+    : [];
+
+  const kpis = [
+    {
+      title: "মোট অর্ডার",
+      value: bn(metrics.totalOrders),
+      unit: "টি",
+      change: growthText(metrics.orderGrowthPercent),
+      icon: ShoppingBag,
+      bg: "bg-secondary/10",
+      color: "text-secondary",
+    },
+    {
+      title: "পেন্ডিং অর্ডার",
+      value: bn(metrics.pendingOrders),
+      unit: "টি",
+      change: "অপেক্ষমাণ",
+      icon: Clock3,
+      bg: "bg-amber-100",
+      color: "text-amber-700",
+    },
+    {
+      title: "পেমেন্ট ভেরিফিকেশন",
+      value: bn(metrics.pendingPayments),
+      unit: "টি",
+      change: "যাচাই প্রয়োজন",
+      icon: Wallet,
+      bg: "bg-fuchsia-100",
+      color: "text-fuchsia-700",
+    },
+    {
+      title: "মোট বিক্রি",
+      value: money(metrics.totalSales),
+      unit: "",
+      change: growthText(metrics.salesGrowthPercent),
+      icon: TrendingUp,
+      bg: "bg-yellow-100",
+      color: "text-yellow-700",
+    },
+    {
+      title: "সফল ডেলিভারি",
+      value: bn(metrics.deliveredOrders),
+      unit: "টি",
+      change: `${bn(metrics.deliveryRate)}% সফল`,
+      icon: BadgeCheck,
+      bg: "bg-green-100",
+      color: "text-green-700",
+    },
+    {
+      title: "বকেয়া / COD ব্যালেন্স",
+      value: money(metrics.outstandingBalance),
+      unit: "",
+      change: "সক্রিয় অর্ডারের অবশিষ্ট পাওনা",
+      icon: Wallet,
+      bg: "bg-secondary/10",
+      color: "text-secondary",
+    },
+  ];
+
+  if (checking || (allowed && dashboardQuery.isPending)) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-secondary" />
+        <p className="mt-3 text-sm text-muted">Dashboard লোড হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  if (!allowed) {
+    return (
+      <div className="rounded-2xl bg-white px-5 py-16 text-center">
+        <AlertCircle size={36} className="mx-auto text-secondary" />
+        <h2 className="mt-4 text-lg font-bold text-primary">Access Denied</h2>
+        <p className="mt-2 text-sm text-muted">শুধু Active Admin Dashboard দেখতে পারবেন।</p>
+      </div>
+    );
+  }
+
+  if (dashboardQuery.isError) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-white p-8 text-center">
+        <p className="text-sm text-red-700">{dashboardQuery.error?.message}</p>
+        <button
+          type="button"
+          onClick={() => dashboardQuery.refetch()}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white"
+        >
+          <RefreshCcw size={15} /> Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className=" max-w-full space-y-6 pb-10">
@@ -203,7 +451,9 @@ export default function AdminDashboard() {
 
         <span className="badge-soft">
           <CalendarDays size={14} />
-          Demo Overview
+          {new Date(dashboard.generatedAt || Date.now()).toLocaleDateString("bn-BD", {
+            timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric"
+          })}
         </span>
       </div>
 
@@ -219,7 +469,7 @@ export default function AdminDashboard() {
               জরুরি করণীয়
             </h2>
             <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-600">
-              ৯টি পেন্ডিং
+              {bn(attentionTotal)}টি পেন্ডিং
             </span>
           </div>
           <p className="text-xs text-muted">
@@ -240,10 +490,10 @@ export default function AdminDashboard() {
                   পেমেন্ট অপেক্ষা
                 </p>
                 <h3 className="mt-1 text-base font-extrabold text-primary">
-                  ৩টি ভেরিফিকেশন বাকি
+                  {bn(attention.paymentPending)}টি ভেরিফিকেশন বাকি
                 </h3>
                 <p className="mt-2 text-xs leading-5 text-muted">
-                  ৩টি ম্যানুয়াল বিকাশ ও নগদ TrxID
+                  {bn(attention.paymentPending)}টি অনলাইন TrxID
                   মিলিয়ে একাউন্টে টাকা নিশ্চিত করতে হবে।
                 </p>
                 <Link
@@ -268,14 +518,16 @@ export default function AdminDashboard() {
                   কল অপেক্ষা
                 </p>
                 <h3 className="mt-1 text-base font-extrabold text-primary">
-                  ২টি COD নিশ্চিতকরণ বাকি
+                  {bn(attention.codUnconfirmed)}টি COD নিশ্চিতকরণ বাকি
                 </h3>
                 <p className="mt-2 text-xs leading-5 text-muted">
                   ক্যাশ অন ডেলিভারি প্রসেসিংয়ের আগে
                   গ্রাহকের সাথে ফোনে অর্ডার কনফার্ম করুন।
                 </p>
                 <Link
-                  to="/admin/orders?status=cod_pending"
+                  to={attention.firstCodOrderId
+                    ? `/admin/orders/${encodeURIComponent(attention.firstCodOrderId)}`
+                    : "/admin/orders"}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-secondary/10 px-4 py-2 text-xs font-bold text-secondary hover:bg-secondary/20"
                 >
                   কল করুন <ArrowRight size={14} />
@@ -296,14 +548,16 @@ export default function AdminDashboard() {
                   কাস্টমাইজড অর্ডার
                 </p>
                 <h3 className="mt-1 text-base font-extrabold text-primary">
-                  ৪টি কাস্টম প্রসেসিং
+                  {bn(attention.customProcessing)}টি কাস্টম প্রসেসিং
                 </h3>
                 <p className="mt-2 text-xs leading-5 text-muted">
                   কাঠের মোড়ক, নামফলক ও অন্যান্য
                   কাস্টম গিফটের কাজ শুরু বা অগ্রগতি আপডেট করুন।
                 </p>
                 <Link
-                  to="/admin/orders?type=custom"
+                  to={attention.firstCustomOrderId
+                    ? `/admin/orders/${encodeURIComponent(attention.firstCustomOrderId)}`
+                    : "/admin/orders"}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-secondary"
                 >
                   প্রসেস করুন <ArrowRight size={14} />
@@ -431,14 +685,14 @@ export default function AdminDashboard() {
                     <Cell key={item.name} fill={item.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(v) => `${bn(v)} টি`} />
               </PieChart>
             </ResponsiveContainer>
 
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-xs text-muted">মোট অর্ডার</span>
               <span className="text-2xl font-extrabold text-primary">
-                ১৪৮
+                {bn(statusTotal)}
               </span>
             </div>
           </div>
@@ -507,71 +761,181 @@ export default function AdminDashboard() {
       </section>
 
       {/* ===================================== */}
-      {/* RECENT ORDERS */}
+      {/* RECENT ORDERS - ORDER MANAGEMENT STYLE */}
       {/* ===================================== */}
 
       <section className="section-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-4 sm:p-5">
           <div>
-            <h2 className="font-bold text-primary">
-              সাম্প্রতিক অর্ডার
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              সর্বশেষ জমা হওয়া অর্ডারসমূহ
-            </p>
+            <h2 className="font-bold text-primary">সাম্প্রতিক অর্ডার</h2>
+            <p className="mt-1 text-xs text-muted">সর্বশেষ জমা হওয়া ৫টি অর্ডার</p>
           </div>
-
           <Link
             to="/admin/orders"
             className="inline-flex items-center gap-1 text-xs font-bold text-secondary"
           >
-            সব অর্ডার
-            <ArrowRight size={15} />
+            সব অর্ডার <ArrowRight size={15} />
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="table w-full">
-            <thead className="bg-base-200 text-primary">
-              <tr>
-                <th>অর্ডার</th>
-                <th>কাস্টমার</th>
-                <th>প্রোডাক্ট</th>
-                <th>মূল্য</th>
-                <th>স্ট্যাটাস</th>
-                <th>অ্যাকশন</th>
+        {/* DESKTOP: SAME 8-COLUMN LAYOUT AS ORDER MANAGEMENT */}
+        <div className="hidden overflow-x-auto lg:block">
+          <table className="w-full min-w-[1180px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-base-300 bg-secondary/5 text-sm font-bold text-primary/60">
+                <th className="px-5 py-3">Order / Date</th>
+                <th className="px-5 py-3">Customer</th>
+                <th className="px-5 py-3">Products</th>
+                <th className="px-5 py-3">Amount</th>
+                <th className="px-5 py-3">Payment</th>
+                <th className="px-5 py-3">Delivery</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Action</th>
               </tr>
             </thead>
+            <tbody className="divide-y divide-base-300/60">
+              {recentOrders.map((order, index) => {
+                const payment = order.payment || {};
+                const courier = order.courier || {};
+                const customerName = order.customer?.name || "Unknown Customer";
+                const customerPhone = order.customer?.phone || order.shipping?.phone || "—";
+                const customerPhoto = order.guest ? "" :
+                  (order.customerPhotoUrl || "");
+                const detailsUrl = `/admin/orders/${encodeURIComponent(order._id)}`;
 
-            <tbody>
-              {recentOrders.map((order) => (
-                <tr key={order.id}>
-                  <td className="font-bold text-primary">
-                    {order.id}
-                  </td>
-                  <td>{order.customer}</td>
-                  <td>{order.product}</td>
-                  <td className="font-semibold">
-                    {money(order.amount)}
-                  </td>
-                  <td>
-                    <span className="badge-soft whitespace-nowrap">
-                      {order.status}
-                    </span>
-                  </td>
-                  <td>
-                    <Link
-                      to={`/admin/orders/${order.id}`}
-                      className="text-xs font-bold text-secondary hover:underline"
-                    >
-                      বিস্তারিত
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                return (
+                  <tr
+                    key={order._id}
+                    className={`transition-colors hover:bg-secondary/5 ${
+                      index % 2 === 0 ? "bg-white" : "bg-[#faf7fb]"
+                    }`}
+                  >
+                    <td className="px-5 py-2.5 align-middle">
+                      <p title={order.orderNumber} className="max-w-[190px] truncate whitespace-nowrap text-xs font-bold text-primary">
+                        #{order.orderNumber}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted">
+                        <CalendarDays size={13} /> {dateText(order.createdAt)}
+                      </p>
+                    </td>
+                    <td className="px-5 py-2.5 align-middle">
+                      <div className="flex min-w-[175px] items-center gap-2.5">
+                        <CustomerAvatar name={customerName} photoUrl={customerPhoto} />
+                        <div className="min-w-0 flex-1">
+                          <p title={customerName} className="max-w-[145px] truncate whitespace-nowrap text-sm font-semibold text-primary">
+                            {customerName}
+                          </p>
+                          <p className="whitespace-nowrap text-[11px] text-muted">{customerPhone}</p>
+                          <p className="text-[11px] font-medium text-secondary">
+                            {order.guest ? "Guest Customer" : "Registered Customer"}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-2.5 align-middle">
+                      <OrderProductPreview order={order} />
+                    </td>
+                    <td className="px-5 py-2.5 align-middle">
+                      <p className="whitespace-nowrap text-sm font-bold text-primary">{money(order.total)}</p>
+                      <p className="mt-1 whitespace-nowrap text-[11px] font-medium text-green-700">
+                        Paid: {money(payment.verifiedAmount)}
+                      </p>
+                      <p className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-amber-700">
+                        Due: {money(getDue(order))}
+                      </p>
+                    </td>
+                    <td className="px-5 py-2.5 align-middle">
+                      <p className="mb-1.5 whitespace-nowrap text-xs font-semibold text-primary">
+                        {METHOD_NAMES[payment.method] || payment.method || "—"}
+                      </p>
+                      <Badge value={payment.status} type="payment" />
+                    </td>
+                    <td className="px-5 py-2.5 align-middle">
+                      <div className="flex items-center gap-1.5">
+                        <Truck size={15} className="shrink-0 text-secondary" />
+                        <p title={courier.name || "Not Assigned"} className="max-w-[135px] truncate whitespace-nowrap text-xs font-semibold text-primary">
+                          {courier.name || "Not Assigned"}
+                        </p>
+                      </div>
+                      <p title={courier.trackingNumber || "Tracking Pending"} className="mt-1 max-w-[145px] truncate text-[11px] text-muted">
+                        {courier.trackingNumber || "Tracking Pending"}
+                      </p>
+                    </td>
+                    <td className="px-5 py-2.5 align-middle"><Badge value={order.status} /></td>
+                    <td className="px-5 py-2.5 text-right align-middle">
+                      <Link
+                        to={detailsUrl}
+                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-secondary/10 px-3 py-2 text-xs font-semibold text-secondary transition hover:bg-secondary/20"
+                      >
+                        <Eye size={15} /> Details
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+
+        {/* MOBILE: MATCHING ORDER MANAGEMENT CARDS */}
+        <div className="space-y-3 p-3 sm:p-4 lg:hidden">
+          {recentOrders.map((order) => {
+            const first = order.items?.[0];
+            const payment = order.payment || {};
+            const url = `/admin/orders/${encodeURIComponent(order._id)}`;
+            return (
+              <article key={order._id} className="overflow-hidden rounded-xl border border-base-300 bg-white">
+                <div className="flex items-start justify-between gap-2 bg-base-200/70 p-3">
+                  <div>
+                    <p className="break-all text-xs font-bold text-primary">{order.orderNumber}</p>
+                    <p className="mt-1 text-[11px] text-muted">{dateText(order.createdAt)}</p>
+                  </div>
+                  <Badge value={order.status} />
+                </div>
+                <div className="space-y-3 p-3">
+                  <div className="flex items-center gap-3">
+                    <ProductThumb product={first} size="lg" />
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-xs font-bold text-primary">{first?.name || "অর্ডারের পণ্য"}</p>
+                      {first?.variantTitle && (
+                        <p className="mt-1 text-[11px] text-muted">{first.variantTitle}</p>
+                      )}
+                      <p className="mt-1 text-[11px] text-muted">মোট {getQuantity(order)} পিস</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 rounded-lg bg-base-200/60 p-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted">Customer</p>
+                      <p className="mt-1 truncate text-xs font-bold text-primary">{order.customer?.name || "—"}</p>
+                      <p className="mt-1 text-[11px] text-muted">{order.guest ? "Guest" : "Registered"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted">Order Total</p>
+                      <p className="mt-1 text-sm font-bold text-primary">{money(order.total)}</p>
+                      <p className="mt-1 text-[11px] text-amber-700">Due: {money(getDue(order))}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-primary">
+                      {METHOD_NAMES[payment.method] || payment.method || "—"}
+                    </span>
+                    <Badge value={payment.status} type="payment" />
+                  </div>
+                  <Link to={url} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-white transition hover:bg-secondary">
+                    <Eye size={15} /> বিস্তারিত দেখুন <ArrowRight size={14} />
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        {recentOrders.length === 0 && (
+          <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
+            <ShoppingBag size={30} className="text-secondary" />
+            <p className="mt-3 text-xs text-muted">এখনো কোনো Order পাওয়া যায়নি।</p>
+          </div>
+        )}
       </section>
     </div>
   );

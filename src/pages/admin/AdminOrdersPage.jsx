@@ -1,5 +1,7 @@
+import { useContext, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
-import { useMemo, useState } from "react";
 import {
   Search,
   ShoppingBag,
@@ -7,291 +9,68 @@ import {
   Paintbrush,
   Truck,
   Eye,
-  X,
-  Phone,
-  MapPin,
-  Package,
   CalendarDays,
-  Wallet,
   RefreshCcw,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   UserRound,
-  CreditCard,
   ArrowRight,
-  CheckCircle2,
   AlertCircle,
   ImageOff,
+  Loader2,
 } from "lucide-react";
 
-// =====================================
-// DEMO DATA
-// Replace with TanStack Query API data
-// =====================================
+import { AuthContext } from "../../providers/AuthProvider";
 
-const demoOrders = [
-  {
-    id: "SKB-98432",
-    date: "2026-10-25T10:30:00",
-    customer: "রহিম আহমেদ",
-    phone: "01712345678",
-    address: "নরসিংদী সদর, নরসিংদী",
-    products: [
-      {
-        id: "p1",
-        name: "কাস্টমাইজড প্রিমিয়াম ফটো ফ্রেম",
-        variant: "12×16 inch • Golden",
-        image:
-          "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=200&q=80",
-        quantity: 1,
-        price: 1850,
-      },
-    ],
-    total: 1930,
-    advancePaid: 0,
-    codBalance: 1930,
-    paymentMethod: "bKash",
-    paymentStatus: "pending_verification",
-    status: "pending",
-    courier: "",
-    trackingId: "",
-    customized: true,
-    note: "নাম ও ছবি অনুযায়ী কাস্টমাইজ করতে হবে",
-  },
-  {
-    id: "SKB-98433",
-    date: "2026-10-25T09:15:00",
-    customer: "সাদিয়া ইসলাম",
-    phone: "01812345678",
-    address: "ধানমন্ডি, ঢাকা",
-    products: [
-      {
-        id: "p2",
-        name: "Birthday Luxury Gift Hamper",
-        variant: "Chocolate + Flower + Balloon",
-        image:
-          "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&q=80",
-        quantity: 1,
-        price: 2650,
-      },
-    ],
-    total: 2780,
-    advancePaid: 0,
-    codBalance: 2780,
-    paymentMethod: "COD",
-    paymentStatus: "cod_pending",
-    status: "pending",
-    courier: "",
-    trackingId: "",
-    customized: false,
-    note: "ডেলিভারির আগে কল করবেন",
-  },
-  {
-    id: "SKB-98434",
-    date: "2026-10-24T15:20:00",
-    customer: "মেহেদী হাসান",
-    phone: "01912345678",
-    address: "কান্দিরপাড়, কুমিল্লা",
-    products: [
-      {
-        id: "p3",
-        name: "ইসলামিক ক্যালিগ্রাফি ফ্রেম",
-        variant: "Golden Frame • Customized",
-        image:
-          "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=200&q=80",
-        quantity: 1,
-        price: 1450,
-      },
-    ],
-    total: 1580,
-    advancePaid: 790,
-    codBalance: 790,
-    paymentMethod: "Nagad",
-    paymentStatus: "verified",
-    status: "processing",
-    courier: "",
-    trackingId: "",
-    customized: true,
-    note: "গোল্ডেন ফ্রেম",
-  },
-  {
-    id: "SKB-98435",
-    date: "2026-10-24T11:45:00",
-    customer: "তানজিলা আক্তার",
-    phone: "01612345678",
-    address: "চৌরাস্তা, গাজীপুর",
-    products: [
-      {
-        id: "p4",
-        name: "কাপল শাড়ি পাঞ্জাবি কম্বো",
-        variant: "Maroon • Size L",
-        image:
-          "https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=200&q=80",
-        quantity: 1,
-        price: 4200,
-      },
-    ],
-    total: 4330,
-    advancePaid: 2165,
-    codBalance: 2165,
-    paymentMethod: "bKash",
-    paymentStatus: "verified",
-    status: "ready_to_ship",
-    courier: "",
-    trackingId: "",
-    customized: true,
-    note: "",
-  },
-  {
-    id: "SKB-98436",
-    date: "2026-10-23T14:00:00",
-    customer: "আকাশ দাস",
-    phone: "01798765432",
-    address: "মাধবদী, নরসিংদী",
-    products: [
-      {
-        id: "p5",
-        name: "কাপল ফটো ফ্রেম",
-        variant: "Wooden • 8×10 inch",
-        image:
-          "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=200&q=80",
-        quantity: 2,
-        price: 850,
-      },
-    ],
-    total: 1780,
-    advancePaid: 890,
-    codBalance: 890,
-    paymentMethod: "Rocket",
-    paymentStatus: "verified",
-    status: "shipped",
-    courier: "Steadfast",
-    trackingId: "STD-123456",
-    customized: false,
-    note: "",
-  },
-  {
-    id: "SKB-98437",
-    date: "2026-10-22T12:10:00",
-    customer: "নুসরাত জাহান",
-    phone: "01898765432",
-    address: "জিন্দাবাজার, সিলেট",
-    products: [
-      {
-        id: "p6",
-        name: "চকলেট ও ফুলের গিফট বক্স",
-        variant: "Premium Red Rose",
-        image:
-          "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&q=80",
-        quantity: 1,
-        price: 2200,
-      },
-    ],
-    total: 2330,
-    advancePaid: 2330,
-    codBalance: 0,
-    paymentMethod: "bKash",
-    paymentStatus: "verified",
-    status: "delivered",
-    courier: "Pathao",
-    trackingId: "PTH-98437",
-    customized: false,
-    note: "",
-  },
-  {
-    id: "SKB-98438",
-    date: "2026-10-21T16:20:00",
-    customer: "ইমরান হোসেন",
-    phone: "01512345678",
-    address: "শিবপুর, নরসিংদী",
-    products: [
-      {
-        id: "p7",
-        name: "নিকাহনামা ফ্রেম",
-        variant: "A3 • Premium",
-        image:
-          "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=200&q=80",
-        quantity: 1,
-        price: 1950,
-      },
-    ],
-    total: 2030,
-    advancePaid: 0,
-    codBalance: 2030,
-    paymentMethod: "COD",
-    paymentStatus: "cod_pending",
-    status: "cancelled",
-    courier: "",
-    trackingId: "",
-    customized: true,
-    note: "",
-  },
-  {
-    id: "SKB-98439",
-    date: "2026-10-25T08:30:00",
-    customer: "ফারিয়া ইসলাম",
-    phone: "01312345678",
-    address: "সাহেব বাজার, রাজশাহী",
-    products: [
-      {
-        id: "p8",
-        name: "Luxury Surprise Gift Box",
-        variant: "Premium Packaging",
-        image:
-          "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&q=80",
-        quantity: 1,
-        price: 3500,
-      },
-    ],
-    total: 3630,
-    advancePaid: 0,
-    codBalance: 3630,
-    paymentMethod: "COD",
-    paymentStatus: "cod_pending",
-    status: "confirmed",
-    courier: "",
-    trackingId: "",
-    customized: false,
-    note: "",
-  },
-];
+// ========================================
+// CONFIG
+// ========================================
 
-const statusMap = {
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/$/, "");
+
+const PER_PAGE = 10;
+
+const STATUS_MAP = {
   pending: {
     label: "পেন্ডিং",
-    color: "bg-amber-50 text-amber-700 border-amber-200",
+    color: "bg-amber-50 text-amber-700",
   },
-  confirmed: {
-    label: "কনফার্মড",
-    color: "bg-blue-50 text-blue-700 border-blue-200",
+  verified: {
+    label: "যাচাইকৃত",
+    color: "bg-blue-50 text-blue-700",
   },
   processing: {
     label: "প্রসেসিং",
-    color: "bg-purple-50 text-purple-700 border-purple-200",
-  },
-  ready_to_ship: {
-    label: "প্যাকিং সম্পন্ন",
-    color: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
+    color: "bg-purple-50 text-purple-700",
   },
   shipped: {
     label: "শিপড",
-    color: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    color: "bg-indigo-50 text-indigo-700",
   },
   delivered: {
     label: "ডেলিভার্ড",
-    color: "bg-green-50 text-green-700 border-green-200",
+    color: "bg-green-50 text-green-700",
+  },
+  rejected: {
+    label: "রিজেক্টেড",
+    color: "bg-red-50 text-red-700",
   },
   cancelled: {
     label: "বাতিল",
-    color: "bg-red-50 text-red-700 border-red-200",
+    color: "bg-red-50 text-red-700",
   },
 };
 
-const paymentMap = {
-  pending_verification: {
+const PAYMENT_MAP = {
+  pending: {
     label: "যাচাই বাকি",
     color: "bg-amber-50 text-amber-700",
+  },
+  partially_paid: {
+    label: "আংশিক পরিশোধিত",
+    color: "bg-blue-50 text-blue-700",
   },
   verified: {
     label: "ভেরিফাইড",
@@ -311,510 +90,510 @@ const paymentMap = {
   },
 };
 
-const statusTabs = [
+const METHOD_NAMES = {
+  bkash: "bKash",
+  nagad: "Nagad",
+  rocket: "Rocket",
+  cod: "Cash on Delivery",
+};
+
+const STATUS_TABS = [
   ["all", "সব অর্ডার"],
   ["pending", "পেন্ডিং"],
-  ["confirmed", "কনফার্মড"],
+  ["verified", "যাচাইকৃত"],
   ["processing", "প্রসেসিং"],
-  ["ready_to_ship", "প্যাকিং সম্পন্ন"],
   ["shipped", "শিপড"],
   ["delivered", "ডেলিভার্ড"],
+  ["rejected", "রিজেক্টেড"],
   ["cancelled", "বাতিল"],
 ];
 
-const money = (amount) =>
-  `৳${Number(amount || 0).toLocaleString("bn-BD")}`;
+// ========================================
+// HELPERS
+// ========================================
 
-const dateText = (value) =>
-  new Date(value).toLocaleDateString("bn-BD", {
+const money = (value) =>
+  `৳${Number(value || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`;
+
+function dateText(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return date.toLocaleString("bn-BD", {
+    timeZone: "Asia/Dhaka",
     day: "numeric",
     month: "short",
     year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getQuantity(order) {
+  if (order.itemCount !== undefined && order.itemCount !== null) {
+    return Number(order.itemCount) || 0;
+  }
+
+  return (order.items || []).reduce(
+    (total, item) => total + (Number(item.quantity) || 0),
+    0,
+  );
+}
+
+function getDue(order) {
+  return Math.max(
+    0,
+    Number(
+      order.payment?.dueAmount ??
+        Number(order.total || 0) - Number(order.payment?.verifiedAmount || 0),
+    ) || 0,
+  );
+}
+
+// ========================================
+// AUTHENTICATED API
+// ========================================
+
+async function adminRequest(user, path, signal) {
+  if (!user) {
+    throw new Error("Admin login required");
+  }
+
+  const token = await user.getIdToken();
+
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "GET",
+    signal,
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
   });
 
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.success !== true) {
+    throw new Error(data.message || `Request failed (${response.status})`);
+  }
+
+  return data;
+}
+
+// ========================================
+// STATUS BADGE
+// ========================================
+
 function Badge({ value, type = "order" }) {
-  const item =
-    type === "payment" ? paymentMap[value] : statusMap[value];
+  const meta = type === "payment" ? PAYMENT_MAP[value] : STATUS_MAP[value];
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border border-transparent px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${
-        item?.color || "bg-base-200 text-muted"
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+        meta?.color || "bg-base-200 text-muted"
       }`}
+      style={{
+        borderColor: "color-mix(in srgb, currentColor 10%, transparent)",
+      }}
     >
-      {item?.label || value}
+      {meta?.label || value || "—"}
     </span>
   );
 }
 
+// ========================================
+// PRODUCT THUMBNAIL
+// ========================================
+
 function ProductThumb({ product, size = "md" }) {
-  const [failed, setFailed] = useState(false);
+  const [failedUrl, setFailedUrl] = useState("");
+
+  const image = product?.image || "";
+
+  const sizeClass =
+    size === "sm" ? "size-10" : size === "lg" ? "size-16" : "size-12";
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-200 ${
-        size === "lg" ? "size-16" : "size-12"
-      }`}
+      className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-lg border border-base-300 bg-base-200`}
     >
-      {product?.image && !failed ? (
+      {image && failedUrl !== image ? (
         <img
-          src={product.image}
-          alt={product.name}
-          className="h-full w-full object-cover"
+          src={image}
+          alt={product?.name || "Product"}
           loading="lazy"
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(image)}
+          className="h-full w-full object-cover"
         />
       ) : (
-        <ImageOff size={20} className="text-muted" />
+        <ImageOff size={size === "sm" ? 16 : 20} className="text-muted" />
       )}
     </div>
   );
 }
 
-function StatCard({
-  title,
-  subtitle,
-  value,
-  icon: Icon,
-  iconClass,
-  note,
-  noteClass,
-}) {
+// ========================================
+// CUSTOMER PROFILE AVATAR
+// ========================================
+
+function CustomerAvatar({ name, photoUrl }) {
+  const [failedUrl, setFailedUrl] = useState("");
+
+  const showPhoto = Boolean(photoUrl) && failedUrl !== photoUrl;
+
+  return (
+    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-secondary/15 bg-secondary/10 text-secondary">
+      {showPhoto ? (
+        <img
+          src={photoUrl}
+          alt={name || "Customer"}
+          loading="lazy"
+          onError={() => setFailedUrl(photoUrl)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <UserRound size={19} strokeWidth={1.8} />
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// PRODUCT PREVIEW
+// MY ORDERS STYLE
+// ========================================
+
+function OrderProductPreview({ order }) {
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  const products = items.slice(0, 2);
+
+  const quantity = getQuantity(order);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {/* OVERLAPPING PRODUCT IMAGES */}
+
+      <div className="flex shrink-0 items-center">
+        {products.map((product, index) => (
+          <div
+            key={product.cartId || `${product.productId}-${index}`}
+            className={`rounded-lg border-2 border-white ${
+              index > 0 ? "-ml-2" : ""
+            }`}
+          >
+            <ProductThumb product={product} size="sm" />
+          </div>
+        ))}
+
+        {products.length === 0 && (
+          <div className="flex size-10 items-center justify-center rounded-lg bg-base-200 text-secondary">
+            <ShoppingBag size={17} />
+          </div>
+        )}
+      </div>
+
+      {/* PRODUCT INFORMATION */}
+
+      <div className="min-w-0 flex-1">
+        <p
+          title={products[0]?.name || ""}
+          className="w-[145px] truncate text-xs font-semibold text-primary"
+        >
+          {products[0]?.name || "অর্ডারের পণ্য"}
+        </p>
+
+        <p className="mt-1 text-[11px] text-muted">
+          মোট {quantity.toLocaleString("bn-BD")} পিস
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// STAT CARD
+// ========================================
+
+function StatCard({ title, subtitle, value, icon: Icon, iconClass }) {
   return (
     <div className="rounded-xl border border-base-300/70 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="text-xs font-bold text-primary sm:text-sm">
-            {title}
-          </h3>
-          <p className="mt-0.5 text-[10px] text-muted sm:text-xs">
-            {subtitle}
-          </p>
+        <div>
+          <h3 className="text-xs font-bold text-primary sm:text-sm">{title}</h3>
+
+          <p className="mt-1 text-[11px] text-muted">{subtitle}</p>
         </div>
+
         <div
-          className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconClass}`}
+          className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${iconClass}`}
         >
-          <Icon size={19} />
+          <Icon size={20} />
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
-        <p className="text-2xl font-extrabold text-primary sm:text-3xl">
-          {value.toLocaleString("bn-BD")}
-          <span className="ml-1 text-sm font-semibold">টি</span>
-        </p>
-        <span
-          className={`rounded-full px-2 py-1 text-[10px] font-bold ${noteClass}`}
-        >
-          {note}
-        </span>
-      </div>
+      <p className="mt-4 text-2xl font-bold text-primary sm:text-3xl">
+        {Number(value || 0).toLocaleString("bn-BD")}
+      </p>
     </div>
   );
 }
 
-function DetailRow({ label, children }) {
-  return (
-    <div className="flex justify-between gap-4 py-1.5 text-xs sm:text-sm">
-      <span className="shrink-0 text-muted">{label}</span>
-      <span className="text-right font-semibold text-primary">
-        {children}
-      </span>
-    </div>
-  );
-}
-
-function OrderDetailsModal({ order, onClose }) {
-  if (!order) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-primary/50 p-3 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="order-detail-title"
-        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-base-300 p-4 sm:p-5">
-          <div>
-            <p className="text-xs font-semibold text-secondary">
-              Order Details
-            </p>
-            <h2
-              id="order-detail-title"
-              className="mt-1 text-lg font-extrabold text-primary"
-            >
-              #{order.id}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-9 items-center justify-center rounded-lg bg-base-200"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-4 overflow-y-auto p-4 sm:p-5">
-          <div className="flex flex-wrap gap-2">
-            <Badge value={order.status} />
-            <Badge value={order.paymentStatus} type="payment" />
-            {order.customized && (
-              <span className="rounded-full bg-fuchsia-50 px-3 py-1 text-[10px] font-bold text-fuchsia-700">
-                Customized
-              </span>
-            )}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-base-300 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-primary">
-                <UserRound size={16} />
-                কাস্টমার
-              </h3>
-              <p className="text-sm font-bold">{order.customer}</p>
-              <a
-                href={`tel:${order.phone}`}
-                className="mt-2 flex items-center gap-2 text-xs text-secondary"
-              >
-                <Phone size={14} />
-                {order.phone}
-              </a>
-              <p className="mt-2 flex items-start gap-2 text-xs text-muted">
-                <MapPin size={14} className="shrink-0" />
-                {order.address}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-base-300 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-primary">
-                <CreditCard size={16} />
-                পেমেন্ট
-              </h3>
-              <DetailRow label="মাধ্যম">
-                {order.paymentMethod}
-              </DetailRow>
-              <DetailRow label="অগ্রিম প্রাপ্ত">
-                {money(order.advancePaid)}
-              </DetailRow>
-              <DetailRow label="COD বাকি">
-                {money(order.codBalance)}
-              </DetailRow>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-base-300 p-4">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-primary">
-              <Package size={16} />
-              প্রোডাক্টসমূহ
-            </h3>
-
-            <div className="space-y-3">
-              {order.products.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex items-center gap-3 rounded-xl bg-base-200 p-3"
-                >
-                  <ProductThumb product={product} size="lg" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-primary sm:text-sm">
-                      {product.name}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted">
-                      {product.variant}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted">
-                      Qty: {product.quantity}
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold text-primary">
-                    {money(product.price * product.quantity)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-base-200 p-4">
-            <DetailRow label="অর্ডারের তারিখ">
-              {dateText(order.date)}
-            </DetailRow>
-            <DetailRow label="কুরিয়ার">
-              {order.courier || "এখনো নির্ধারিত নয়"}
-            </DetailRow>
-            {order.trackingId && (
-              <DetailRow label="Tracking ID">
-                {order.trackingId}
-              </DetailRow>
-            )}
-            <div className="mt-2 border-t border-base-300 pt-2">
-              <DetailRow label="সর্বমোট">
-                {money(order.total)}
-              </DetailRow>
-            </div>
-          </div>
-
-          {order.note && (
-            <div className="rounded-xl border border-secondary/15 bg-secondary/5 p-4">
-              <p className="text-xs font-bold text-secondary">
-                Customer Note
-              </p>
-              <p className="mt-1 text-sm text-primary">{order.note}</p>
-            </div>
-          )}
-
-          {order.paymentStatus === "pending_verification" && (
-            <div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
-              <AlertCircle size={17} className="shrink-0" />
-              পেমেন্ট যাচাই না হওয়া পর্যন্ত অর্ডার প্রসেস করবেন না।
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end border-t border-base-300 p-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white"
-          >
-            বন্ধ করুন
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// =====================================
-// MAIN PAGE
-// =====================================
+// ========================================
+// MAIN ADMIN ORDERS PAGE
+// ========================================
 
 export default function AdminOrdersPage() {
-  const [orders] = useState(demoOrders);
+  const { user, loading, role, roleLoading, accountStatus } =
+    useContext(AuthContext);
+
+  // ========================================
+  // FILTER STATES
+  // ========================================
+
   const [activeTab, setActiveTab] = useState("all");
+
   const [search, setSearch] = useState("");
+
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
   const [paymentFilter, setPaymentFilter] = useState("all");
+
   const [dateFilter, setDateFilter] = useState("all");
+
   const [page, setPage] = useState(1);
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
 
-  const perPage = 10;
+  // ========================================
+  // AUTHORIZATION
+  // ========================================
 
-  const selectedOrder =
-    orders.find((item) => item.id === selectedOrderId) || null;
+  const checking = loading || (Boolean(user) && roleLoading);
 
-  const counts = useMemo(() => {
-    const result = { all: orders.length };
+  const allowed =
+    !checking &&
+    Boolean(user) &&
+    role === "admin" &&
+    accountStatus === "active";
 
-    Object.keys(statusMap).forEach((status) => {
-      result[status] = orders.filter(
-        (order) => order.status === status
-      ).length;
-    });
+  // ========================================
+  // DEBOUNCED SEARCH
+  // ========================================
 
-    return result;
-  }, [orders]);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
 
-  const stats = useMemo(() => {
-    const active = orders.filter(
-      (order) =>
-        !["delivered", "cancelled"].includes(order.status)
-    ).length;
+    return () => clearTimeout(timeout);
+  }, [search]);
 
-    const pending = orders.filter(
-      (order) => order.status === "pending"
-    ).length;
+  // ========================================
+  // ORDER LIST QUERY
+  // ========================================
 
-    const custom = orders.filter(
-      (order) =>
-        order.customized &&
-        ["confirmed", "processing"].includes(order.status)
-    ).length;
+  const ordersQuery = useQuery({
+    queryKey: [
+      "admin-orders",
+      user?.uid,
+      page,
+      activeTab,
+      paymentFilter,
+      dateFilter,
+      debouncedSearch,
+    ],
 
-    const transit = orders.filter(
-      (order) => order.status === "shipped"
-    ).length;
+    enabled: allowed,
 
-    return { active, pending, custom, transit };
-  }, [orders]);
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        status: activeTab,
+        method: paymentFilter,
+        date: dateFilter,
+      });
 
-  const filteredOrders = useMemo(() => {
-    const term = search.trim().toLowerCase();
+      if (debouncedSearch) {
+        params.set("search", debouncedSearch);
+      }
 
-    return orders
-      .filter((order) => {
-        const searchMatch =
-          !term ||
-          order.id.toLowerCase().includes(term) ||
-          order.customer.toLowerCase().includes(term) ||
-          order.phone.includes(term) ||
-          order.products.some((product) =>
-            product.name.toLowerCase().includes(term)
-          );
+      return adminRequest(user, `/admin/orders?${params.toString()}`, signal);
+    },
 
-        const statusMatch =
-          activeTab === "all" || order.status === activeTab;
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
+  });
 
-        const paymentMatch =
-          paymentFilter === "all" ||
-          order.paymentMethod === paymentFilter;
+  // ========================================
+  // API DATA
+  // ========================================
 
-        let dateMatch = true;
+  const data = ordersQuery.data || {};
 
-        if (dateFilter !== "all") {
-          const date = new Date(order.date);
-          const now = new Date();
-          const today = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate()
-          );
+  const orders = Array.isArray(data.orders) ? data.orders : [];
 
-          if (dateFilter === "today") {
-            dateMatch = date >= today && date <= now;
-          } else if (dateFilter === "week") {
-            const start = new Date(today);
-            start.setDate(start.getDate() - 6);
-            dateMatch = date >= start && date <= now;
-          } else if (dateFilter === "month") {
-            dateMatch =
-              date.getMonth() === now.getMonth() &&
-              date.getFullYear() === now.getFullYear() &&
-              date <= now;
-          }
-        }
+  const stats = data.stats || {};
 
-        return (
-          searchMatch &&
-          statusMatch &&
-          paymentMatch &&
-          dateMatch
-        );
-      })
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [orders, search, activeTab, paymentFilter, dateFilter]);
+  const counts = data.counts || {};
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredOrders.length / perPage)
-  );
+  const pagination = data.pagination || {};
 
-  const currentPage = Math.min(page, totalPages);
+  const totalPages = Math.max(1, Number(pagination.totalPages) || 1);
 
-  const paginatedOrders = filteredOrders.slice(
-    (currentPage - 1) * perPage,
-    currentPage * perPage
-  );
-
-  const resetPage = () => setPage(1);
+  // ========================================
+  // RESET FILTERS
+  // ========================================
 
   const resetFilters = () => {
-    setActiveTab("all");
     setSearch("");
+    setDebouncedSearch("");
+    setActiveTab("all");
     setPaymentFilter("all");
     setDateFilter("all");
     setPage(1);
   };
 
+  // ========================================
+  // AUTH LOADING
+  // ========================================
+
+  if (checking) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-secondary" />
+
+        <p className="mt-3 text-sm text-muted">Admin Account যাচাই হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  // ========================================
+  // ACCESS DENIED
+  // ========================================
+
+  if (!allowed) {
+    return (
+      <div className="rounded-2xl bg-white px-5 py-16 text-center">
+        <AlertCircle size={36} className="mx-auto text-secondary" />
+
+        <h2 className="mt-4 text-lg font-bold text-primary">Access Denied</h2>
+
+        <p className="mt-2 text-sm text-muted">
+          শুধুমাত্র Active Admin অর্ডার ম্যানেজ করতে পারবেন।
+        </p>
+      </div>
+    );
+  }
+
+  // ========================================
+  // MAIN UI
+  // ========================================
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
-
+      {/* ================================== */}
       {/* PAGE HEADER */}
+      {/* ================================== */}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-primary sm:text-2xl">
+          <h1 className="text-xl font-bold text-primary sm:text-2xl">
             অর্ডার ম্যানেজমেন্ট
           </h1>
+
           <p className="mt-1 text-xs text-muted">
-            সকল অর্ডার, পেমেন্ট ও ডেলিভারি স্ট্যাটাস এক জায়গায়।
+            Guest ও Registered Customer-এর অর্ডার, পেমেন্ট এবং ডেলিভারি এক
+            জায়গায় পরিচালনা করুন।
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-semibold text-secondary shadow-sm">
-          <ShoppingBag size={15} />
-          {orders.length.toLocaleString("bn-BD")} Orders
-        </div>
+        <button
+          type="button"
+          onClick={() => ordersQuery.refetch()}
+          disabled={ordersQuery.isFetching}
+          className="inline-flex items-center gap-2 rounded-xl border border-base-300 bg-white px-4 py-2.5 text-xs font-bold text-secondary hover:bg-secondary/5 disabled:opacity-50"
+        >
+          <RefreshCcw
+            size={16}
+            className={ordersQuery.isFetching ? "animate-spin" : ""}
+          />
+          Refresh
+        </button>
       </div>
 
-      {/* 4 KPI CARDS — SCREENSHOT STYLE */}
+      {/* ================================== */}
+      {/* KPI CARDS */}
+      {/* ================================== */}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="মোট সক্রিয় অর্ডার"
-          subtitle="Active Lifecycle"
+          subtitle="Pending to Shipped"
           value={stats.active}
           icon={ShoppingBag}
           iconClass="bg-purple-100 text-primary"
-          note="চলমান অর্ডার"
-          noteClass="bg-purple-50 text-secondary"
         />
 
         <StatCard
           title="নতুন / পেন্ডিং অর্ডার"
-          subtitle="Pending Confirmation"
+          subtitle="Awaiting Confirmation"
           value={stats.pending}
           icon={ClipboardClock}
           iconClass="bg-amber-100 text-amber-800"
-          note="ভেরিফিকেশন আবশ্যক"
-          noteClass="bg-amber-100 text-amber-800"
         />
 
         <StatCard
           title="কাস্টমাইজড প্রস্তুত কাজ"
-          subtitle="Custom Engraving & Craft"
+          subtitle="Custom Orders in Progress"
           value={stats.custom}
           icon={Paintbrush}
           iconClass="bg-fuchsia-100 text-fuchsia-700"
-          note="ওয়ার্কশপে চলমান"
-          noteClass="bg-fuchsia-100 text-fuchsia-700"
         />
 
         <StatCard
-          title="কুরিয়ারে হস্তান্তর / পথে আছে"
-          subtitle="Dispatched & Transit"
+          title="কুরিয়ারে / পথে আছে"
+          subtitle="Shipped Orders"
           value={stats.transit}
           icon={Truck}
-          iconClass="bg-purple-100 text-primary"
-          note="Pathao & Steadfast"
-          noteClass="bg-purple-50 text-primary"
+          iconClass="bg-indigo-100 text-indigo-700"
         />
       </div>
 
-      {/* ORDER SECTION */}
-      <div className="overflow-hidden rounded-2xl border border-base-300/70 bg-white shadow-sm">
+      {/* ================================== */}
+      {/* ORDER MANAGEMENT SECTION */}
+      {/* ================================== */}
 
-        {/* TABLE HEADING */}
+      <section className="overflow-hidden rounded-2xl border border-base-300/70 bg-white shadow-sm">
+        {/* TABLE TITLE */}
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-4 sm:p-5">
           <div>
-            <h2 className="text-base font-extrabold text-primary">
-              সকল অর্ডার
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              অর্ডারের বিস্তারিত তথ্য ও বর্তমান অবস্থা
-            </p>
+            <h2 className="text-base font-bold text-primary">সকল অর্ডার</h2>
+
+            <p className="mt-1 text-xs text-muted">Order List & Management</p>
           </div>
 
           <span className="rounded-full bg-secondary/10 px-3 py-1.5 text-xs font-bold text-secondary">
-            {filteredOrders.length.toLocaleString("bn-BD")} Results
+            {Number(pagination.total || 0).toLocaleString("bn-BD")} Results
           </span>
         </div>
 
+        {/* ================================== */}
         {/* STATUS TABS */}
+        {/* ================================== */}
+
         <div className="flex gap-2 overflow-x-auto border-b border-base-300 px-4 py-3 sm:px-5">
-          {statusTabs.map(([value, label]) => (
+          {STATUS_TABS.map(([value, label]) => (
             <button
               key={value}
               type="button"
               onClick={() => {
                 setActiveTab(value);
-                resetPage();
+                setPage(1);
               }}
               className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                 activeTab === value
@@ -823,74 +602,74 @@ export default function AdminOrdersPage() {
               }`}
             >
               {label}
+
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                  activeTab === value
-                    ? "bg-white/20"
-                    : "bg-white"
+                  activeTab === value ? "bg-white/20" : "bg-white"
                 }`}
               >
-                {counts[value] || 0}
+                {Number(counts[value] || 0).toLocaleString("bn-BD")}
               </span>
             </button>
           ))}
         </div>
 
-        {/* FILTERS */}
+        {/* ================================== */}
+        {/* SEARCH + FILTERS */}
+        {/* ================================== */}
+
         <div className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1fr)_170px_150px_auto]">
+          {/* SEARCH */}
+
           <label className="flex h-11 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 focus-within:border-secondary">
             <Search size={17} className="shrink-0 text-muted" />
+
             <input
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                resetPage();
+              maxLength={100}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
               }}
               placeholder="Order ID, Customer, Phone, Product..."
-              className="w-full min-w-0 bg-transparent text-xs text-primary outline-none placeholder:text-muted"
+              className="w-full min-w-0 bg-transparent text-xs text-primary outline-none"
             />
           </label>
 
-          <div className="relative">
-            <select
-              value={paymentFilter}
-              onChange={(e) => {
-                setPaymentFilter(e.target.value);
-                resetPage();
-              }}
-              className="h-11 w-full appearance-none rounded-xl border border-base-300 bg-base-200 px-3 pr-9 text-xs font-semibold text-primary outline-none"
-            >
-              <option value="all">সব পেমেন্ট মাধ্যম</option>
-              <option value="bKash">bKash</option>
-              <option value="Nagad">Nagad</option>
-              <option value="Rocket">Rocket</option>
-              <option value="COD">COD</option>
-            </select>
-            <ChevronDown
-              size={15}
-              className="pointer-events-none absolute right-3 top-3.5 text-muted"
-            />
-          </div>
+          {/* PAYMENT FILTER */}
 
-          <div className="relative">
-            <select
-              value={dateFilter}
-              onChange={(e) => {
-                setDateFilter(e.target.value);
-                resetPage();
-              }}
-              className="h-11 w-full appearance-none rounded-xl border border-base-300 bg-base-200 px-3 pr-9 text-xs font-semibold text-primary outline-none"
-            >
-              <option value="all">সব তারিখ</option>
-              <option value="today">আজ</option>
-              <option value="week">শেষ ৭ দিন</option>
-              <option value="month">এই মাস</option>
-            </select>
-            <ChevronDown
-              size={15}
-              className="pointer-events-none absolute right-3 top-3.5 text-muted"
-            />
-          </div>
+          <select
+            value={paymentFilter}
+            onChange={(event) => {
+              setPaymentFilter(event.target.value);
+              setPage(1);
+            }}
+            className="h-11 w-full rounded-xl border border-base-300 bg-base-200 px-3 text-xs font-semibold text-primary outline-none"
+          >
+            <option value="all">সব পেমেন্ট মাধ্যম</option>
+            <option value="bkash">bKash</option>
+            <option value="nagad">Nagad</option>
+            <option value="rocket">Rocket</option>
+            <option value="cod">Cash on Delivery</option>
+          </select>
+
+          {/* DATE FILTER */}
+
+          <select
+            value={dateFilter}
+            onChange={(event) => {
+              setDateFilter(event.target.value);
+              setPage(1);
+            }}
+            className="h-11 w-full rounded-xl border border-base-300 bg-base-200 px-3 text-xs font-semibold text-primary outline-none"
+          >
+            <option value="all">সব তারিখ</option>
+            <option value="today">আজ</option>
+            <option value="week">শেষ ৭ দিন</option>
+            <option value="month">এই মাস</option>
+          </select>
+
+          {/* RESET */}
 
           <button
             type="button"
@@ -902,318 +681,423 @@ export default function AdminOrdersPage() {
           </button>
         </div>
 
-        {/* DESKTOP ZEBRA TABLE */}
-        <div className="hidden overflow-x-auto lg:block">
-          <table className="w-full min-w-[1050px] border-collapse text-left">
-            <thead>
-              <tr className="bg-[#f3edf5] text-[11px] font-bold text-primary">
-                <th className="px-4 py-4">অর্ডার ID / তারিখ</th>
-                <th className="px-4 py-4">কাস্টমার</th>
-                <th className="px-4 py-4">প্রোডাক্ট</th>
-                <th className="px-4 py-4">মোট / বকেয়া</th>
-                <th className="px-4 py-4">পেমেন্ট</th>
-                <th className="px-4 py-4">ডেলিভারি</th>
-                <th className="px-4 py-4">স্ট্যাটাস</th>
-                <th className="px-4 py-4 text-right">অ্যাকশন</th>
-              </tr>
-            </thead>
+        {/* ================================== */}
+        {/* ERROR STATE */}
+        {/* ================================== */}
 
-            <tbody>
-              {paginatedOrders.map((order, index) => {
-                const firstProduct = order.products[0];
-                const quantity = order.products.reduce(
-                  (sum, product) => sum + product.quantity,
-                  0
-                );
-
-                return (
-                  <tr
-                    key={order.id}
-                    className={`border-b border-base-300/50 transition hover:bg-purple-50/70 ${
-                      index % 2 === 0
-                        ? "bg-white"
-                        : "bg-[#faf7fb]"
-                    }`}
-                  >
-                    {/* ORDER */}
-                    <td className="px-4 py-4 align-middle">
-                      <p className="whitespace-nowrap text-sm font-semibold text-primary">
-                        #{order.id}
-                      </p>
-                      <p className="mt-1.5 flex items-center gap-1 text-[10px] text-muted">
-                        <CalendarDays size={12} />
-                        {dateText(order.date)}
-                      </p>
-                    </td>
-
-                    {/* CUSTOMER */}
-                    <td className="px-4 py-4 align-middle">
-                      <div className="flex items-start gap-2">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-                          <UserRound size={15} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="whitespace-nowrap text-xs font-bold text-primary">
-                            {order.customer}
-                          </p>
-                          <p className="mt-1 text-[10px] text-muted">
-                            {order.phone}
-                          </p>
-                          <p className="mt-1 max-w-36 truncate text-[10px] text-muted">
-                            {order.address}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* PRODUCT WITH IMAGE */}
-                    <td className="px-4 py-4 align-middle">
-                      <div className="flex min-w-[190px] items-center gap-2.5">
-                        <ProductThumb product={firstProduct} />
-
-                        <div className="min-w-0">
-                          <p className="line-clamp-2 max-w-44 text-xs font-bold leading-5 text-primary">
-                            {firstProduct?.name}
-                          </p>
-                          <p className="mt-1 text-[10px] text-muted">
-                            {firstProduct?.variant}
-                          </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1">
-                            <span className="rounded bg-base-200 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
-                              Qty: {quantity}
-                            </span>
-                            {order.customized && (
-                              <span className="rounded bg-fuchsia-50 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-700">
-                                Custom
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* AMOUNT */}
-                    <td className="px-4 py-4 align-middle">
-                      <p className="whitespace-nowrap text-sm font-extrabold text-primary">
-                        {money(order.total)}
-                      </p>
-                      <p className="mt-1 text-[10px] text-green-700">
-                        Paid: {money(order.advancePaid)}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold text-amber-700">
-                        Due: {money(order.codBalance)}
-                      </p>
-                    </td>
-
-                    {/* PAYMENT */}
-                    <td className="px-4 py-4 align-middle">
-                      <p className="mb-2 flex items-center gap-1 text-xs font-bold text-primary">
-                        <Wallet size={13} className="text-secondary" />
-                        {order.paymentMethod}
-                      </p>
-                      <Badge
-                        value={order.paymentStatus}
-                        type="payment"
-                      />
-                    </td>
-
-                    {/* DELIVERY */}
-                    <td className="px-4 py-4 align-middle">
-                      <p className="flex items-center gap-1 text-xs font-bold text-primary">
-                        <Truck size={13} className="text-secondary" />
-                        {order.courier || "Not Assigned"}
-                      </p>
-                      <p className="mt-1 max-w-28 truncate text-[10px] text-muted">
-                        {order.trackingId || "Tracking pending"}
-                      </p>
-                    </td>
-
-                    {/* ORDER STATUS */}
-                    <td className="px-4 py-4 align-middle">
-                      <Badge value={order.status} />
-                    </td>
-
-                    {/* ACTION */}
-                    <td className="px-4 py-4 text-right align-middle">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOrderId(order.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-secondary/15 bg-secondary/10 px-3 py-2 text-[11px] font-bold text-secondary transition hover:bg-secondary hover:text-white"
-                      >
-                        <Eye size={14} />
-                        Details
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* MOBILE + TABLET ORDER CARDS */}
-        <div className="space-y-3 p-3 sm:p-4 lg:hidden">
-          {paginatedOrders.map((order) => {
-            const firstProduct = order.products[0];
-
-            return (
-              <div
-                key={order.id}
-                className="overflow-hidden rounded-xl border border-base-300 bg-white"
-              >
-                <div className="flex items-start justify-between gap-2 bg-base-200/70 p-3">
-                  <div>
-                    <p className="text-xs font-extrabold text-primary">
-                      #{order.id}
-                    </p>
-                    <p className="mt-1 text-[10px] text-muted">
-                      {dateText(order.date)}
-                    </p>
-                  </div>
-                  <Badge value={order.status} />
-                </div>
-
-                <div className="space-y-3 p-3">
-                  <div className="flex items-center gap-3">
-                    <ProductThumb product={firstProduct} size="lg" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-primary">
-                        {firstProduct?.name}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted">
-                        {firstProduct?.variant}
-                      </p>
-                      <p className="mt-1 text-[10px] text-muted">
-                        {order.products.length} Product Line(s)
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 rounded-lg bg-base-200/60 p-3">
-                    <div>
-                      <p className="text-[10px] text-muted">কাস্টমার</p>
-                      <p className="mt-1 text-xs font-bold text-primary">
-                        {order.customer}
-                      </p>
-                      <p className="mt-1 text-[10px] text-muted">
-                        {order.phone}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted">সর্বমোট</p>
-                      <p className="mt-1 text-sm font-extrabold text-primary">
-                        {money(order.total)}
-                      </p>
-                      <p className="mt-1 text-[10px] text-amber-700">
-                        Due: {money(order.codBalance)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-primary">
-                        {order.paymentMethod}
-                      </span>
-                      <Badge
-                        value={order.paymentStatus}
-                        type="payment"
-                      />
-                    </div>
-                    <span className="text-[11px] text-muted">
-                      {order.courier || "Courier Pending"}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOrderId(order.id)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-white"
-                  >
-                    <Eye size={15} />
-                    বিস্তারিত দেখুন
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* EMPTY STATE */}
-        {paginatedOrders.length === 0 && (
-          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-            <div className="mb-3 flex size-14 items-center justify-center rounded-xl bg-secondary/10 text-secondary">
-              <ShoppingBag size={25} />
-            </div>
-            <h3 className="text-sm font-bold text-primary">
-              কোনো অর্ডার পাওয়া যায়নি
-            </h3>
-            <p className="mt-2 text-xs text-muted">
-              Filter পরিবর্তন করে আবার চেষ্টা করুন।
+        {ordersQuery.isError && (
+          <div
+            role="alert"
+            className="m-4 rounded-xl border border-red-200 bg-red-50 p-4"
+          >
+            <p className="text-sm text-red-700">
+              {ordersQuery.error?.message || "Order list load failed"}
             </p>
+
             <button
               type="button"
-              onClick={resetFilters}
-              className="mt-4 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white"
+              onClick={() => ordersQuery.refetch()}
+              className="mt-3 text-xs font-bold text-red-700 underline"
             >
-              Reset Filters
+              Try Again
             </button>
           </div>
         )}
 
-        {/* PAGINATION */}
-        {filteredOrders.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 p-4 sm:px-5">
-            <p className="text-xs text-muted">
-              Showing{" "}
-              {((currentPage - 1) * perPage + 1).toLocaleString("bn-BD")}
-              {"–"}
-              {Math.min(
-                currentPage * perPage,
-                filteredOrders.length
-              ).toLocaleString("bn-BD")}
-              {" of "}
-              {filteredOrders.length.toLocaleString("bn-BD")}
-            </p>
+        {/* ================================== */}
+        {/* ORDER LIST */}
+        {/* ================================== */}
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary disabled:opacity-40"
-              >
-                <ChevronLeft size={17} />
-              </button>
+        {ordersQuery.isPending ? (
+          <div className="flex min-h-64 flex-col items-center justify-center">
+            <Loader2 size={28} className="animate-spin text-secondary" />
 
-              <span className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white">
-                {currentPage.toLocaleString("bn-BD")} /{" "}
-                {totalPages.toLocaleString("bn-BD")}
-              </span>
-
-              <button
-                type="button"
-                disabled={currentPage === totalPages}
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
-                className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary disabled:opacity-40"
-              >
-                <ChevronRight size={17} />
-              </button>
-            </div>
+            <p className="mt-3 text-sm text-muted">Orders লোড হচ্ছে...</p>
           </div>
-        )}
-      </div>
+        ) : !ordersQuery.isError ? (
+          <>
+            {/* ================================== */}
+            {/* DESKTOP TABLE */}
+            {/* ================================== */}
 
-      {/* DETAILS MODAL */}
-      {selectedOrder && (
-        <OrderDetailsModal
-          order={selectedOrder}
-          onClose={() => setSelectedOrderId(null)}
-        />
-      )}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1180px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-base-300 bg-secondary/5 text-sm font-bold text-primary/60">
+                    <th className="px-5 py-3">Order / Date</th>
+
+                    <th className="px-5 py-3">Customer</th>
+
+                    <th className="px-5 py-3">Products</th>
+
+                    <th className="px-5 py-3">Amount</th>
+
+                    <th className="px-5 py-3">Payment</th>
+
+                    <th className="px-5 py-3">Delivery</th>
+
+                    <th className="px-5 py-3">Status</th>
+
+                    <th className="px-5 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-base-300/60">
+                  {orders.map((order, index) => {
+                    const payment = order.payment || {};
+                    const courier = order.courier || {};
+
+                    const customerName =
+                      order.customer?.name || "Unknown Customer";
+
+                    const customerPhone =
+                      order.customer?.phone || order.shipping?.phone || "—";
+
+                    const customerPhoto = order.guest
+                      ? ""
+                      : order.customerPhotoUrl ||
+                        order.customer?.photoUrl ||
+                        order.customer?.photoURL ||
+                        "";
+
+                    const detailsUrl = `/admin/orders/${encodeURIComponent(
+                      order._id,
+                    )}`;
+
+                    return (
+                      <tr
+                        key={order._id}
+                        className={`transition-colors hover:bg-secondary/5 ${
+                          index % 2 === 0 ? "bg-white" : "bg-[#faf7fb]"
+                        }`}
+                      >
+                        {/* ORDER + DATE */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <p
+                            title={order.orderNumber}
+                            className="max-w-[190px] truncate whitespace-nowrap text-xs font-bold text-primary"
+                          >
+                            #{order.orderNumber}
+                          </p>
+
+                          <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted">
+                            <CalendarDays size={13} />
+                            {dateText(order.createdAt)}
+                          </p>
+                        </td>
+
+                        {/* CUSTOMER */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <div className="flex min-w-[175px] items-center gap-2.5">
+                            <CustomerAvatar
+                              name={customerName}
+                              photoUrl={customerPhoto}
+                            />
+
+                            <div className="min-w-0 flex-1">
+                              <p
+                                title={customerName}
+                                className="max-w-[145px] truncate whitespace-nowrap text-sm font-semibold text-primary"
+                              >
+                                {customerName}
+                              </p>
+
+                              <p className="whitespace-nowrap text-[11px] text-muted">
+                                {customerPhone}
+                              </p>
+
+                              <p className="text-[11px] font-medium text-secondary">
+                                {order.guest
+                                  ? "Guest Customer"
+                                  : "Registered Customer"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* PRODUCTS */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <OrderProductPreview order={order} />
+                        </td>
+
+                        {/* AMOUNT */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <p className="whitespace-nowrap text-sm font-bold text-primary">
+                            {money(order.total)}
+                          </p>
+
+                          <p className="mt-1 whitespace-nowrap text-[11px] font-medium text-green-700">
+                            Paid: {money(payment.verifiedAmount)}
+                          </p>
+
+                          <p className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-amber-700">
+                            Due: {money(getDue(order))}
+                          </p>
+                        </td>
+
+                        {/* PAYMENT */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <p className="mb-1.5 whitespace-nowrap text-xs font-semibold text-primary">
+                            {METHOD_NAMES[payment.method] ||
+                              payment.method ||
+                              "—"}
+                          </p>
+
+                          <Badge value={payment.status} type="payment" />
+                        </td>
+
+                        {/* COURIER */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <div className="flex items-center gap-1.5">
+                            <Truck
+                              size={15}
+                              className="shrink-0 text-secondary"
+                            />
+
+                            <p
+                              title={courier.name || "Not Assigned"}
+                              className="max-w-[135px] truncate whitespace-nowrap text-xs font-semibold text-primary"
+                            >
+                              {courier.name || "Not Assigned"}
+                            </p>
+                          </div>
+
+                          <p
+                            title={courier.trackingNumber || "Tracking Pending"}
+                            className="mt-1 max-w-[145px] truncate text-[11px] text-muted"
+                          >
+                            {courier.trackingNumber || "Tracking Pending"}
+                          </p>
+                        </td>
+
+                        {/* ORDER STATUS */}
+
+                        <td className="px-5 py-2.5 align-middle">
+                          <Badge value={order.status} />
+                        </td>
+
+                        {/* DETAILS PAGE LINK */}
+
+                        <td className="px-5 py-2.5 text-right align-middle">
+                          <Link
+                            to={detailsUrl}
+                            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-secondary/10 px-3 py-2 text-xs font-semibold text-secondary transition hover:bg-secondary/20"
+                          >
+                            <Eye size={15} />
+                            Details
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ================================== */}
+            {/* MOBILE ORDER CARDS */}
+            {/* ================================== */}
+
+            <div className="space-y-3 p-3 sm:p-4 lg:hidden">
+              {orders.map((order) => {
+                const first = order.items?.[0];
+
+                const payment = order.payment || {};
+
+                const detailsUrl = `/admin/orders/${encodeURIComponent(
+                  order._id,
+                )}`;
+
+                return (
+                  <article
+                    key={order._id}
+                    className="overflow-hidden rounded-xl border border-base-300 bg-white"
+                  >
+                    {/* CARD HEADER */}
+
+                    <div className="flex items-start justify-between gap-2 bg-base-200/70 p-3">
+                      <div>
+                        <p className="break-all text-xs font-bold text-primary">
+                          {order.orderNumber}
+                        </p>
+
+                        <p className="mt-1 text-[11px] text-muted">
+                          {dateText(order.createdAt)}
+                        </p>
+                      </div>
+
+                      <Badge value={order.status} />
+                    </div>
+
+                    <div className="space-y-3 p-3">
+                      {/* PRODUCT */}
+
+                      <div className="flex items-center gap-3">
+                        <ProductThumb product={first} size="lg" />
+
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 text-xs font-bold text-primary">
+                            {first?.name || "অর্ডারের পণ্য"}
+                          </p>
+
+                          {first?.variantTitle && (
+                            <p className="mt-1 text-[11px] text-muted">
+                              {first.variantTitle}
+                            </p>
+                          )}
+
+                          <p className="mt-1 text-[11px] text-muted">
+                            মোট {getQuantity(order)} পিস
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* CUSTOMER + TOTAL */}
+
+                      <div className="grid grid-cols-2 gap-3 rounded-lg bg-base-200/60 p-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-muted">Customer</p>
+
+                          <p
+                            title={order.customer?.name}
+                            className="mt-1 truncate text-xs font-bold text-primary"
+                          >
+                            {order.customer?.name || "—"}
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-muted">
+                            {order.guest ? "Guest" : "Registered"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] text-muted">Order Total</p>
+
+                          <p className="mt-1 text-sm font-bold text-primary">
+                            {money(order.total)}
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-amber-700">
+                            Due: {money(getDue(order))}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* PAYMENT */}
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-primary">
+                          {METHOD_NAMES[payment.method] ||
+                            payment.method ||
+                            "—"}
+                        </span>
+
+                        <Badge value={payment.status} type="payment" />
+                      </div>
+
+                      {/* GO TO DETAILS PAGE */}
+
+                      <Link
+                        to={detailsUrl}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-white transition hover:bg-secondary"
+                      >
+                        <Eye size={15} />
+                        বিস্তারিত দেখুন
+                        <ArrowRight size={14} />
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* ================================== */}
+            {/* EMPTY STATE */}
+            {/* ================================== */}
+
+            {orders.length === 0 && (
+              <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+                <ShoppingBag size={30} className="text-secondary" />
+
+                <h3 className="mt-4 text-sm font-bold text-primary">
+                  কোনো অর্ডার পাওয়া যায়নি
+                </h3>
+
+                <p className="mt-2 text-xs text-muted">
+                  Filter পরিবর্তন করে দেখুন।
+                </p>
+
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="mt-4 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            )}
+
+            {/* ================================== */}
+            {/* PAGINATION */}
+            {/* ================================== */}
+
+            {Number(pagination.total) > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 p-4 sm:px-5">
+                <p className="text-xs text-muted">
+                  Showing {((page - 1) * PER_PAGE + 1).toLocaleString("bn-BD")}
+                  {"–"}
+                  {Math.min(
+                    page * PER_PAGE,
+                    Number(pagination.total),
+                  ).toLocaleString("bn-BD")}
+                  {" of "}
+                  {Number(pagination.total).toLocaleString("bn-BD")}
+                </p>
+
+                <div className="flex items-center gap-2">
+                  {/* PREVIOUS */}
+
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    aria-label="Previous page"
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary disabled:opacity-40"
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+
+                  {/* CURRENT PAGE */}
+
+                  <span className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white">
+                    {page} / {totalPages}
+                  </span>
+
+                  {/* NEXT */}
+
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    aria-label="Next page"
+                    onClick={() =>
+                      setPage((prev) => Math.min(totalPages, prev + 1))
+                    }
+                    className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary disabled:opacity-40"
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
+      </section>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import Swal from "sweetalert2";
@@ -24,13 +23,11 @@ import {
 import { AuthContext } from "../../providers/AuthProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3000"
 ).replace(/\/$/, "");
 
-const money = (value) =>
-  `৳${Number(value || 0).toLocaleString("bn-BD")}`;
+const money = (value) => `৳${Number(value || 0).toLocaleString("bn-BD")}`;
 
 const formatDate = (value) =>
   value
@@ -47,12 +44,8 @@ function StatCard({ title, value, icon: Icon, iconClass, note }) {
     <div className="rounded-2xl border border-base-300/80 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-primary">
-            {title}
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            {note}
-          </p>
+          <p className="text-sm font-semibold text-primary">{title}</p>
+          <p className="mt-1 text-xs text-muted">{note}</p>
         </div>
 
         <span
@@ -76,9 +69,7 @@ function ProductImage({ product }) {
 
   const image = product.images?.[0];
 
-  const src = typeof image === "string"
-    ? image
-    : image?.url || "";
+  const src = typeof image === "string" ? image : image?.url || "";
 
   useEffect(() => {
     setFailed(false);
@@ -112,11 +103,7 @@ function AvailabilityBadge({ available }) {
           : "border-red-200 bg-red-50 text-red-700"
       }`}
     >
-      {available ? (
-        <CheckCircle2 size={14} />
-      ) : (
-        <XCircle size={14} />
-      )}
+      {available ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
 
       {available ? "Available" : "Unavailable"}
     </span>
@@ -148,10 +135,7 @@ export default function AdminProductsPage() {
   const [updatingId, setUpdatingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const isAdmin =
-    !!user &&
-    role === "admin" &&
-    accountStatus === "active";
+  const isAdmin = !!user && role === "admin" && accountStatus === "active";
 
   // ================= SEARCH DEBOUNCE =================
 
@@ -183,27 +167,13 @@ export default function AdminProductsPage() {
   const categories = categoryData?.categories || [];
 
   const categoryMap = Object.fromEntries(
-    categories.map((item) => [item.id, item.name])
+    categories.map((item) => [item.id, item.name]),
   );
 
   // ================= GET ADMIN PRODUCTS =================
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: [
-      "adminProducts",
-      debouncedSearch,
-      status,
-      category,
-      sort,
-      page,
-    ],
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ["adminProducts", debouncedSearch, status, category, sort, page],
 
     enabled: isAdmin && !authLoading && !roleLoading,
 
@@ -226,15 +196,13 @@ export default function AdminProductsPage() {
             Authorization: `Bearer ${token}`,
           },
           signal,
-        }
+        },
       );
 
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.message || "Failed to fetch products"
-        );
+        throw new Error(result.message || "Failed to fetch products");
       }
 
       return result;
@@ -288,15 +256,13 @@ export default function AdminProductsPage() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ available }),
-        }
+        },
       );
 
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.message || "Availability update failed"
-        );
+        throw new Error(result.message || "Availability update failed");
       }
 
       await queryClient.invalidateQueries({
@@ -314,7 +280,6 @@ export default function AdminProductsPage() {
         timer: 2000,
         timerProgressBar: true,
       });
-
     } catch (error) {
       Swal.fire({
         title: error.message,
@@ -325,7 +290,6 @@ export default function AdminProductsPage() {
         timer: 2500,
         timerProgressBar: true,
       });
-
     } finally {
       setUpdatingId(null);
     }
@@ -354,22 +318,17 @@ export default function AdminProductsPage() {
     try {
       const token = await user.getIdToken();
 
-      const res = await fetch(
-        `${API_URL}/admin/products/${product._id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_URL}/admin/products/${product._id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.message || "Product delete failed"
-        );
+        throw new Error(result.message || "Product delete failed");
       }
 
       // If last product on the page is deleted,
@@ -391,7 +350,6 @@ export default function AdminProductsPage() {
         timer: 2000,
         timerProgressBar: true,
       });
-
     } catch (error) {
       Swal.fire({
         title: error.message,
@@ -402,7 +360,6 @@ export default function AdminProductsPage() {
         timer: 2500,
         timerProgressBar: true,
       });
-
     } finally {
       setDeletingId(null);
     }
@@ -430,12 +387,10 @@ export default function AdminProductsPage() {
 
   const pageNumbers = Array.from(
     { length: totalPages },
-    (_, index) => index + 1
+    (_, index) => index + 1,
   ).filter(
     (number) =>
-      number === 1 ||
-      number === totalPages ||
-      Math.abs(number - page) <= 1
+      number === 1 || number === totalPages || Math.abs(number - page) <= 1,
   );
 
   // ================= AUTH LOADING =================
@@ -443,10 +398,7 @@ export default function AdminProductsPage() {
   if (authLoading || roleLoading) {
     return (
       <div className="flex min-h-80 items-center justify-center">
-        <LoaderCircle
-          size={30}
-          className="animate-spin text-secondary"
-        />
+        <LoaderCircle size={30} className="animate-spin text-secondary" />
       </div>
     );
   }
@@ -454,10 +406,7 @@ export default function AdminProductsPage() {
   if (!isAdmin) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
-        <ShieldCheck
-          size={30}
-          className="mx-auto text-red-500"
-        />
+        <ShieldCheck size={30} className="mx-auto text-red-500" />
         <p className="mt-3 text-sm font-bold text-red-700">
           এই পেজটি শুধু Admin-এর জন্য।
         </p>
@@ -467,16 +416,13 @@ export default function AdminProductsPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
-
       {/* ================= PAGE HEADER ================= */}
 
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-[#4b1558] to-secondary p-5 text-white shadow-md sm:p-6">
-
         <div className="absolute -right-10 -top-14 size-44 rounded-full bg-white/5" />
         <div className="absolute bottom-0 right-32 size-24 rounded-full bg-gold-soft/10 blur-xl" />
 
         <div className="relative flex flex-wrap items-center justify-between gap-5">
-
           <div>
             <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-gold-soft">
               <Layers3 size={14} />
@@ -488,7 +434,8 @@ export default function AdminProductsPage() {
             </h1>
 
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">
-              আপনার স্টোরের প্রোডাক্ট, মূল্য, availability এবং featured collection পরিচালনা করুন।
+              আপনার স্টোরের প্রোডাক্ট, মূল্য, availability এবং featured
+              collection পরিচালনা করুন।
             </p>
           </div>
 
@@ -542,7 +489,6 @@ export default function AdminProductsPage() {
       {/* ================= PRODUCT LIST ================= */}
 
       <section className="overflow-hidden rounded-2xl border border-base-300/80 bg-white shadow-sm">
-
         {/* Section Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-4 sm:p-5">
           <div>
@@ -557,10 +503,7 @@ export default function AdminProductsPage() {
 
           <div className="flex items-center gap-3">
             {isFetching && (
-              <LoaderCircle
-                size={17}
-                className="animate-spin text-secondary"
-              />
+              <LoaderCircle size={17} className="animate-spin text-secondary" />
             )}
 
             <button
@@ -610,7 +553,6 @@ export default function AdminProductsPage() {
         {/* ================= SEARCH + FILTERS ================= */}
 
         <div className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1fr)_220px_190px_auto]">
-
           {/* Search */}
           <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 focus-within:border-secondary focus-within:bg-white">
             <Search size={19} className="shrink-0 text-secondary" />
@@ -647,10 +589,7 @@ export default function AdminProductsPage() {
 
           {/* Sorting */}
           <label className="flex h-11 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3">
-            <ArrowUpDown
-              size={16}
-              className="shrink-0 text-secondary"
-            />
+            <ArrowUpDown size={16} className="shrink-0 text-secondary" />
 
             <select
               value={sort}
@@ -689,22 +628,15 @@ export default function AdminProductsPage() {
             </span>
           </p>
 
-          <span className="text-xs text-muted">
-            প্রতি পেজে ১০টি প্রোডাক্ট
-          </span>
+          <span className="text-xs text-muted">প্রতি পেজে ১০টি প্রোডাক্ট</span>
         </div>
 
         {/* ================= LOADING ================= */}
 
         {isLoading && (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3">
-            <LoaderCircle
-              size={32}
-              className="animate-spin text-secondary"
-            />
-            <p className="text-sm text-muted">
-              প্রোডাক্ট লোড হচ্ছে...
-            </p>
+            <LoaderCircle size={32} className="animate-spin text-secondary" />
+            <p className="text-sm text-muted">প্রোডাক্ট লোড হচ্ছে...</p>
           </div>
         )}
 
@@ -735,7 +667,6 @@ export default function AdminProductsPage() {
             {/* Desktop Table */}
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[1010px] border-collapse text-left">
-
                 <thead className="bg-[#f3ecf6]">
                   <tr className="text-xs font-bold text-primary">
                     <th className="px-4 py-4">প্রোডাক্ট</th>
@@ -753,9 +684,7 @@ export default function AdminProductsPage() {
                     <tr
                       key={product._id}
                       className={`border-b border-base-300/60 transition hover:bg-secondary/5 ${
-                        index % 2 === 0
-                          ? "bg-white"
-                          : "bg-[#fbf8fc]"
+                        index % 2 === 0 ? "bg-white" : "bg-[#fbf8fc]"
                       }`}
                     >
                       {/* Product */}
@@ -791,10 +720,7 @@ export default function AdminProductsPage() {
                       {/* Price */}
                       <td className="px-4 py-4">
                         <p className="whitespace-nowrap text-sm font-bold text-primary">
-                          {money(
-                            product.salePrice ??
-                              product.regularPrice
-                          )}
+                          {money(product.salePrice ?? product.regularPrice)}
                         </p>
 
                         {product.salePrice != null && (
@@ -812,10 +738,7 @@ export default function AdminProductsPage() {
                             checked={product.available === true}
                             disabled={!!updatingId || !!deletingId}
                             onChange={(event) =>
-                              toggleAvailability(
-                                product,
-                                event.target.checked
-                              )
+                              toggleAvailability(product, event.target.checked)
                             }
                             aria-label={`Availability for ${product.name}`}
                             className="toggle toggle-sm toggle-success"
@@ -850,9 +773,7 @@ export default function AdminProductsPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              navigate(
-                                `/admin/products/edit/${product._id}`
-                              )
+                              navigate(`/admin/products/edit/${product._id}`)
                             }
                             className="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 px-3 py-2 text-sm font-medium text-secondary transition hover:bg-secondary hover:text-white"
                           >
@@ -900,37 +821,27 @@ export default function AdminProductsPage() {
                         {product.name}
                       </p>
 
-                      <p className="mt-1 text-xs text-muted">
-                        {product.sku}
-                      </p>
+                      <p className="mt-1 text-xs text-muted">{product.sku}</p>
 
                       <p className="mt-1 text-xs text-muted">
                         {categoryMap[product.categoryId] || "—"}
                       </p>
 
                       <p className="mt-2 text-sm font-bold text-secondary">
-                        {money(
-                          product.salePrice ??
-                            product.regularPrice
-                        )}
+                        {money(product.salePrice ?? product.regularPrice)}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-200 p-3">
-                    <AvailabilityBadge
-                      available={product.available === true}
-                    />
+                    <AvailabilityBadge available={product.available === true} />
 
                     <input
                       type="checkbox"
                       checked={product.available === true}
                       disabled={!!updatingId || !!deletingId}
                       onChange={(event) =>
-                        toggleAvailability(
-                          product,
-                          event.target.checked
-                        )
+                        toggleAvailability(product, event.target.checked)
                       }
                       className="toggle toggle-sm toggle-success"
                       aria-label={`Availability for ${product.name}`}
@@ -948,9 +859,7 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        navigate(
-                          `/admin/products/edit/${product._id}`
-                        )
+                        navigate(`/admin/products/edit/${product._id}`)
                       }
                       className="flex items-center justify-center gap-2 rounded-lg bg-secondary/10 px-3 py-2.5 text-sm font-medium text-secondary"
                     >
@@ -1003,13 +912,11 @@ export default function AdminProductsPage() {
             {pagination.total > 0 && (
               <div className="flex flex-col gap-3 border-t border-base-300 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <p className="text-sm text-muted">
-                  {(
-                    (pagination.page - 1) * 10 + 1
-                  ).toLocaleString("bn-BD")}
+                  {((pagination.page - 1) * 10 + 1).toLocaleString("bn-BD")}
                   {" – "}
                   {Math.min(
                     pagination.page * 10,
-                    pagination.total
+                    pagination.total,
                   ).toLocaleString("bn-BD")}
                   {" / "}
                   {pagination.total.toLocaleString("bn-BD")}
@@ -1020,9 +927,7 @@ export default function AdminProductsPage() {
                   <button
                     type="button"
                     disabled={!pagination.hasPreviousPage}
-                    onClick={() =>
-                      setPage((prev) => Math.max(1, prev - 1))
-                    }
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                     className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary hover:bg-base-200 disabled:opacity-40"
                   >
                     <ChevronLeft size={18} />
@@ -1030,12 +935,9 @@ export default function AdminProductsPage() {
 
                   {pageNumbers.map((number, index) => (
                     <div key={number} className="flex items-center gap-1.5">
-                      {index > 0 &&
-                        number - pageNumbers[index - 1] > 1 && (
-                          <span className="px-1 text-sm text-muted">
-                            ...
-                          </span>
-                        )}
+                      {index > 0 && number - pageNumbers[index - 1] > 1 && (
+                        <span className="px-1 text-sm text-muted">...</span>
+                      )}
 
                       <button
                         type="button"
@@ -1054,9 +956,7 @@ export default function AdminProductsPage() {
                   <button
                     type="button"
                     disabled={!pagination.hasNextPage}
-                    onClick={() =>
-                      setPage((prev) => prev + 1)
-                    }
+                    onClick={() => setPage((prev) => prev + 1)}
                     className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary hover:bg-base-200 disabled:opacity-40"
                   >
                     <ChevronRight size={18} />
