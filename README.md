@@ -27,7 +27,7 @@ The application uses a **React storefront** connected to a separately deployable
 
 ## 🖼️ Screenshot
 
-![SokhBilash gift moments UI](screenshots/sokhbilash.png)
+![SokhBilash Storefront](./screenshots/screenshot-sokhbilash.png)
 
 *Actual development screenshot of a responsive storefront section.*
 
