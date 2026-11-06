@@ -14,8 +14,6 @@ import {
   Package,
   Truck,
   Users,
-  ChartNoAxesCombined,
-  Settings,
   Menu,
   X,
   LogOut,
@@ -24,7 +22,6 @@ import {
   LoaderCircle,
   Store,
   ShieldCheck,
-  UserRound,
 } from "lucide-react";
 
 import Swal from "sweetalert2";
@@ -69,7 +66,6 @@ const menus = [
     path: "/admin/customers",
     icon: Users,
   },
-
 ];
 
 // ========================================
@@ -268,7 +264,7 @@ export default function AdminLayout() {
 
           <div className="flex h-20 shrink-0 items-center justify-between border-b border-base-300/70 px-5">
             <Link
-              to="/admin"
+              to="/"
               onClick={() => setSidebarOpen(false)}
               className="flex min-w-0 items-center gap-3"
               aria-label="SokhBilash Admin Dashboard"
