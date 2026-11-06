@@ -1,18 +1,13 @@
-
 import { useContext, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getAuth,
-  updateProfile as firebaseUpdateProfile,
-} from "firebase/auth";
+import { getAuth, updateProfile as firebaseUpdateProfile } from "firebase/auth";
 import Swal from "sweetalert2";
 
 import {
   ArrowLeft,
   CalendarDays,
   Camera,
-  CheckCircle2,
   CircleAlert,
   Edit3,
   Loader2,
@@ -38,11 +33,7 @@ const auth = getAuth(app);
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
-const ALLOWED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const fieldClass =
   "mt-2 w-full rounded-xl border border-base-300 bg-base-200/40 px-3.5 py-3 text-sm text-primary outline-none focus:border-secondary focus:bg-white focus:ring-2 focus:ring-secondary/10 disabled:opacity-60";
@@ -145,14 +136,8 @@ function validateForm(form) {
     return "সঠিক ১১ সংখ্যার মোবাইল নম্বর লিখুন।";
   }
 
-  if (
-    form.division ||
-    form.district ||
-    form.address.trim()
-  ) {
-    if (
-      !DIVISIONS[form.division]?.includes(form.district)
-    ) {
+  if (form.division || form.district || form.address.trim()) {
+    if (!DIVISIONS[form.division]?.includes(form.district)) {
       return "সঠিক বিভাগ ও জেলা নির্বাচন করুন।";
     }
 
@@ -183,20 +168,16 @@ async function uploadImageToImgBB(file) {
     {
       method: "POST",
       body: formData,
-    }
+    },
   );
 
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok || !result.success) {
-    throw new Error(
-      result?.error?.message ||
-      "ImgBB-তে ছবি আপলোড করা যায়নি।"
-    );
+    throw new Error(result?.error?.message || "ImgBB-তে ছবি আপলোড করা যায়নি।");
   }
 
-  const imageUrl =
-    result.data?.display_url || result.data?.url;
+  const imageUrl = result.data?.display_url || result.data?.url;
 
   if (!imageUrl) {
     throw new Error("ImgBB থেকে Image URL পাওয়া যায়নি।");
@@ -213,8 +194,7 @@ function Avatar({ src, name }) {
   const [brokenSrc, setBrokenSrc] = useState("");
 
   const fallback =
-    Array.from(String(name || "").trim())[0]?.toUpperCase() ||
-    "U";
+    Array.from(String(name || "").trim())[0]?.toUpperCase() || "U";
 
   return (
     <div className="flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-3xl border-[5px] border-white bg-[#FFD700] text-[#310039] shadow-lg sm:size-32">
@@ -227,9 +207,7 @@ function Avatar({ src, name }) {
           onError={() => setBrokenSrc(src)}
         />
       ) : (
-        <span className="text-5xl font-bold">
-          {fallback}
-        </span>
+        <span className="text-5xl font-bold">{fallback}</span>
       )}
     </div>
   );
@@ -247,13 +225,9 @@ function SectionHeader({ icon: Icon, title, subtitle }) {
       </span>
 
       <div>
-        <h2 className="text-sm font-bold text-primary sm:text-base">
-          {title}
-        </h2>
+        <h2 className="text-sm font-bold text-primary sm:text-base">{title}</h2>
 
-        <p className="mt-1 text-[11px] text-muted">
-          {subtitle}
-        </p>
+        <p className="mt-1 text-[11px] text-muted">{subtitle}</p>
       </div>
     </div>
   );
@@ -284,11 +258,7 @@ function FormField({ icon: Icon, title, hint, children }) {
 
       {children}
 
-      {hint && (
-        <p className="mt-1.5 text-[11px] text-muted">
-          {hint}
-        </p>
-      )}
+      {hint && <p className="mt-1.5 text-[11px] text-muted">{hint}</p>}
     </div>
   );
 }
@@ -313,9 +283,7 @@ function ProfileContent({
 
   // Restore a draft after temporary React remount.
   const [draft, setDraft] = useState(
-    () =>
-      (canEdit && profileDraftCache.get(draftKey)) ||
-      createDraft(profile)
+    () => (canEdit && profileDraftCache.get(draftKey)) || createDraft(profile),
   );
 
   const draftRef = useRef(draft);
@@ -324,13 +292,7 @@ function ProfileContent({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const {
-    editing,
-    form,
-    photoFile,
-    previewUrl,
-    removePhoto,
-  } = draft;
+  const { editing, form, photoFile, previewUrl, removePhoto } = draft;
 
   // ======================================
   // UPDATE DRAFT
@@ -533,11 +495,7 @@ function ProfileContent({
   async function handleSave(event) {
     event.preventDefault();
 
-    if (
-      !canEdit ||
-      !draftRef.current.editing ||
-      savingRef.current
-    ) {
+    if (!canEdit || !draftRef.current.editing || savingRef.current) {
       return;
     }
 
@@ -559,9 +517,7 @@ function ProfileContent({
     try {
       // Verify account ownership
       if (auth.currentUser?.uid !== userUid) {
-        throw new Error(
-          "Login session পরিবর্তিত হয়েছে। আবার লগইন করুন।"
-        );
+        throw new Error("Login session পরিবর্তিত হয়েছে। আবার লগইন করুন।");
       }
 
       // ----------------------------------
@@ -578,9 +534,7 @@ function ProfileContent({
         if (current.uploadedPhotoUrl) {
           photoUrl = current.uploadedPhotoUrl;
         } else {
-          photoUrl = await uploadImageToImgBB(
-            current.photoFile
-          );
+          photoUrl = await uploadImageToImgBB(current.photoFile);
 
           updateDraft({
             ...draftRef.current,
@@ -608,9 +562,7 @@ function ProfileContent({
       });
 
       if (!response?.profile) {
-        throw new Error(
-          "Server থেকে updated profile পাওয়া যায়নি।"
-        );
+        throw new Error("Server থেকে updated profile পাওয়া যায়নি।");
       }
 
       databaseSaved = true;
@@ -625,16 +577,10 @@ function ProfileContent({
       // STEP 3: REACT QUERY UPDATE
       // ----------------------------------
 
-      queryClient.setQueryData(
-        queryKey,
-        updatedProfile
-      );
+      queryClient.setQueryData(queryKey, updatedProfile);
 
       void queryClient.invalidateQueries({
-        queryKey: [
-          "checkout-shipping-profile",
-          userUid,
-        ],
+        queryKey: ["checkout-shipping-profile", userUid],
       });
 
       // ----------------------------------
@@ -653,7 +599,6 @@ function ProfileContent({
       clearDraft(updatedProfile);
 
       toast("প্রোফাইল সফলভাবে আপডেট হয়েছে!");
-
     } catch (err) {
       console.error("Profile update error:", err);
 
@@ -668,7 +613,6 @@ function ProfileContent({
       // Important:
       // Editing remains active on failure.
       // Selected photo and form are preserved.
-
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -679,9 +623,7 @@ function ProfileContent({
   // DISPLAY VALUES
   // ======================================
 
-  const displayName = editing
-    ? form.displayName
-    : profile.displayName;
+  const displayName = editing ? form.displayName : profile.displayName;
 
   const avatarUrl = editing
     ? removePhoto
@@ -690,13 +632,10 @@ function ProfileContent({
     : profile.photoUrl || "";
 
   const hasAddress = Boolean(
-    profile.division &&
-    profile.district &&
-    profile.address
+    profile.division && profile.district && profile.address,
   );
 
-  const deliveryFee =
-    profile.district === "নরসিংদী" ? 80 : 130;
+  const deliveryFee = profile.district === "নরসিংদী" ? 80 : 130;
 
   // ======================================
   // UI
@@ -705,45 +644,34 @@ function ProfileContent({
   return (
     <main className="page-bg min-h-screen pb-12">
       <div className="page-container pt-6 sm:pt-9">
-
         {/* BREADCRUMB */}
 
         <nav
           aria-label="Breadcrumb"
           className="mb-5 flex items-center gap-2 text-xs text-muted"
         >
-          <Link
-            to="/"
-            className="hover:text-secondary"
-          >
+          <Link to="/" className="hover:text-secondary">
             হোম
           </Link>
 
           <span>/</span>
 
           <span className="font-semibold text-secondary">
-            {isAdminView
-              ? "User Profile"
-              : "আমার প্রোফাইল"}
+            {isAdminView ? "User Profile" : "আমার প্রোফাইল"}
           </span>
         </nav>
 
         {/* PAGE HEADING */}
 
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-secondary">
               <ShieldCheck size={14} />
-              {isAdminView
-                ? "ACCOUNT DETAILS"
-                : "MY ACCOUNT"}
+              {isAdminView ? "ACCOUNT DETAILS" : "MY ACCOUNT"}
             </p>
 
             <h1 className="text-2xl font-bold text-primary sm:text-3xl">
-              {isAdminView
-                ? "ইউজার প্রোফাইল"
-                : "আমার প্রোফাইল"}
+              {isAdminView ? "ইউজার প্রোফাইল" : "আমার প্রোফাইল"}
             </h1>
 
             <p className="mt-2 text-xs text-muted sm:text-sm">
@@ -775,23 +703,17 @@ function ProfileContent({
 
         {isAdminView && (
           <div className="mb-5 flex items-start gap-3 rounded-xl border border-secondary/15 bg-secondary/5 p-4 text-xs leading-5 text-muted">
-            <LockKeyhole
-              size={17}
-              className="shrink-0 text-secondary"
-            />
-            Admin অন্য ইউজারের প্রোফাইল দেখতে পারবেন,
-            পরিবর্তন করতে পারবেন না।
+            <LockKeyhole size={17} className="shrink-0 text-secondary" />
+            Admin অন্য ইউজারের প্রোফাইল দেখতে পারবেন, পরিবর্তন করতে পারবেন না।
           </div>
         )}
 
         {/* PROFILE HEADER */}
 
         <section className="section-card overflow-hidden">
-
           {/* BANNER */}
 
           <div className="relative h-40 overflow-hidden bg-[#310039] sm:h-44">
-
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 bg-repeat opacity-30"
@@ -803,7 +725,6 @@ function ProfileContent({
             />
 
             <div className="relative flex items-start justify-between gap-3 px-5 pt-5 sm:px-7 sm:pt-6">
-
               <div>
                 <p className="text-xs font-bold tracking-[0.15em] text-[#FFE16D]">
                   শখবিলাস
@@ -817,35 +738,24 @@ function ProfileContent({
               <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-[10px] font-semibold text-white">
                 MEMBER PROFILE
               </span>
-
             </div>
           </div>
 
           {/* AVATAR + IMAGE UPLOAD */}
 
           <div className="relative px-4 pb-6 sm:px-7">
-
             <div className="-mt-14 flex flex-wrap items-end justify-between gap-4">
-
               <div className="flex min-w-0 flex-wrap items-end gap-3 sm:gap-4">
-
-                <Avatar
-                  src={avatarUrl}
-                  name={displayName}
-                />
+                <Avatar src={avatarUrl} name={displayName} />
 
                 {/* UPLOAD BUTTON */}
 
                 {editing && canEdit && (
                   <div className="mb-1 flex flex-col items-start gap-2">
-
                     <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-secondary/20 bg-white px-4 py-2.5 text-xs font-semibold text-secondary shadow-sm transition hover:border-secondary">
-
                       <Camera size={16} />
 
-                      {photoFile
-                        ? "Change Photo"
-                        : "Upload Photo"}
+                      {photoFile ? "Change Photo" : "Upload Photo"}
 
                       <input
                         type="file"
@@ -856,8 +766,6 @@ function ProfileContent({
                         className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                       />
                     </label>
-
-                   
 
                     {/* PHOTO REMOVE / CANCEL */}
 
@@ -873,26 +781,23 @@ function ProfileContent({
                       </button>
                     )}
 
-                    {!removePhoto &&
-                      !photoFile &&
-                      !!profile.photoUrl && (
-                        <button
-                          type="button"
-                          onClick={handleRemovePhoto}
-                          disabled={saving}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:underline"
-                        >
-                          <Trash2 size={13} />
-                          Remove Photo
-                        </button>
-                      )}
+                    {!removePhoto && !photoFile && !!profile.photoUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:underline"
+                      >
+                        <Trash2 size={13} />
+                        Remove Photo
+                      </button>
+                    )}
 
                     {(photoFile || removePhoto) && (
                       <span className="text-[10px] font-medium text-emerald-700">
                         Save Changes দিলে ছবি আপডেট হবে।
                       </span>
                     )}
-
                   </div>
                 )}
               </div>
@@ -900,7 +805,6 @@ function ProfileContent({
               {/* ROLE AND STATUS */}
 
               <div className="mb-1 flex flex-wrap gap-2">
-
                 <span className="rounded-full border border-secondary/20 bg-secondary/5 px-3 py-1.5 text-[11px] font-semibold capitalize text-secondary">
                   {profile.role || "customer"}
                 </span>
@@ -914,7 +818,6 @@ function ProfileContent({
                 >
                   {profile.status || "—"}
                 </span>
-
               </div>
             </div>
 
@@ -932,26 +835,18 @@ function ProfileContent({
             {/* ACCOUNT META */}
 
             <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 border-t border-base-300/70 pt-4 text-xs text-muted">
-
               <span className="inline-flex items-center gap-2">
-                <CalendarDays
-                  size={15}
-                  className="text-secondary"
-                />
+                <CalendarDays size={15} className="text-secondary" />
                 Joined {formatDate(profile.createdAt)}
               </span>
 
               <span className="inline-flex items-center gap-2">
-                <ShieldCheck
-                  size={15}
-                  className="text-secondary"
-                />
+                <ShieldCheck size={15} className="text-secondary" />
 
                 {profile.role === "admin"
                   ? "Administrator Account"
                   : "Registered Customer"}
               </span>
-
             </div>
           </div>
         </section>
@@ -963,10 +858,7 @@ function ProfileContent({
             role="alert"
             className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-xs leading-6 text-red-700"
           >
-            <CircleAlert
-              size={17}
-              className="shrink-0"
-            />
+            <CircleAlert size={17} className="shrink-0" />
 
             {error}
           </div>
@@ -979,11 +871,9 @@ function ProfileContent({
           noValidate
           className="mt-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-12"
         >
-
           {/* PERSONAL INFORMATION */}
 
           <section className="section-card min-w-0 p-4 sm:p-6 lg:col-span-7">
-
             <SectionHeader
               icon={UserRound}
               title="ব্যক্তিগত তথ্য"
@@ -992,7 +882,6 @@ function ProfileContent({
 
             {!editing ? (
               <div className="grid gap-3 sm:grid-cols-2">
-
                 <InfoItem
                   icon={UserRound}
                   label="পূর্ণ নাম"
@@ -1014,35 +903,22 @@ function ProfileContent({
                 </div>
 
                 <p className="flex items-start gap-2 rounded-xl bg-secondary/5 p-3.5 text-xs leading-5 text-muted sm:col-span-2">
-                  <LockKeyhole
-                    size={15}
-                    className="shrink-0 text-secondary"
-                  />
+                  <LockKeyhole size={15} className="shrink-0 text-secondary" />
                   Email Address পরিবর্তন করা যাবে না।
                 </p>
-
               </div>
             ) : (
               <div className="space-y-4">
-
                 {/* NAME */}
 
-                <FormField
-                  icon={UserRound}
-                  title="পূর্ণ নাম"
-                >
+                <FormField icon={UserRound} title="পূর্ণ নাম">
                   <input
                     type="text"
                     autoComplete="name"
                     maxLength={100}
                     value={form.displayName}
                     disabled={saving}
-                    onChange={(e) =>
-                      updateField(
-                        "displayName",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => updateField("displayName", e.target.value)}
                     placeholder="আপনার সম্পূর্ণ নাম"
                     className={fieldClass}
                   />
@@ -1072,10 +948,7 @@ function ProfileContent({
 
                 {/* PHONE */}
 
-                <FormField
-                  icon={Phone}
-                  title="মোবাইল নম্বর"
-                >
+                <FormField icon={Phone} title="মোবাইল নম্বর">
                   <input
                     type="tel"
                     inputMode="numeric"
@@ -1086,16 +959,13 @@ function ProfileContent({
                     onChange={(e) =>
                       updateField(
                         "phone",
-                        e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 11)
+                        e.target.value.replace(/\D/g, "").slice(0, 11),
                       )
                     }
                     placeholder="01712345678"
                     className={fieldClass}
                   />
                 </FormField>
-
               </div>
             )}
           </section>
@@ -1103,7 +973,6 @@ function ProfileContent({
           {/* DELIVERY ADDRESS */}
 
           <section className="section-card min-w-0 p-4 sm:p-6 lg:col-span-5">
-
             <SectionHeader
               icon={Truck}
               title="ডেলিভারি ঠিকানা"
@@ -1113,11 +982,8 @@ function ProfileContent({
             {!editing ? (
               hasAddress ? (
                 <div className="space-y-4">
-
                   <div className="rounded-2xl border border-secondary/15 bg-secondary/5 p-4">
-
                     <div className="flex items-center gap-3">
-
                       <span className="flex size-10 items-center justify-center rounded-xl bg-white text-secondary">
                         <MapPin size={19} />
                       </span>
@@ -1131,7 +997,6 @@ function ProfileContent({
                           Checkout-এর জন্য সংরক্ষিত
                         </p>
                       </div>
-
                     </div>
 
                     <p className="mt-4 whitespace-pre-wrap break-words border-t border-secondary/10 pt-4 text-sm leading-7 text-primary">
@@ -1141,40 +1006,28 @@ function ProfileContent({
                     <p className="mt-2 text-xs font-semibold text-secondary">
                       {profile.district}, {profile.division}
                     </p>
-
                   </div>
 
                   <p className="flex items-start gap-3 rounded-xl bg-base-200/60 p-3.5 text-xs leading-6 text-muted">
-                    <Truck
-                      size={17}
-                      className="shrink-0 text-secondary"
-                    />
+                    <Truck size={17} className="shrink-0 text-secondary" />
 
                     <span>
                       আনুমানিক ডেলিভারি চার্জ{" "}
-                      <strong className="text-secondary">
-                        ৳{deliveryFee}
-                      </strong>
+                      <strong className="text-secondary">৳{deliveryFee}</strong>
                       । চূড়ান্ত চার্জ Checkout-এ নিশ্চিত হবে।
                     </span>
                   </p>
-
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-secondary/25 bg-secondary/5 p-7 text-center">
-
-                  <MapPin
-                    size={25}
-                    className="mx-auto text-secondary"
-                  />
+                  <MapPin size={25} className="mx-auto text-secondary" />
 
                   <p className="mt-3 text-sm font-bold text-primary">
                     ডেলিভারি ঠিকানা নেই
                   </p>
 
                   <p className="mt-2 text-xs leading-6 text-muted">
-                    ঠিকানা Save করলে পরবর্তী Checkout-এ
-                    ব্যবহার করতে পারবেন।
+                    ঠিকানা Save করলে পরবর্তী Checkout-এ ব্যবহার করতে পারবেন।
                   </p>
 
                   {!isAdminView && (
@@ -1186,23 +1039,18 @@ function ProfileContent({
                       ঠিকানা যোগ করুন
                     </button>
                   )}
-
                 </div>
               )
             ) : (
               <div className="space-y-4">
-
                 <p className="rounded-xl bg-secondary/5 p-3 text-xs leading-5 text-muted">
-                  এখানে দেওয়া ঠিকানাটি আপনার Default
-                  Delivery Address হিসেবে Save হবে।
+                  এখানে দেওয়া ঠিকানাটি আপনার Default Delivery Address হিসেবে
+                  Save হবে।
                 </p>
 
                 {/* DIVISION */}
 
-                <FormField
-                  icon={MapPin}
-                  title="বিভাগ"
-                >
+                <FormField icon={MapPin} title="বিভাগ">
                   <select
                     value={form.division}
                     disabled={saving}
@@ -1222,54 +1070,32 @@ function ProfileContent({
                       setError("");
                     }}
                   >
-                    <option value="">
-                      বিভাগ নির্বাচন করুন
-                    </option>
+                    <option value="">বিভাগ নির্বাচন করুন</option>
 
-                    {Object.keys(DIVISIONS).map(
-                      (division) => (
-                        <option
-                          key={division}
-                          value={division}
-                        >
-                          {division}
-                        </option>
-                      )
-                    )}
+                    {Object.keys(DIVISIONS).map((division) => (
+                      <option key={division} value={division}>
+                        {division}
+                      </option>
+                    ))}
                   </select>
                 </FormField>
 
                 {/* DISTRICT */}
 
-                <FormField
-                  icon={MapPin}
-                  title="জেলা"
-                >
+                <FormField icon={MapPin} title="জেলা">
                   <select
                     value={form.district}
                     disabled={!form.division || saving}
                     className={fieldClass}
-                    onChange={(e) =>
-                      updateField(
-                        "district",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => updateField("district", e.target.value)}
                   >
-                    <option value="">
-                      জেলা নির্বাচন করুন
-                    </option>
+                    <option value="">জেলা নির্বাচন করুন</option>
 
-                    {(DIVISIONS[form.division] || []).map(
-                      (district) => (
-                        <option
-                          key={district}
-                          value={district}
-                        >
-                          {district}
-                        </option>
-                      )
-                    )}
+                    {(DIVISIONS[form.division] || []).map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
                   </select>
                 </FormField>
 
@@ -1285,17 +1111,11 @@ function ProfileContent({
                     maxLength={500}
                     value={form.address}
                     disabled={saving}
-                    onChange={(e) =>
-                      updateField(
-                        "address",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => updateField("address", e.target.value)}
                     placeholder="বাড়ি নং, রোড, এলাকা, থানা..."
                     className={`${fieldClass} resize-y`}
                   />
                 </FormField>
-
               </div>
             )}
           </section>
@@ -1304,21 +1124,16 @@ function ProfileContent({
 
           {editing && canEdit && (
             <div className="lg:col-span-12">
-
               <div className="section-card flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
-
                 <p className="flex max-w-md items-start gap-2 text-xs leading-5 text-muted">
                   <ShieldCheck
                     size={17}
                     className="mt-0.5 shrink-0 text-secondary"
                   />
-
-                  Save করলে ছবি, ব্যক্তিগত তথ্য ও
-                  ডেলিভারি ঠিকানা আপডেট হবে।
+                  Save করলে ছবি, ব্যক্তিগত তথ্য ও ডেলিভারি ঠিকানা আপডেট হবে।
                 </p>
 
                 <div className="flex w-full gap-2 sm:w-auto">
-
                   {/* CANCEL */}
 
                   <button
@@ -1339,34 +1154,23 @@ function ProfileContent({
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-secondary px-5 py-3 text-xs font-semibold text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
                   >
                     {saving ? (
-                      <Loader2
-                        size={16}
-                        className="animate-spin"
-                      />
+                      <Loader2 size={16} className="animate-spin" />
                     ) : (
                       <Save size={16} />
                     )}
 
-                    {saving
-                      ? "Saving..."
-                      : "Save Changes"}
+                    {saving ? "Saving..." : "Save Changes"}
                   </button>
-
                 </div>
               </div>
             </div>
           )}
-
         </form>
 
         {/* BACK LINK */}
 
         <Link
-          to={
-            isAdminView || profile.role === "admin"
-              ? "/admin"
-              : "/"
-          }
+          to={isAdminView || profile.role === "admin" ? "/admin" : "/"}
           className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-secondary hover:text-primary"
         >
           <ArrowLeft size={16} />
@@ -1375,7 +1179,6 @@ function ProfileContent({
             ? "Dashboard-এ ফিরে যান"
             : "হোমে ফিরে যান"}
         </Link>
-
       </div>
     </main>
   );
@@ -1388,14 +1191,8 @@ function ProfileContent({
 export default function ProfilePage() {
   const { id } = useParams();
 
-  const {
-    user,
-    loading,
-    role,
-    roleLoading,
-    accountStatus,
-    updateUserProfile,
-  } = useContext(AuthContext);
+  const { user, loading, role, roleLoading, accountStatus, updateUserProfile } =
+    useContext(AuthContext);
 
   const isAdminView = Boolean(id);
 
@@ -1444,14 +1241,9 @@ export default function ProfilePage() {
     return (
       <main className="page-bg flex min-h-[65vh] items-center justify-center">
         <div className="text-center">
-          <Loader2
-            size={29}
-            className="mx-auto animate-spin text-secondary"
-          />
+          <Loader2 size={29} className="mx-auto animate-spin text-secondary" />
 
-          <p className="mt-3 text-sm text-muted">
-            প্রোফাইল লোড হচ্ছে...
-          </p>
+          <p className="mt-3 text-sm text-muted">প্রোফাইল লোড হচ্ছে...</p>
         </div>
       </main>
     );
@@ -1473,14 +1265,9 @@ export default function ProfilePage() {
     return (
       <main className="page-bg flex min-h-[65vh] items-center justify-center">
         <div className="text-center">
-          <Loader2
-            size={29}
-            className="mx-auto animate-spin text-secondary"
-          />
+          <Loader2 size={29} className="mx-auto animate-spin text-secondary" />
 
-          <p className="mt-3 text-sm text-muted">
-            প্রোফাইল লোড হচ্ছে...
-          </p>
+          <p className="mt-3 text-sm text-muted">প্রোফাইল লোড হচ্ছে...</p>
         </div>
       </main>
     );
@@ -1493,21 +1280,15 @@ export default function ProfilePage() {
   if (!profileQuery.data) {
     return (
       <main className="page-bg flex min-h-[65vh] items-center justify-center px-4">
-
         <div className="section-card w-full max-w-md p-7 text-center">
-
-          <CircleAlert
-            size={32}
-            className="mx-auto text-red-500"
-          />
+          <CircleAlert size={32} className="mx-auto text-red-500" />
 
           <h2 className="mt-4 text-lg font-bold text-primary">
             প্রোফাইল লোড করা যায়নি
           </h2>
 
           <p className="mt-2 text-xs text-muted">
-            {profileQuery.error?.message ||
-              "প্রোফাইল পাওয়া যায়নি।"}
+            {profileQuery.error?.message || "প্রোফাইল পাওয়া যায়নি।"}
           </p>
 
           <button
@@ -1518,7 +1299,6 @@ export default function ProfilePage() {
             <RefreshCw size={15} />
             আবার চেষ্টা করুন
           </button>
-
         </div>
       </main>
     );
@@ -1530,11 +1310,7 @@ export default function ProfilePage() {
 
   return (
     <ProfileContent
-      key={
-        isAdminView
-          ? `admin-view:${user.uid}:${id}`
-          : `self:${user.uid}`
-      }
+      key={isAdminView ? `admin-view:${user.uid}:${id}` : `self:${user.uid}`}
       profile={profileQuery.data}
       userUid={user.uid}
       queryKey={queryKey}

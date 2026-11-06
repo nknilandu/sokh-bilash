@@ -1304,7 +1304,7 @@ export default function OrderTrackingPage() {
                   </div>
 
                   <Link
-                    to="/contact"
+                    to="/help#contact"
                     className="btn-outline-brand mt-4 w-full rounded-xl px-3 py-2.5 text-xs"
                   >
                     সাপোর্টে যোগাযোগ করুন

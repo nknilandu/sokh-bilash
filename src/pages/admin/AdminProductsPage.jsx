@@ -22,10 +22,8 @@ import {
 } from "lucide-react";
 import { AuthContext } from "../../providers/AuthProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { API_URL } from "../../utils/siteConfig";
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const money = (value) => `৳${Number(value || 0).toLocaleString("bn-BD")}`;
 

@@ -11,16 +11,10 @@ import {
 import { getAuth } from "firebase/auth";
 import { app } from "../../firebase/firebase.config";
 import { AuthContext } from "./AuthProvider";
+import { API_URL } from "../utils/siteConfig";
 
 export const CartContext = createContext(null);
 
-// ==========================================
-// CONFIGURATION
-// ==========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const GUEST_CART_KEY = "sokhbilash-cart";
 const MERGE_ID_KEY = "sokhbilash-cart-merge-id";

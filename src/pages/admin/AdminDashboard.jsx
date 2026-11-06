@@ -38,14 +38,12 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { API_URL } from "../../utils/siteConfig";
 
 // =====================================
 // REAL DASHBOARD DATA
 // =====================================
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const STATUS_COLORS = ["#8d389e", "#df72ef", "#ffe16d", "#c73e49"];
 const PAYMENT_COLORS = ["#8d389e", "#ffd700", "#310039"];

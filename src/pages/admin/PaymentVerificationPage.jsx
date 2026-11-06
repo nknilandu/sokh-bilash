@@ -32,15 +32,14 @@ import {
   ImageOff,
 } from "lucide-react";
 
+import { API_URL } from "../../utils/siteConfig";
+
 import { AuthContext } from "../../providers/AuthProvider";
 
 // ========================================
 // CONFIG
 // ========================================
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const PAGE_SIZE = 10;
 

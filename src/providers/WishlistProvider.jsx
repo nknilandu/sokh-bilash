@@ -10,13 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AuthContext } from "./AuthProvider";
 
-// ==========================================
-// CONFIGURATION
-// ==========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "../utils/siteConfig";
 
 const STORAGE_KEY = "sokhbilash-wishlist";
 const EVENT = "sokhbilash-wishlist-updated";

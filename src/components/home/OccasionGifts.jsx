@@ -14,14 +14,8 @@ import {
   RiCake2Fill,
   RiHandHeartFill,
 } from "react-icons/ri";
+import { API_URL } from "../../utils/siteConfig";
 
-// ========================================
-// API CONFIGURATION
-// ========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 // ========================================
 // FALLBACK ICONS

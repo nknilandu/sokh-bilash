@@ -43,15 +43,8 @@ import {
 } from "lucide-react";
 
 import { AuthContext } from "../../providers/AuthProvider";
+import { API_URL } from "../../utils/siteConfig";
 
-// ==================================================
-// CONFIG
-// ==================================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:3000"
-).replace(/\/$/, "");
 
 const COURIER_KEY =
   "sokhbilash-admin-courier-names";

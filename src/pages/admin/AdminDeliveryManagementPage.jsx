@@ -24,10 +24,8 @@ import {
   ImageOff,
 } from "lucide-react";
 import { AuthContext } from "../../providers/AuthProvider";
+import { API_URL } from "../../utils/siteConfig";
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 const COURIER_STORAGE_KEY = "sokhbilash-admin-courier-names";
 const PAGE_SIZE = 10;
 const NEXT_STATUS = {

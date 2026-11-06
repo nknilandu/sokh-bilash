@@ -1,9 +1,6 @@
 import { getAuth } from "firebase/auth";
 import { app } from "../../firebase/firebase.config";
-
-export const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "./siteConfig";
 
 const auth = getAuth(app);
 const GUEST_TOKEN_PREFIX = "sokhbilash-guest-order-token:";

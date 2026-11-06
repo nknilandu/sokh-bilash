@@ -14,11 +14,9 @@ import {
   X,
   AlertTriangle,
 } from "lucide-react";
+import { API_URL } from "../../utils/siteConfig";
 
-const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:3000"
-).replace(/\/$/, "");
+
 
 const MAX_QUANTITY = 10;
 const MAX_PHOTOS = 20;

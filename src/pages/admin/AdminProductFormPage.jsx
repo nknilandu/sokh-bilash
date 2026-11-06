@@ -24,14 +24,8 @@ import {
 } from "lucide-react";
 
 import { app } from "../../../firebase/firebase.config";
+import { API_URL } from "../../utils/siteConfig";
 
-// =====================================
-// CONFIGURATION
-// =====================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const MAX_IMAGES = 5;
 const MAX_VARIANTS = 100;

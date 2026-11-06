@@ -1,14 +1,8 @@
 import { Gift, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { API_URL } from "../../utils/siteConfig";
 
-// ========================================
-// API URL
-// ========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 // ========================================
 // FETCH CATEGORIES

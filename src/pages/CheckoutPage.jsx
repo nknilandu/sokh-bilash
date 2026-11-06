@@ -99,7 +99,7 @@ const validPhone = (s) =>
   /^01[3-9]\d{8}$/.test(String(s || "").trim());
 
 const configuredNumber = (s) =>
-  /^01\d{9,10}$/.test(String(s || ""));
+  /^01[3-9]\d{8}$/.test(String(s || "").trim());
 
 const amount = (v) => Math.max(0, Number(v) || 0);
 

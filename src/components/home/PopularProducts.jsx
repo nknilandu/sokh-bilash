@@ -4,14 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, PackageSearch, RotateCcw, Sparkles } from "lucide-react";
 
 import ProductCard from "../product/ProductCard";
+import { API_URL } from "../../utils/siteConfig";
 
-// ========================================
-// API CONFIG
-// ========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const MAX_PRODUCTS = 8;
 

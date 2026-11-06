@@ -18,10 +18,7 @@ import {
 import { AuthContext } from "../../providers/AuthProvider";
 import Swal from "sweetalert2";
 import useCart from "../../hooks/useCart";
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "../../utils/siteConfig";
 
 const initialForm = {
   name: "",
@@ -758,8 +755,11 @@ const Register = () => {
                 </label>
 
                 <Link
-                  to="/terms"
-                  className="font-semibold text-secondary hover:underline"
+                  to="/help#terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="font-bold text-secondary hover:underline"
                 >
                   শর্তাবলি
                 </Link>
@@ -767,8 +767,11 @@ const Register = () => {
                 {" ও "}
 
                 <Link
-                  to="/privacy-policy"
-                  className="font-semibold text-secondary hover:underline"
+                  to="/help#privacy-policy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="font-bold text-secondary hover:underline"
                 >
                   গোপনীয়তা নীতি
                 </Link>

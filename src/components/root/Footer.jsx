@@ -1,89 +1,59 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MessageCircle, ArrowRight, Mail } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 
-import { FaFacebookF, FaInstagram, FaYoutube } from "react-icons/fa6";
+import { FaFacebookF, FaGithub, FaLinkedinIn } from "react-icons/fa6";
 import logo from "../../assets/sokhbilash-nav-logo.png";
+
+import { CONTACT, CONTACT_URLS } from "../../utils/siteConfig";
 
 const shoppingLinks = [
   { label: "সব পণ্য", to: "/shop" },
-  { label: "নিজের গিফট তৈরি করুন", to: "/gift-box" },
-  { label: "উইশলিস্ট", to: "/wishlist" },
+  { label: "ক্যাটাগরি", to: "/categories" },
+  { label: "আমার অর্ডারগুলি", to: "/my-orders" },
   { label: "অর্ডার ট্র্যাক", to: "/track-order" },
+  { label: "উইশলিস্ট", to: "/wishlist" },
 ];
 
 const supportLinks = [
-  { label: "সাধারণ জিজ্ঞাসা", to: "/faq" },
-  { label: "ডেলিভারি তথ্য", to: "/delivery" },
-  { label: "রিটার্ন ও রিফান্ড নীতি", to: "/return-policy" },
-  { label: "গোপনীয়তা নীতি", to: "/privacy-policy" },
-  { label: "অ্যাফিলিয়েট রিকোয়েস্ট", to: "/affiliate" },
+  {
+    label: "সাধারণ জিজ্ঞাসা",
+    to: "/help#faq",
+  },
+  {
+    label: "ডেলিভারি তথ্য",
+    to: "/help#delivery",
+  },
+  {
+    label: "রিটার্ন ও রিফান্ড নীতি",
+    to: "/help#return-policy",
+  },
+  {
+    label: "গোপনীয়তা নীতি",
+    to: "/help#privacy-policy",
+  },
+  {
+    label: "শর্তাবলি",
+    to: "/help#terms",
+  },
 ];
 
 const socialLinks = [
-  { label: "Facebook", href: "https://facebook.com", Icon: FaFacebookF },
-  { label: "Instagram", href: "https://instagram.com", Icon: FaInstagram },
-  { label: "YouTube", href: "https://youtube.com", Icon: FaYoutube },
+  {
+    label: "Linkedin ",
+    href: "https://www.linkedin.com/in/nilandu/",
+    Icon: FaLinkedinIn,
+  },
+  { label: "Github", href: "https://github.com/nknilandu", Icon: FaGithub },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/nknilandu",
+    Icon: FaFacebookF,
+  },
 ];
 
 const Footer = () => {
-  const [email, setEmail] = useState("");
-
-  const handleSubscribe = (e) => {
-    e.preventDefault();
-
-    // Connect your newsletter API here.
-    console.log("Newsletter email:", email);
-    setEmail("");
-  };
-
   return (
-    <footer className="bg-primary text-primary-content">
-      {/* Newsletter */}
-      <div className="page-container border-b border-white/15 py-10 sm:py-12 lg:py-14">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
-          <div>
-            <h2 className="text-2xl font-bold leading-snug sm:text-3xl">
-              নতুন কালেকশন ও অফারের খবর পান
-            </h2>
-            <p className="mt-2 text-sm text-white/75 sm:text-base">
-              প্রতি মাসে বাছাই করা উপহার আইডিয়া আপনার ইনবক্সে।
-            </p>
-          </div>
-
-          <form
-            onSubmit={handleSubscribe}
-            className="flex w-full flex-col gap-3 sm:flex-row lg:max-w-xl"
-          >
-            <label htmlFor="footer-email" className="sr-only">
-              আপনার ইমেইল
-            </label>
-
-            <div className="relative flex-1">
-              <Mail
-                size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50"
-              />
-              <input
-                id="footer-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="আপনার ইমেইল"
-                autoComplete="email"
-                required
-                className="h-12 w-full rounded-full border border-white/10 bg-white/10 pl-11 pr-5 text-sm text-white outline-none transition placeholder:text-white/60 focus:border-gold-soft focus:ring-2 focus:ring-gold-soft/20"
-              />
-            </div>
-
-            <button type="submit" className="btn-gold h-12 shrink-0 px-7">
-              সাবস্ক্রাইব
-              <ArrowRight size={16} />
-            </button>
-          </form>
-        </div>
-      </div>
-
+    <footer className="bg-primary text-primary-content pt-8">
       {/* Main footer */}
       <div className="page-container grid grid-cols-1 gap-10 py-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12 lg:py-12">
         {/* Brand */}
@@ -150,40 +120,52 @@ const Footer = () => {
         </div>
 
         {/* Contact */}
+
+        {/* CONTACT */}
+
         <div>
           <h3 className="mb-4 font-bold text-gold-soft">যোগাযোগ</h3>
 
           <address className="space-y-3 text-sm not-italic leading-6 text-white/80">
-            <p>
+            {/* PHONE */}
+            {CONTACT.phone && (
+              <p>
+                <a
+                  href={CONTACT_URLS.phone}
+                  className="transition hover:text-gold-soft"
+                >
+                  {CONTACT.phone}
+                </a>
+              </p>
+            )}
+
+            {/* EMAIL */}
+            {CONTACT.email && (
+              <p>
+                <a
+                  href={CONTACT_URLS.email}
+                  className="transition hover:text-gold-soft"
+                >
+                  {CONTACT.email}
+                </a>
+              </p>
+            )}
+
+            {/* BUSINESS ADDRESS */}
+            <p>নরসিংদী, বাংলাদেশ</p>
+
+            {/* WHATSAPP */}
+            {CONTACT.whatsapp && (
               <a
-                href="tel:+8801XXXXXXXXX"
-                className="transition hover:text-gold-soft"
+                href={CONTACT_URLS.whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 font-medium text-gold-soft transition hover:opacity-80"
               >
-                +880 1XXX-XXXXXX (প্রয়োজনমতো)
+                <MessageCircle size={17} />
+                হোয়াটসঅ্যাপে কথা বলুন
               </a>
-            </p>
-
-            <p>
-              <a
-                href="mailto:hello@example.com"
-                className="transition hover:text-gold-soft"
-              >
-                hello@example.com
-              </a>
-            </p>
-
-            <p>ঢাকা, বাংলাদেশ (ঠিকানা যোগ করুন)</p>
-            <p>প্রতিদিন সকাল ১০টা – রাত ৮টা</p>
-
-            <a
-              href="https://wa.me/8801XXXXXXXXX"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 font-medium text-gold-soft transition hover:opacity-80"
-            >
-              <MessageCircle size={17} />
-              হোয়াটসঅ্যাপে কথা বলুন
-            </a>
+            )}
           </address>
         </div>
       </div>
@@ -196,18 +178,13 @@ const Footer = () => {
             সংরক্ষিত।
           </p>
 
-          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2">
-            <Link
-              to="/privacy-policy"
-              className="transition hover:text-gold-soft"
-            >
-              গোপনীয়তা নীতি
-            </Link>
-
-            <Link to="/terms" className="transition hover:text-gold-soft">
-              শর্তাবলি
-            </Link>
-          </div>
+          <Link
+            to="/help#developer"
+            className="text-xs text-white/70 transition hover:text-gold-soft"
+          >
+            Designed & Developed by
+            <span className="ml-1 font-semibold">Nilandu Kumar Das Vapon</span>
+          </Link>
         </div>
       </div>
     </footer>

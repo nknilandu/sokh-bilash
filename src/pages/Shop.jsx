@@ -17,11 +17,7 @@ import {
 } from "lucide-react";
 import ProductCard from "../components/product/ProductCard";
 
-// Adjust ProductCard import path to your project.
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "../utils/siteConfig";
 
 const PRODUCTS_PER_PAGE = 12;
 
@@ -60,7 +56,6 @@ const createInitialFilters = () => ({
   minPrice: "",
   maxPrice: "",
 
-  rating: 0,
   availability: "all",
 });
 
@@ -332,10 +327,6 @@ export default function Shop() {
       params.set("maxPrice", String(filters.maxPrice));
     }
 
-    if (filters.rating > 0) {
-      params.set("rating", String(filters.rating));
-    }
-
     if (filters.availability !== "all") {
       params.set("availability", filters.availability);
     }
@@ -445,7 +436,6 @@ export default function Shop() {
     filters.categories.length +
     filters.occasions.length +
     filters.features.length +
-    (filters.rating > 0 ? 1 : 0) +
     (filters.minPrice !== "" || filters.maxPrice !== "" ? 1 : 0) +
     (filters.availability !== "all" ? 1 : 0);
 
@@ -639,39 +629,6 @@ export default function Shop() {
         ))}
       </FilterSection>
 
-      {/* ================= RATING ================= */}
-
-      <FilterSection title="গ্রাহক রেটিং">
-        {[4, 3, 2, 1].map((rating) => (
-          <label
-            key={rating}
-            className="flex cursor-pointer items-center gap-2 text-sm"
-          >
-            <input
-              type="radio"
-              name="rating"
-              checked={filters.rating === rating}
-              onChange={() => updateFilter("rating", rating)}
-              className="radio radio-secondary radio-sm"
-            />
-
-            <span className="flex items-center gap-1 text-amber-500">
-              {"★".repeat(rating)}
-
-              <span className="text-muted"> ও তার বেশি</span>
-            </span>
-          </label>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => updateFilter("rating", 0)}
-          className="text-xs text-secondary hover:underline"
-        >
-          সব রেটিং
-        </button>
-      </FilterSection>
-
       {/* MOBILE SHOW PRODUCTS BUTTON */}
 
       <button
@@ -853,8 +810,6 @@ export default function Shop() {
                   <option value="price-low">দাম: কম থেকে বেশি</option>
 
                   <option value="price-high">দাম: বেশি থেকে কম</option>
-
-                  <option value="rating">সর্বোচ্চ রেটিং</option>
                 </select>
               </label>
             </div>
@@ -940,21 +895,6 @@ export default function Shop() {
                         setCurrentPage(1);
                       }}
                       aria-label="মূল্য ফিল্টার সরান"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                )}
-
-                {/* RATING CHIP */}
-
-                {filters.rating > 0 && (
-                  <span className="badge-soft gap-1.5 py-1.5">
-                    {filters.rating}★+
-                    <button
-                      type="button"
-                      onClick={() => updateFilter("rating", 0)}
-                      aria-label="রেটিং ফিল্টার সরান"
                     >
                       <X size={12} />
                     </button>
@@ -1125,56 +1065,50 @@ export default function Shop() {
                   </div>
                 )}
 
-                
-{/* ========================= */}
-{/* PERSONALIZED GIFT BANNER  */}
-{/* ========================= */}
+                {/* ========================= */}
+                {/* PERSONALIZED GIFT BANNER  */}
+                {/* ========================= */}
 
-<section className="relative mt-7 overflow-hidden rounded-2xl bg-gradient-to-r from-[#310039] via-[#76258A] to-[#4b174d] p-5 text-white shadow-md sm:mt-8 sm:p-7">
+                <section className="relative mt-7 overflow-hidden rounded-2xl bg-gradient-to-r from-[#310039] via-[#76258A] to-[#4b174d] p-5 text-white shadow-md sm:mt-8 sm:p-7">
+                  {/* Background Decoration */}
+                  <div className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full bg-white/10 blur-2xl" />
 
-  {/* Background Decoration */}
-  <div className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full bg-white/10 blur-2xl" />
+                  <div className="pointer-events-none absolute -bottom-20 left-1/3 size-40 rounded-full bg-gold-soft/10 blur-2xl" />
 
-  <div className="pointer-events-none absolute -bottom-20 left-1/3 size-40 rounded-full bg-gold-soft/10 blur-2xl" />
+                  <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+                    {/* ICON */}
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-gold-soft">
+                      <Sparkles size={26} />
+                    </div>
 
-  <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+                    {/* CONTENT */}
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gold-soft">
+                        <Gift size={13} />
+                        আপনার উপহার, আপনার মতো
+                      </span>
 
-    {/* ICON */}
-    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-gold-soft">
-      <Sparkles size={26} />
-    </div>
+                      <h2 className="mt-1 text-lg font-bold leading-snug sm:text-xl">
+                        প্রিয়জনের জন্য একটু আলাদা কিছু খুঁজছেন?
+                      </h2>
 
-    {/* CONTENT */}
-    <div className="min-w-0 flex-1">
+                      <p className="mt-2 max-w-2xl text-xs leading-6 text-white/80 sm:text-sm">
+                        প্রিয় ছবি, নাম কিংবা বিশেষ বার্তায় সাজিয়ে নিন একান্ত
+                        নিজের মতো উপহার। ছোট্ট একটি উপহারেই তৈরি হোক আজীবনের
+                        সুন্দর স্মৃতি।
+                      </p>
+                    </div>
 
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gold-soft">
-        <Gift size={13} />
-        আপনার উপহার, আপনার মতো
-      </span>
-
-      <h2 className="mt-1 text-lg font-bold leading-snug sm:text-xl">
-        প্রিয়জনের জন্য একটু আলাদা কিছু খুঁজছেন?
-      </h2>
-
-      <p className="mt-2 max-w-2xl text-xs leading-6 text-white/80 sm:text-sm">
-        প্রিয় ছবি, নাম কিংবা বিশেষ বার্তায় সাজিয়ে নিন
-        একান্ত নিজের মতো উপহার। ছোট্ট একটি উপহারেই
-        তৈরি হোক আজীবনের সুন্দর স্মৃতি।
-      </p>
-    </div>
-
-    {/* CTA BUTTON */}
-    <Link
-      to="/shop?categories=personalized"
-      className="btn-gold inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold sm:w-auto"
-    >
-      কাস্টমাইজড উপহার দেখুন
-      <ArrowRight size={16} />
-    </Link>
-
-  </div>
-</section>
-
+                    {/* CTA BUTTON */}
+                    <Link
+                      to="/shop?categories=personalized"
+                      className="btn-gold inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold sm:w-auto"
+                    >
+                      কাস্টমাইজড উপহার দেখুন
+                      <ArrowRight size={16} />
+                    </Link>
+                  </div>
+                </section>
               </>
             ) : (
               /* ========================= */

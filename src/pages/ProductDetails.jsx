@@ -29,14 +29,15 @@ import useCart from "../hooks/useCart";
 import { AuthContext } from "../providers/AuthProvider";
 
 import { useWishlist } from "../providers/WishlistProvider";
+import {
+  API_URL,
+  CONTACT,
+  getWhatsAppUrl,
+} from "../utils/siteConfig";
 
 // ========================================
 // CONFIGURATION
 // ========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
 
 const MAX_PHOTOS = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -741,11 +742,16 @@ function ProductDetailsContent({ product, relatedProducts }) {
       .filter(Boolean)
       .join("\n");
 
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(message)}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    if (!CONTACT.whatsapp) {
+      Swal.fire({
+        icon: "warning",
+        title: "WhatsApp সাপোর্ট উপলব্ধ নয়",
+        text: "অনুগ্রহ করে ফোন বা ইমেইলে যোগাযোগ করুন।",
+      });
+      return;
+    }
+
+    window.open(getWhatsAppUrl(message), "_blank", "noopener,noreferrer");
   };
 
   // ========================================

@@ -3,9 +3,7 @@ import { app } from "../../firebase/firebase.config";
 
 const auth = getAuth(app);
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "./siteConfig";
 
 export async function profileRequest(
   path,

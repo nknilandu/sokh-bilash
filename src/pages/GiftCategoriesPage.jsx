@@ -16,13 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-// ==========================================
-// API CONFIGURATION
-// ==========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "../utils/siteConfig";
 
 // ==========================================
 // OCCASION ICON FALLBACK

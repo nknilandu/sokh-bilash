@@ -32,14 +32,7 @@ import useCart from "../hooks/useCart";
 import CartItemEditor from "../components/cart/CartItemEditor";
 import { AuthContext } from "../providers/AuthProvider";
 import ProductCard from "../components/product/ProductCard";
-
-// ==========================================
-// CONFIGURATION
-// ==========================================
-
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "../utils/siteConfig";
 
 const WISHLIST_KEY = "sokhbilash-wishlist";
 
@@ -1604,7 +1597,7 @@ export default function CartPage() {
                   </p>
 
                   <Link
-                    to="/contact"
+                    to="/help#contact"
                     className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-secondary hover:underline"
                   >
                     যোগাযোগ করুন

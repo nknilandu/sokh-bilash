@@ -21,11 +21,11 @@ import { app } from "../../firebase/firebase.config";
 
 export const AuthContext = createContext(null);
 
+import { API_URL } from "../utils/siteConfig";
+
 const auth = getAuth(app);
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:3000"
-).replace(/\/$/, "");
+
 
 // ========================================
 // INITIAL ROLE STATE

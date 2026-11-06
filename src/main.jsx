@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import "./index.css";
 
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 
 import { RouterProvider } from "react-router/dom";
 
@@ -16,7 +16,6 @@ import Root from "./layouts/Root";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
 import ProductDetails from "./pages/ProductDetails";
-import GiftBoxBuilder from "./pages/GiftBoxBuilder";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 
@@ -80,6 +79,7 @@ import ProfileProtectedRoute from "./routes/ProfileProtectedRoute";
 import { WishlistProvider } from "./providers/WishlistProvider";
 import AdminCustomersPage from "./pages/admin/AdminCustomersPage";
 import AdminDeliveryManagementPage from "./pages/admin/AdminDeliveryManagementPage";
+import HelpAndPoliciesPage from "./pages/HelpAndPoliciesPage";
 
 // ========================================
 // REACT QUERY CLIENT
@@ -124,22 +124,14 @@ const router = createBrowserRouter([
         path: "shop/:id",
         element: <ProductDetails />,
       },
-
-      {
-        path: "gift-box",
-        element: <GiftBoxBuilder />,
-      },
-
       {
         path: "cart",
         element: <CartPage />,
       },
-
       {
         path: "checkout",
         element: <CheckoutPage />,
       },
-
       {
         path: "order-confirmation/:orderId",
         element: <OrderConfirmationPage />,
@@ -152,27 +144,22 @@ const router = createBrowserRouter([
         path: "order-rejected/:orderId",
         element: <OrderRejectedPage />,
       },
-
       {
         path: "track-order",
         element: <OrderTrackingPage />,
       },
-
       {
         path: "track-order/:orderId",
         element: <OrderTrackingPage />,
       },
-
       {
         path: "wishlist",
         element: <WishlistPage />,
       },
-
       {
         path: "categories",
         element: <GiftCategoriesPage />,
       },
-
       {
         path: "my-orders",
         element: <MyOrdersPage />,
@@ -185,6 +172,32 @@ const router = createBrowserRouter([
           </ProfileProtectedRoute>
         ),
       },
+
+      {
+        path: "help",
+        element: <HelpAndPoliciesPage />,
+      },
+      {
+        path: "faq",
+        element: <Navigate to="/help#faq" replace />,
+      },
+      {
+        path: "delivery",
+        element: <Navigate to="/help#delivery" replace />,
+      },
+      {
+        path: "return-policy",
+        element: <Navigate to="/help#return-policy" replace />,
+      },
+      {
+        path: "privacy-policy",
+        element: <Navigate to="/help#privacy-policy" replace />,
+      },
+      {
+        path: "terms",
+        element: <Navigate to="/help#terms" replace />,
+      },
+
       {
         path: "*",
         element: <ErrorPage />,

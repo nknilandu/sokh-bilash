@@ -639,7 +639,7 @@ export default function OrderStatusPage({ mode = "confirmation" }) {
               আবার চেষ্টা করুন
             </button>
 
-            <Link to="/contact" className="btn-outline-brand">
+            <Link to="/help#contact" className="btn-outline-brand">
               সাপোর্ট
             </Link>
           </div>
@@ -1178,8 +1178,8 @@ export default function OrderStatusPage({ mode = "confirmation" }) {
           </div>
 
           <Link
-            to="/contact"
-            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-xs font-semibold text-white hover:bg-primary"
+            to="/help#contact"
+            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-primary"
           >
             <Phone size={14} />
             যোগাযোগ করুন
