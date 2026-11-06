@@ -16,10 +16,10 @@ import {
   X,
 } from "lucide-react";
 
-import ProductCard from "../components/product/ProductCard";
-import { useWishlist } from "../providers/WishlistProvider";
+import ProductCard from "../../components/product/ProductCard";
+import { useWishlist } from "../../providers/WishlistProvider";
 
-import { API_URL } from "../utils/siteConfig";
+import { API_URL } from "../../utils/siteConfig";
 
 // ==========================================
 // PRICE HELPERS

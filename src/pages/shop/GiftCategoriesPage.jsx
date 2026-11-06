@@ -16,7 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-import { API_URL } from "../utils/siteConfig";
+import { API_URL } from "../../utils/siteConfig";
 
 // ==========================================
 // OCCASION ICON FALLBACK

@@ -24,10 +24,10 @@ import {
   X,
 } from "lucide-react";
 
-import { app } from "../../firebase/firebase.config";
-import { AuthContext } from "../providers/AuthProvider";
-import { profileRequest } from "../utils/profileApi";
-import { DIVISIONS } from "../utils/bangladeshRegions";
+import { app } from "../../../firebase/firebase.config";
+import { AuthContext } from "../../providers/AuthProvider";
+import { profileRequest } from "../../utils/profileApi";
+import { DIVISIONS } from "../../utils/bangladeshRegions";
 
 const auth = getAuth(app);
 

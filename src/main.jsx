@@ -13,19 +13,19 @@ import { RouterProvider } from "react-router/dom";
 
 import Root from "./layouts/Root";
 
-import Home from "./pages/Home";
-import Shop from "./pages/Shop";
-import ProductDetails from "./pages/ProductDetails";
-import CartPage from "./pages/CartPage";
-import CheckoutPage from "./pages/CheckoutPage";
+import Home from "./pages/home/Home";
+import Shop from "./pages/shop/Shop";
+import ProductDetails from "./pages/shop/ProductDetails";
+import CartPage from "./pages/cart/CartPage";
+import CheckoutPage from "./pages/cart/CheckoutPage";
 
 import OrderConfirmationPage from "./pages/order/OrderConfirmationPage";
 import OrderVerifiedPage from "./pages/order/OrderVerifiedPage";
 import OrderRejectedPage from "./pages/order/OrderRejectedPage";
 import OrderTrackingPage from "./pages/order/OrderTrackingPage";
 
-import WishlistPage from "./pages/WishlistPage";
-import GiftCategoriesPage from "./pages/GiftCategoriesPage";
+import WishlistPage from "./pages/cart/WishlistPage";
+import GiftCategoriesPage from "./pages/shop/GiftCategoriesPage";
 
 // ========================================
 // ERROR PAGES
@@ -74,12 +74,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ToastContainer } from "react-toastify";
 import MyOrdersPage from "./pages/order/MyOrdersPage";
-import ProfilePage from "./pages/ProfilePage";
+import ProfilePage from "./pages/profile/ProfilePage";
 import ProfileProtectedRoute from "./routes/ProfileProtectedRoute";
 import { WishlistProvider } from "./providers/WishlistProvider";
 import AdminCustomersPage from "./pages/admin/AdminCustomersPage";
 import AdminDeliveryManagementPage from "./pages/admin/AdminDeliveryManagementPage";
-import HelpAndPoliciesPage from "./pages/HelpAndPoliciesPage";
+import HelpAndPoliciesPage from "./pages/information/HelpAndPoliciesPage";
 
 // ========================================
 // REACT QUERY CLIENT

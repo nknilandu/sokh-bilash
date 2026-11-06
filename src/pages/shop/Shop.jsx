@@ -15,9 +15,9 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-import ProductCard from "../components/product/ProductCard";
+import ProductCard from "../../components/product/ProductCard";
 
-import { API_URL } from "../utils/siteConfig";
+import { API_URL } from "../../utils/siteConfig";
 
 const PRODUCTS_PER_PAGE = 12;
 

@@ -24,16 +24,16 @@ import {
   ImageOff,
 } from "lucide-react";
 
-import ProductCard from "../components/product/ProductCard";
-import useCart from "../hooks/useCart";
-import { AuthContext } from "../providers/AuthProvider";
+import ProductCard from "../../components/product/ProductCard";
+import useCart from "../../hooks/useCart";
+import { AuthContext } from "../../providers/AuthProvider";
 
-import { useWishlist } from "../providers/WishlistProvider";
+import { useWishlist } from "../../providers/WishlistProvider";
 import {
   API_URL,
   CONTACT,
   getWhatsAppUrl,
-} from "../utils/siteConfig";
+} from "../../utils/siteConfig";
 
 // ========================================
 // CONFIGURATION

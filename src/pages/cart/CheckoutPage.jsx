@@ -29,18 +29,18 @@ import {
   X,
 } from "lucide-react";
 
-import useCart from "../hooks/useCart";
+import useCart from "../../hooks/useCart";
 
 import {
   money,
   orderRequest,
   saveGuestOrderToken,
-} from "../utils/orderApi";
+} from "../../utils/orderApi";
 
-import { app } from "../../firebase/firebase.config";
-import { AuthContext } from "../providers/AuthProvider";
+import { app } from "../../../firebase/firebase.config";
+import { AuthContext } from "../../providers/AuthProvider";
 
-import { DIVISIONS } from "../utils/bangladeshRegions";
+import { DIVISIONS } from "../../utils/bangladeshRegions";
 
 const auth = getAuth(app);
 

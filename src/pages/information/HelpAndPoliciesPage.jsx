@@ -27,7 +27,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { FaGithub, FaLinkedinIn } from "react-icons/fa6";
-import { CONTACT, CONTACT_URLS, getWhatsAppUrl } from "../utils/siteConfig";
+import { CONTACT, CONTACT_URLS, getWhatsAppUrl } from "../../utils/siteConfig";
 
 // Confirm these profile links before publishing.
 const DEVELOPER = {

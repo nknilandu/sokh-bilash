@@ -28,11 +28,11 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-import useCart from "../hooks/useCart";
-import CartItemEditor from "../components/cart/CartItemEditor";
-import { AuthContext } from "../providers/AuthProvider";
-import ProductCard from "../components/product/ProductCard";
-import { API_URL } from "../utils/siteConfig";
+import useCart from "../../hooks/useCart";
+import CartItemEditor from "../../components/cart/CartItemEditor";
+import { AuthContext } from "../../providers/AuthProvider";
+import ProductCard from "../../components/product/ProductCard";
+import { API_URL } from "../../utils/siteConfig";
 
 const WISHLIST_KEY = "sokhbilash-wishlist";
 
