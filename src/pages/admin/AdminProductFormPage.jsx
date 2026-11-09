@@ -5,7 +5,6 @@ import Swal from "sweetalert2";
 import { getAuth } from "firebase/auth";
 
 import {
-  Gift,
   GripVertical,
   Image as ImageIcon,
   ImageOff,
@@ -26,13 +25,8 @@ import {
 import { app } from "../../../firebase/firebase.config";
 import { API_URL } from "../../utils/siteConfig";
 
-
 const MAX_IMAGES = 5;
 const MAX_VARIANTS = 100;
-
-// =====================================
-// STYLES
-// =====================================
 
 const inputClass =
   "w-full min-w-0 rounded-lg border border-[#e8ddec] bg-white px-3 py-2.5 text-sm text-[#310039] placeholder:text-[#a89aad] outline-none transition focus:border-[#903eaa] focus:ring-2 focus:ring-[#903eaa]/10";
@@ -43,9 +37,9 @@ const primaryButton =
 const softButton =
   "inline-flex items-center justify-center gap-2 rounded-lg bg-[#f2e8f7] px-3 py-2 text-sm font-semibold text-[#76258a] transition hover:bg-[#ead9f1] disabled:opacity-50";
 
-// =====================================
+// ==========================================
 // HELPERS
-// =====================================
+// ==========================================
 
 const uid = () =>
   globalThis.crypto?.randomUUID?.() ||
@@ -57,25 +51,28 @@ const makeSku = () =>
     .slice(2, 7)
     .toUpperCase()}`;
 
-const money = (value) => `৳ ${Number(value || 0).toLocaleString("bn-BD")}`;
+const money = (value) =>
+  `৳ ${Number(value || 0).toLocaleString("bn-BD", {
+    maximumFractionDigits: 2,
+  })}`;
 
-const validUrl = (url) => {
+const validUrl = (value) => {
   try {
-    return ["https:", "http:"].includes(new URL(String(url).trim()).protocol);
+    return ["https:", "http:"].includes(new URL(String(value).trim()).protocol);
   } catch {
     return false;
   }
 };
 
 const makeHash = (text) => {
-  let h = 2166136261;
+  let hash = 2166136261;
 
   for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
 
-  return (h >>> 0).toString(36).toUpperCase();
+  return (hash >>> 0).toString(36).toUpperCase();
 };
 
 const createImage = (url = "") => ({
@@ -103,32 +100,21 @@ const createProduct = () => ({
   variantsEnabled: false,
 
   options: {
-    size: {
-      enabled: true,
-      values: [],
-    },
-    color: {
-      enabled: true,
-      values: [],
-    },
-    type: {
-      enabled: false,
-      values: [],
-    },
+    size: { enabled: true, values: [] },
+    color: { enabled: true, values: [] },
+    type: { enabled: false, values: [] },
   },
 
   variantOverrides: {},
-
   customerFieldType: "none",
-  surpriseBox: false,
 
   packaging: "regular",
   premiumBoxPrice: "250",
 });
 
-// =====================================
-// SECTION
-// =====================================
+// ==========================================
+// REUSABLE COMPONENTS
+// ==========================================
 
 function Section({ title, right, children }) {
   return (
@@ -138,7 +124,6 @@ function Section({ title, right, children }) {
           <span className="size-2 shrink-0 rounded-full bg-[#903eaa]" />
           {title}
         </h2>
-
         {right}
       </div>
 
@@ -147,16 +132,11 @@ function Section({ title, right, children }) {
   );
 }
 
-// =====================================
-// FIELD
-// =====================================
-
 function Field({ label, required = false, hint, children }) {
   return (
     <div className="min-w-0">
       <p className="mb-2 text-sm font-semibold text-[#310039]">
         {label}
-
         {required && <span className="ml-1 text-red-500">*</span>}
       </p>
 
@@ -169,40 +149,27 @@ function Field({ label, required = false, hint, children }) {
   );
 }
 
-// =====================================
-// SWITCH
-// =====================================
-
 function MiniSwitch({ checked, onChange, disabled = false }) {
   return (
     <label className="relative inline-flex shrink-0 cursor-pointer items-center">
       <input
         type="checkbox"
-        checked={!!checked}
+        checked={Boolean(checked)}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"
       />
 
       <span className="h-6 w-11 rounded-full bg-[#ddd2e3] transition peer-checked:bg-[#903eaa] peer-focus-visible:ring-2 peer-focus-visible:ring-[#903eaa] peer-disabled:opacity-50" />
-
       <span className="absolute left-[3px] top-[3px] size-[18px] rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
     </label>
   );
 }
 
-// =====================================
-// IMAGE PREVIEW
-// =====================================
-
 function Photo({ url, className = "" }) {
-  const [broken, setBroken] = useState(false);
+  const [brokenUrl, setBrokenUrl] = useState("");
 
-  useEffect(() => {
-    setBroken(false);
-  }, [url]);
-
-  if (!validUrl(url) || broken) {
+  if (!validUrl(url) || brokenUrl === url) {
     return (
       <div
         className={`flex items-center justify-center bg-[#f4eef8] text-[#a692b0] ${className}`}
@@ -217,21 +184,16 @@ function Photo({ url, className = "" }) {
       src={url}
       alt="Product preview"
       className={`object-cover ${className}`}
-      onError={() => setBroken(true)}
+      onError={() => setBrokenUrl(url)}
     />
   );
 }
-
-// =====================================
-// STATUS CARD
-// =====================================
 
 function StatusCard({ title, subtitle, checked, onChange }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl bg-[#f7f0fc] px-4 py-4">
       <div className="min-w-0">
         <p className="text-sm font-bold">{title}</p>
-
         <p className="mt-1 text-xs text-[#82748b]">{subtitle}</p>
       </div>
 
@@ -240,9 +202,9 @@ function StatusCard({ title, subtitle, checked, onChange }) {
   );
 }
 
-// =====================================
+// ==========================================
 // VARIANT OPTION GROUP
-// =====================================
+// ==========================================
 
 function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
   const [draft, setDraft] = useState("");
@@ -250,7 +212,7 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
   const addValues = () => {
     draft
       .split(",")
-      .map((item) => item.trim())
+      .map((value) => value.trim())
       .filter(Boolean)
       .forEach((value) => onAdd(type, value));
 
@@ -258,14 +220,14 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
   };
 
   const colorDot = (label) => {
-    const v = label.toLowerCase();
+    const value = label.toLowerCase();
 
-    if (/black|কালো/.test(v)) return "#222222";
-    if (/gold|সোনালি/.test(v)) return "#e7bf27";
-    if (/red|লাল/.test(v)) return "#e14755";
-    if (/white|সাদা/.test(v)) return "#ffffff";
-    if (/blue|নীল/.test(v)) return "#397ec4";
-    if (/green|সবুজ/.test(v)) return "#42965a";
+    if (/black|কালো/.test(value)) return "#222222";
+    if (/gold|সোনালি/.test(value)) return "#e7bf27";
+    if (/red|লাল/.test(value)) return "#e14755";
+    if (/white|সাদা/.test(value)) return "#ffffff";
+    if (/blue|নীল/.test(value)) return "#397ec4";
+    if (/green|সবুজ/.test(value)) return "#42965a";
 
     return "#903eaa";
   };
@@ -286,7 +248,7 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
 
           <MiniSwitch
             checked={group.enabled}
-            onChange={(v) => onToggle(type, v)}
+            onChange={(value) => onToggle(type, value)}
           />
         </div>
       </div>
@@ -322,10 +284,10 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
 
           <input
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === ",") {
-                e.preventDefault();
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === ",") {
+                event.preventDefault();
                 addValues();
               }
             }}
@@ -347,9 +309,9 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
   );
 }
 
-// =====================================
-// POLISHED VARIANT CARD
-// =====================================
+// ==========================================
+// VARIANT CARD
+// ==========================================
 
 function VariantCard({ variant, onChange, coverImage, basePrice }) {
   return (
@@ -360,8 +322,6 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
           : "border-[#eae5ed] bg-[#faf8fb] opacity-80"
       }`}
     >
-      {/* CARD HEADER */}
-
       <div className="flex items-center gap-3">
         <Photo
           url={variant.imageUrl || coverImage}
@@ -391,23 +351,17 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
 
           <MiniSwitch
             checked={variant.available}
-            onChange={(v) => onChange({ available: v })}
+            onChange={(value) => onChange({ available: value })}
           />
         </div>
       </div>
-
-      {/* IMAGE URL + PRICE */}
 
       <div className="mt-4 grid min-w-0 gap-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(90px,0.5fr)]">
         <Field label="ভ্যারিয়েন্ট ছবির URL">
           <input
             type="url"
             value={variant.imageUrl}
-            onChange={(e) =>
-              onChange({
-                imageUrl: e.target.value,
-              })
-            }
+            onChange={(event) => onChange({ imageUrl: event.target.value })}
             placeholder="https://example.com/photo.jpg"
             className={inputClass}
           />
@@ -419,18 +373,12 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
             min="0.01"
             step="0.01"
             value={variant.price}
-            onChange={(e) =>
-              onChange({
-                price: e.target.value,
-              })
-            }
+            onChange={(event) => onChange({ price: event.target.value })}
             placeholder={String(basePrice || 0)}
             className={inputClass}
           />
         </Field>
       </div>
-
-      {/* SKU */}
 
       <div className="mt-3 min-w-0">
         <Field label="Unique Variant SKU">
@@ -438,11 +386,7 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
             <input
               value={variant.sku}
               disabled={variant.autoSku}
-              onChange={(e) =>
-                onChange({
-                  sku: e.target.value,
-                })
-              }
+              onChange={(event) => onChange({ sku: event.target.value })}
               placeholder="Enter unique SKU"
               className={`${inputClass} min-w-0 flex-1 disabled:bg-[#fbf8fd] disabled:text-[#8f7699]`}
             />
@@ -454,10 +398,10 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
               <input
                 type="checkbox"
                 checked={variant.autoSku}
-                onChange={(e) =>
+                onChange={(event) =>
                   onChange({
-                    autoSku: e.target.checked,
-                    sku: e.target.checked ? "" : variant.sku,
+                    autoSku: event.target.checked,
+                    sku: event.target.checked ? "" : variant.sku,
                   })
                 }
                 className="checkbox checkbox-sm border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
@@ -478,9 +422,9 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
   );
 }
 
-// =====================================
+// ==========================================
 // MAIN PAGE
-// =====================================
+// ==========================================
 
 export default function AdminProductFormPage() {
   const navigate = useNavigate();
@@ -507,10 +451,11 @@ export default function AdminProductFormPage() {
   const [productLoaded, setProductLoaded] = useState(!isEdit);
 
   const draggingId = useRef(null);
+  const submittingRef = useRef(false);
 
-  // =====================================
-  // LOAD CATEGORIES AND OCCASIONS
-  // =====================================
+  // ========================================
+  // LOAD CATEGORIES & OCCASIONS
+  // ========================================
 
   useEffect(() => {
     let ignore = false;
@@ -531,9 +476,9 @@ export default function AdminProductFormPage() {
 
         if (
           !categoryRes.ok ||
-          !categoryData.success ||
+          categoryData.success !== true ||
           !occasionRes.ok ||
-          !occasionData.success
+          occasionData.success !== true
         ) {
           throw new Error("ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
         }
@@ -543,8 +488,6 @@ export default function AdminProductFormPage() {
           setOccasions(occasionData.occasions || []);
         }
       } catch (err) {
-        console.error("Load categories/occasions:", err);
-
         if (!ignore) {
           setError(err.message || "ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
         }
@@ -562,9 +505,9 @@ export default function AdminProductFormPage() {
     };
   }, []);
 
-  // =====================================
-  // LOAD EXISTING PRODUCT FROM MONGODB
-  // =====================================
+  // ========================================
+  // LOAD EXISTING PRODUCT
+  // ========================================
 
   useEffect(() => {
     let ignore = false;
@@ -576,22 +519,21 @@ export default function AdminProductFormPage() {
       setVariantQuery("");
       setVariantFilter("all");
 
-      // ADD MODE
       if (!productId) {
+        if (ignore) return;
+
         setForm(createProduct());
         setProductLoading(false);
         setProductLoaded(true);
         return;
       }
 
-      // EDIT MODE
       setProductLoading(true);
       setProductLoaded(false);
 
       try {
         const auth = getAuth(app);
 
-        // Wait until Firebase restores logged-in user
         if (typeof auth.authStateReady === "function") {
           await auth.authStateReady();
         }
@@ -604,17 +546,20 @@ export default function AdminProductFormPage() {
 
         const token = await currentUser.getIdToken();
 
-        const response = await fetch(`${API_URL}/admin/products/${productId}`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
+        const response = await fetch(
+          `${API_URL}/admin/products/${encodeURIComponent(productId)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
           },
-          cache: "no-store",
-        });
+        );
 
         const result = await response.json().catch(() => ({}));
 
-        if (!response.ok || !result.success || !result.product) {
+        if (!response.ok || result.success !== true || !result.product) {
           throw new Error(result.message || "প্রোডাক্ট লোড করা যায়নি।");
         }
 
@@ -623,7 +568,6 @@ export default function AdminProductFormPage() {
         const existing = result.product;
         const defaults = createProduct();
 
-        // RESTORE IMAGES
         const images = (Array.isArray(existing.images) ? existing.images : [])
           .map((image) => {
             if (typeof image === "string") {
@@ -637,7 +581,6 @@ export default function AdminProductFormPage() {
           })
           .slice(0, MAX_IMAGES);
 
-        // RESTORE VARIANT OPTIONS
         const options = Object.fromEntries(
           Object.entries(defaults.options).map(([type, defaultGroup]) => {
             const savedGroup = existing.options?.[type] || {};
@@ -658,25 +601,21 @@ export default function AdminProductFormPage() {
           }),
         );
 
-        // RESTORE COMPLETE PRODUCT FORM
         setForm({
           ...defaults,
           ...existing,
 
           id: String(existing._id || existing.id || ""),
-
           name: existing.name || "",
           sku: existing.sku || "",
           autoSku: existing.autoSku === true,
           description: existing.description || "",
 
           regularPrice: String(existing.regularPrice ?? ""),
-
           salePrice:
             existing.salePrice == null ? "" : String(existing.salePrice),
 
           categoryId: existing.categoryId || "",
-
           occasionIds: Array.isArray(existing.occasionIds)
             ? existing.occasionIds
             : [],
@@ -686,11 +625,9 @@ export default function AdminProductFormPage() {
           available: existing.available === true,
           featured: existing.featured === true,
           customizable: existing.customizable === true,
-
           variantsEnabled: existing.variantsEnabled === true,
 
           options,
-
           variantOverrides:
             existing.variantOverrides &&
             typeof existing.variantOverrides === "object" &&
@@ -699,18 +636,12 @@ export default function AdminProductFormPage() {
               : {},
 
           customerFieldType: existing.customerFieldType || "none",
-
-          surpriseBox: existing.surpriseBox === true,
-
           packaging: existing.packaging === "premium" ? "premium" : "regular",
-
           premiumBoxPrice: String(existing.premiumBoxPrice ?? 250),
         });
 
         setProductLoaded(true);
       } catch (err) {
-        console.error("Load Product Error:", err);
-
         if (!ignore) {
           setError(err.message || "প্রোডাক্ট লোড করা যায়নি।");
           setProductLoaded(false);
@@ -729,9 +660,9 @@ export default function AdminProductFormPage() {
     };
   }, [productId]);
 
-  // =====================================
-  // FIELD UPDATES
-  // =====================================
+  // ========================================
+  // FORM UPDATES
+  // ========================================
 
   const update = (key, value) => {
     setForm((prev) => ({
@@ -753,10 +684,6 @@ export default function AdminProductFormPage() {
     setSuccess("");
   };
 
-  // =====================================
-  // CUSTOMER MODE
-  // =====================================
-
   const chooseCustomerMode = (type) => {
     updateMultiple({
       customerFieldType: type,
@@ -768,7 +695,6 @@ export default function AdminProductFormPage() {
     setForm((prev) => ({
       ...prev,
       customizable: enabled,
-
       customerFieldType: enabled
         ? prev.customerFieldType === "none"
           ? "frame"
@@ -777,9 +703,9 @@ export default function AdminProductFormPage() {
     }));
   };
 
-  // =====================================
-  // PRODUCT IMAGE GALLERY
-  // =====================================
+  // ========================================
+  // PRODUCT IMAGES
+  // ========================================
 
   const addPhoto = () => {
     setForm((prev) =>
@@ -818,9 +744,8 @@ export default function AdminProductFormPage() {
     setForm((prev) => {
       const images = [...prev.images];
 
-      const from = images.findIndex((x) => x.id === fromId);
-
-      const to = images.findIndex((x) => x.id === toId);
+      const from = images.findIndex((image) => image.id === fromId);
+      const to = images.findIndex((image) => image.id === toId);
 
       if (from < 0 || to < 0) return prev;
 
@@ -845,9 +770,9 @@ export default function AdminProductFormPage() {
   const mainPhoto =
     gallery.find((image) => image.id === selectedPhoto) || gallery[0];
 
-  // =====================================
+  // ========================================
   // VARIANT OPTIONS
-  // =====================================
+  // ========================================
 
   const toggleOption = (type, enabled) => {
     setForm((prev) => ({
@@ -871,7 +796,7 @@ export default function AdminProductFormPage() {
       const group = prev.options[type];
 
       const exists = group.values.some(
-        (x) => x.label.toLowerCase() === value.toLowerCase(),
+        (option) => option.label.toLowerCase() === value.toLowerCase(),
       );
 
       if (exists) return prev;
@@ -902,15 +827,17 @@ export default function AdminProductFormPage() {
         ...prev.options,
         [type]: {
           ...prev.options[type],
-          values: prev.options[type].values.filter((x) => x.id !== id),
+          values: prev.options[type].values.filter(
+            (option) => option.id !== id,
+          ),
         },
       },
     }));
   };
 
-  // =====================================
+  // ========================================
   // GENERATE VARIANT COMBINATIONS
-  // =====================================
+  // ========================================
 
   const activeGroups = useMemo(
     () =>
@@ -923,7 +850,10 @@ export default function AdminProductFormPage() {
   const combinationCount =
     !form.variantsEnabled || !activeGroups.length
       ? 0
-      : activeGroups.reduce((n, [, group]) => n * group.values.length, 1);
+      : activeGroups.reduce(
+          (count, [, group]) => count * group.values.length,
+          1,
+        );
 
   const combinations = useMemo(() => {
     if (
@@ -938,13 +868,13 @@ export default function AdminProductFormPage() {
 
     for (const [type, group] of activeGroups) {
       rows = rows.flatMap((row) =>
-        group.values.map((v) => ({
+        group.values.map((option) => ({
           parts: [
             ...row.parts,
             {
               type,
-              id: v.id,
-              label: v.label,
+              id: option.id,
+              label: option.label,
             },
           ],
         })),
@@ -953,9 +883,7 @@ export default function AdminProductFormPage() {
 
     return rows.map((row) => ({
       ...row,
-
       key: row.parts.map((part) => `${part.type}:${part.id}`).join("|"),
-
       title: row.parts.map((part) => part.label).join(" / "),
     }));
   }, [activeGroups, combinationCount, form.variantsEnabled]);
@@ -964,13 +892,11 @@ export default function AdminProductFormPage() {
     () =>
       combinations.map((row) => {
         const patch = form.variantOverrides[row.key] || {};
-
         const autoSku = patch.autoSku ?? true;
 
         return {
           ...row,
           autoSku,
-
           sku: autoSku
             ? `${form.sku || "SKB"}-${makeHash(row.key)}`
             : patch.sku || "",
@@ -986,10 +912,8 @@ export default function AdminProductFormPage() {
   const updateVariant = (key, patch) => {
     setForm((prev) => ({
       ...prev,
-
       variantOverrides: {
         ...prev.variantOverrides,
-
         [key]: {
           ...(prev.variantOverrides[key] || {}),
           ...patch,
@@ -998,24 +922,20 @@ export default function AdminProductFormPage() {
     }));
   };
 
-  // =====================================
-  // SEARCH / FILTER VARIANTS
-  // =====================================
-
   const filteredVariants = useMemo(
     () =>
-      variants.filter((v) => {
-        if (variantFilter === "available" && !v.available) {
+      variants.filter((variant) => {
+        if (variantFilter === "available" && !variant.available) {
           return false;
         }
 
-        if (variantFilter === "unavailable" && v.available) {
+        if (variantFilter === "unavailable" && variant.available) {
           return false;
         }
 
         return (
           !variantQuery.trim() ||
-          `${v.title} ${v.sku}`
+          `${variant.title} ${variant.sku}`
             .toLowerCase()
             .includes(variantQuery.toLowerCase().trim())
         );
@@ -1023,20 +943,20 @@ export default function AdminProductFormPage() {
     [variants, variantFilter, variantQuery],
   );
 
-  // =====================================
+  // ========================================
   // PRICE PREVIEW
-  // =====================================
+  // ========================================
 
   const regularPrice = Number(form.regularPrice) || 0;
-
   const salePrice = Number(form.salePrice) || 0;
 
-  const basePrice = salePrice > 0 ? salePrice : regularPrice;
+  const basePrice =
+    salePrice > 0 && salePrice < regularPrice ? salePrice : regularPrice;
 
-  const purchasableVariants = variants.filter((v) => v.available);
+  const purchasableVariants = variants.filter((variant) => variant.available);
 
-  const prices = purchasableVariants.map((v) =>
-    v.price === "" ? basePrice : Number(v.price),
+  const prices = purchasableVariants.map((variant) =>
+    variant.price === "" ? basePrice : Number(variant.price),
   );
 
   const minPrice = form.variantsEnabled
@@ -1051,58 +971,14 @@ export default function AdminProductFormPage() {
       : 0
     : basePrice;
 
-  // =====================================
-  // CUSTOMER FIELD CONFIGURATION
-  // =====================================
-
-  const getCustomerFields = () => {
-    if (!form.customizable) return [];
-
-    if (form.customerFieldType === "frame") {
-      return [
-        {
-          key: "photos",
-          label: "আপনার ছবি আপলোড করুন",
-          type: "file",
-          maxFiles: 20,
-        },
-        {
-          key: "name",
-          label: "নাম",
-          type: "text",
-        },
-        {
-          key: "dob",
-          label: "জন্মতারিখ / বিবাহবার্ষিকী",
-          type: "date",
-        },
-        {
-          key: "engraving",
-          label: "ফ্রেমের নিচের খোদাই বার্তা / উইশ",
-          type: "textarea",
-        },
-      ];
-    }
-
-    if (form.customerFieldType === "note") {
-      return [
-        {
-          key: "customNote",
-          label: "বিশেষ নির্দেশনা",
-          type: "textarea",
-        },
-      ];
-    }
-
-    return [];
-  };
-
-  // =====================================
-  // PUBLISH / UPDATE PRODUCT
-  // =====================================
+  // ========================================
+  // SAVE PRODUCT
+  // ========================================
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (submittingRef.current) return;
 
     setError("");
     setSuccess("");
@@ -1110,23 +986,20 @@ export default function AdminProductFormPage() {
     const fail = (message) => {
       setError(message);
 
-      Swal.fire({
+      void Swal.fire({
         title: message,
         icon: "error",
         toast: true,
         position: "top-end",
         showConfirmButton: false,
         timer: 2500,
-        timerProgressBar: true,
       });
     };
 
-    // PREVENT UPDATE BEFORE PRODUCT LOAD
     if (isEdit && !productLoaded) {
       return fail("প্রোডাক্টের তথ্য এখনো লোড হয়নি।");
     }
 
-    // BASIC VALIDATION
     if (!form.name.trim()) {
       return fail("প্রোডাক্টের নাম লিখুন।");
     }
@@ -1161,19 +1034,43 @@ export default function AdminProductFormPage() {
     }
 
     // IMAGE VALIDATION
+
     const images = form.images.filter((image) => image.url.trim());
 
     if (!images.length || images.some((image) => !validUrl(image.url))) {
       return fail("অন্তত একটি সঠিক Image URL প্রয়োজন।");
     }
 
-    if (new Set(images.map((i) => i.url.trim())).size !== images.length) {
+    if (
+      new Set(images.map((image) => image.url.trim())).size !== images.length
+    ) {
       return fail("একই Image URL একাধিকবার দেওয়া যাবে না।");
     }
 
+    // OPTION VALIDATION
+
+    for (const [type, group] of Object.entries(form.options)) {
+      if (group.values.length > 100) {
+        return fail(`${type}: সর্বোচ্চ ১০০টি অপশন রাখা যাবে।`);
+      }
+
+      if (group.values.some((option) => !String(option.label || "").trim())) {
+        return fail(`${type}: খালি Option রাখা যাবে না।`);
+      }
+
+      if (
+        group.values.some(
+          (option) => !/^[a-zA-Z0-9_-]+$/.test(String(option.id || "")),
+        )
+      ) {
+        return fail(`${type}: একটি Option-এর ID সঠিক নয়।`);
+      }
+    }
+
     // VARIANT VALIDATION
+
     if (combinationCount > MAX_VARIANTS) {
-      return fail(`সর্বোচ্চ ${MAX_VARIANTS}টি variant রাখা যাবে।`);
+      return fail(`সর্বোচ্চ ${MAX_VARIANTS}টি Variant রাখা যাবে।`);
     }
 
     if (form.variantsEnabled && !variants.length) {
@@ -1182,32 +1079,31 @@ export default function AdminProductFormPage() {
       );
     }
 
-    for (const v of variants) {
-      if (!v.sku.trim()) {
-        return fail(`${v.title}: SKU প্রয়োজন।`);
+    for (const variant of variants) {
+      if (!variant.sku.trim()) {
+        return fail(`${variant.title}: SKU প্রয়োজন।`);
       }
 
-      if (v.imageUrl.trim() && !validUrl(v.imageUrl)) {
-        return fail(`${v.title}: Image URL সঠিক নয়।`);
+      if (variant.imageUrl.trim() && !validUrl(variant.imageUrl)) {
+        return fail(`${variant.title}: Image URL সঠিক নয়।`);
       }
 
       if (
-        v.price !== "" &&
-        (!Number.isFinite(Number(v.price)) || Number(v.price) <= 0)
+        variant.price !== "" &&
+        (!Number.isFinite(Number(variant.price)) || Number(variant.price) <= 0)
       ) {
-        return fail(`${v.title}: মূল্য সঠিক নয়।`);
+        return fail(`${variant.title}: মূল্য সঠিক নয়।`);
       }
     }
 
-    const allSkus = [form.sku, ...variants.map((v) => v.sku)].map((s) =>
-      s.trim().toUpperCase(),
+    const allSkus = [form.sku, ...variants.map((variant) => variant.sku)].map(
+      (sku) => sku.trim().toUpperCase(),
     );
 
     if (new Set(allSkus).size !== allSkus.length) {
       return fail("Product ও Variant SKU আলাদা হতে হবে।");
     }
 
-    // PACKAGING VALIDATION
     if (
       !Number.isFinite(Number(form.premiumBoxPrice)) ||
       Number(form.premiumBoxPrice) < 0 ||
@@ -1216,52 +1112,83 @@ export default function AdminProductFormPage() {
       return fail("Premium Box-এর মূল্য সঠিক নয়।");
     }
 
-    const now = new Date().toISOString();
+    // ONLY KEEP ACTIVE VARIANT OVERRIDES
 
-    // =====================================
-    // COMPLETE PRODUCT OBJECT
-    // =====================================
+    const validVariantKeys = new Set(variants.map((variant) => variant.key));
+
+    const currentOverrides = form.variantsEnabled
+      ? Object.fromEntries(
+          Object.entries(form.variantOverrides).filter(([key]) =>
+            validVariantKeys.has(key),
+          ),
+        )
+      : {};
+
+    // ========================================
+    // BACKEND-COMPATIBLE PRODUCT PAYLOAD
+    // ========================================
 
     const payload = {
-      ...form,
-
-      id: form.id || productId || uid(),
       name: form.name.trim(),
-      sku: form.sku.trim(),
+      sku: form.sku.trim().toUpperCase(),
+      autoSku: form.autoSku === true,
 
       regularPrice,
-
       salePrice: form.salePrice === "" ? null : salePrice,
 
-      images: images.map((i) => ({
-        id: i.id,
-        url: i.url.trim(),
+      description: form.description.trim(),
+      categoryId: form.categoryId,
+      occasionIds: [...form.occasionIds],
+
+      images: images.map((image) => ({
+        id: image.id,
+        url: image.url.trim(),
       })),
 
-      variants: variants.map((v) => ({
-        key: v.key,
-        title: v.title,
+      available: form.available === true,
+      featured: form.featured === true,
+      customizable: form.customizable === true,
+      variantsEnabled: form.variantsEnabled === true,
 
-        options: Object.fromEntries(v.parts.map((p) => [p.type, p.label])),
+      options: Object.fromEntries(
+        Object.entries(form.options).map(([type, group]) => [
+          type,
+          {
+            enabled: group.enabled === true,
+            values: group.values.map((option) => ({
+              id: String(option.id),
+              label: option.label.trim(),
+            })),
+          },
+        ]),
+      ),
 
-        sku: v.sku.trim(),
-        autoSku: v.autoSku,
+      variantOverrides: currentOverrides,
 
-        price: v.price === "" ? basePrice : Number(v.price),
+      variants: form.variantsEnabled
+        ? variants.map((variant) => ({
+            key: variant.key,
+            title: variant.title,
 
-        imageUrl: v.imageUrl.trim(),
-        available: v.available,
-      })),
+            options: Object.fromEntries(
+              variant.parts.map((part) => [part.type, part.label]),
+            ),
 
-      customerFields: getCustomerFields(),
+            sku: variant.sku.trim().toUpperCase(),
+            autoSku: variant.autoSku,
+            price: variant.price === "" ? basePrice : Number(variant.price),
+            imageUrl: variant.imageUrl.trim(),
+            available: variant.available,
+          }))
+        : [],
 
+      customerFieldType: form.customizable ? form.customerFieldType : "none",
+
+      packaging: form.packaging === "premium" ? "premium" : "regular",
       premiumBoxPrice: Number(form.premiumBoxPrice),
-
-      status: "published",
-      createdAt: form.createdAt || now,
-      updatedAt: now,
     };
 
+    submittingRef.current = true;
     setLoading(true);
 
     try {
@@ -1279,43 +1206,44 @@ export default function AdminProductFormPage() {
 
       const token = await currentUser.getIdToken();
 
-      // ADD = POST, EDIT = PATCH
-      const response = await fetch(
-        isEdit
-          ? `${API_URL}/admin/products/${productId}`
-          : `${API_URL}/admin/products`,
-        {
-          method: isEdit ? "PATCH" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
+      const endpoint = isEdit
+        ? `${API_URL}/admin/products/${encodeURIComponent(productId)}`
+        : `${API_URL}/admin/products`;
+
+      const response = await fetch(endpoint, {
+        method: isEdit ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify(payload),
+      });
 
       const result = await response.json().catch(() => ({}));
 
-      if (!response.ok || !result.success) {
+      if (!response.ok || result.success !== true) {
         throw new Error(result.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।");
       }
 
       setSuccess(isEdit ? "প্রোডাক্ট আপডেট হয়েছে!" : "প্রোডাক্ট যোগ হয়েছে!");
 
-      Swal.fire({
+      void Swal.fire({
         title: isEdit ? "প্রোডাক্ট আপডেট হয়েছে!" : "প্রোডাক্ট যোগ হয়েছে!",
         icon: "success",
         toast: true,
         position: "top-end",
         showConfirmButton: false,
         timer: 2000,
-        timerProgressBar: true,
       });
 
-      // REFRESH PRODUCT LIST CACHE
-      await queryClient.invalidateQueries({
-        queryKey: ["adminProducts"],
-      });
+      await Promise.all(
+        [
+          ["adminProducts"],
+          ["products"],
+          ["shopProducts"],
+          ["featuredProducts"],
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
 
       navigate("/admin/products", {
         replace: true,
@@ -1325,29 +1253,28 @@ export default function AdminProductFormPage() {
 
       setError(message);
 
-      Swal.fire({
+      void Swal.fire({
         title: message,
         icon: "error",
         toast: true,
         position: "top-end",
         showConfirmButton: false,
         timer: 2500,
-        timerProgressBar: true,
       });
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
 
-  // =====================================
-  // PRODUCT LOADING / ERROR
-  // =====================================
+  // ========================================
+  // LOADING / ERROR
+  // ========================================
 
   if (isEdit && productLoading) {
     return (
       <div className="flex min-h-[65vh] flex-col items-center justify-center gap-3">
         <Loader2 size={32} className="animate-spin text-secondary" />
-
         <p className="text-sm text-muted">প্রোডাক্টের তথ্য লোড হচ্ছে...</p>
       </div>
     );
@@ -1371,14 +1298,12 @@ export default function AdminProductFormPage() {
     );
   }
 
-  // =====================================
-  // JSX - ORIGINAL DESIGN
-  // =====================================
+  // ========================================
+  // PAGE UI
+  // ========================================
 
   return (
     <div className="min-h-screen text-[#310039]">
-      {/* PAGE HEADING */}
-
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs text-[#917b9a]">
@@ -1525,9 +1450,7 @@ export default function AdminProductFormPage() {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
-
                     reorderPhoto(draggingId.current, image.id);
-
                     draggingId.current = null;
                   }}
                   className="flex min-w-0 items-center gap-2 rounded-lg border border-[#ede3f2] bg-[#f7f0fc] p-2.5"
@@ -1536,9 +1459,7 @@ export default function AdminProductFormPage() {
                     draggable
                     onDragStart={(e) => {
                       draggingId.current = image.id;
-
                       e.dataTransfer.effectAllowed = "move";
-
                       e.dataTransfer.setData("text/plain", image.id);
                     }}
                     onDragEnd={() => {
@@ -1630,7 +1551,7 @@ export default function AdminProductFormPage() {
 
                 <MiniSwitch
                   checked={form.variantsEnabled}
-                  onChange={(v) => update("variantsEnabled", v)}
+                  onChange={(value) => update("variantsEnabled", value)}
                 />
 
                 <span className="text-xs font-bold text-[#903eaa]">
@@ -1674,7 +1595,7 @@ export default function AdminProductFormPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="text-base font-bold text-[#903eaa]">
-                        জেনারেটেড ভ্যারিয়েন্ট তালিকা (Generated Variant List)
+                        জেনারেটেড ভ্যারিয়েন্ট তালিকা
                       </h3>
 
                       <p className="mt-1 text-xs text-[#88788e]">
@@ -1689,7 +1610,8 @@ export default function AdminProductFormPage() {
                       </span>
 
                       <span className="rounded-lg bg-[#edf9f0] px-3 py-2 text-xs font-semibold text-[#237547]">
-                        উপলব্ধ {variants.filter((v) => v.available).length}
+                        উপলব্ধ{" "}
+                        {variants.filter((variant) => variant.available).length}
                         টি
                       </span>
                     </div>
@@ -1706,7 +1628,7 @@ export default function AdminProductFormPage() {
                     </div>
                   ) : (
                     <>
-                      {/* SEARCH AND FILTER */}
+                      {/* VARIANT SEARCH */}
 
                       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                         <div className="relative min-w-0 flex-1">
@@ -1729,9 +1651,7 @@ export default function AdminProductFormPage() {
                           className={`${inputClass} sm:w-44`}
                         >
                           <option value="all">সব ভ্যারিয়েন্ট</option>
-
                           <option value="available">উপলব্ধ</option>
-
                           <option value="unavailable">অনুপলব্ধ</option>
                         </select>
                       </div>
@@ -1746,10 +1666,8 @@ export default function AdminProductFormPage() {
                         )}
                       </div>
 
-                      {/* SCROLLABLE VARIANT GRID */}
-
                       <div
-                        className={`mt-3 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 ${
+                        className={`mt-3 grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-3 ${
                           filteredVariants.length > 6
                             ? "max-h-[605px] overflow-y-auto overscroll-contain pr-1 xl:max-h-[590px]"
                             : ""
@@ -1866,12 +1784,11 @@ export default function AdminProductFormPage() {
 
               <p>
                 Frame Field বা Custom Note বেছে নিলেই Customizable Product নিজে
-                থেকে চালু হবে। নিচের ফিল্ডগুলো শুধু গ্রাহক ফর্মের প্রিভিউ; এখানে
-                তথ্য দেওয়া যাবে না।
+                থেকে চালু হবে। নিচের ফিল্ডগুলো শুধু গ্রাহক ফর্মের প্রিভিউ।
               </p>
             </div>
 
-            {/* FRAME FIELD PREVIEW - ALL DISABLED */}
+            {/* FRAME FIELD PREVIEW */}
 
             {form.customerFieldType === "frame" && form.customizable && (
               <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
@@ -1885,16 +1802,13 @@ export default function AdminProductFormPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {/* PHOTO UPLOAD - DISABLED */}
-
                   <div className="rounded-lg bg-white p-4">
                     <Field
                       label="৩. আপনার ছবি আপলোড করুন"
                       hint="সর্বোচ্চ ২০টি ছবি আপলোড করা যাবে"
                     >
-                      <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-[#e4d3eb] bg-[#fbf8fd] p-5 text-center text-xs text-[#76258a]">
+                      <label className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-[#e4d3eb] bg-[#fbf8fd] p-5 text-center text-xs text-[#76258a]">
                         <UploadCloud size={25} />
-
                         <span>ছবি বেছে নিন (Max 20)</span>
 
                         <input
@@ -1907,8 +1821,6 @@ export default function AdminProductFormPage() {
                       </label>
                     </Field>
                   </div>
-
-                  {/* NAME AND DATE - DISABLED */}
 
                   <div className="space-y-3 rounded-lg bg-white p-4">
                     <Field label="৪.১. নাম">
@@ -1925,12 +1837,10 @@ export default function AdminProductFormPage() {
                   </div>
                 </div>
 
-                {/* ENGRAVING - DISABLED */}
-
                 <div className="mt-3 rounded-lg bg-white p-4">
                   <Field
                     label="৫. ফ্রেমের নিচের খোদাই বার্তা / উইশ"
-                    hint="ফ্রেমের নিচে যে বিশেষ বার্তাটি খোদাই করতে চান, এখানে নোটের মতো লিখুন।"
+                    hint="গ্রাহক তাঁর বিশেষ বার্তা এখানে লিখতে পারবেন।"
                   >
                     <textarea
                       rows={3}
@@ -1944,7 +1854,7 @@ export default function AdminProductFormPage() {
               </div>
             )}
 
-            {/* CUSTOM NOTE - DISABLED */}
+            {/* CUSTOM NOTE PREVIEW */}
 
             {form.customerFieldType === "note" && form.customizable && (
               <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
@@ -1955,7 +1865,6 @@ export default function AdminProductFormPage() {
                   <textarea
                     rows={4}
                     maxLength={500}
-                    value=""
                     disabled
                     placeholder="গ্রাহকের বিশেষ নির্দেশনা..."
                     className={`${inputClass} resize-y`}
@@ -1965,44 +1874,15 @@ export default function AdminProductFormPage() {
                 <p className="mt-2 text-right text-xs text-[#8e7995]">0/500</p>
               </div>
             )}
-
-            {/* SURPRISE BOX */}
-
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#f7f0fc] p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-lg bg-[#ffe16d]">
-                  <Gift size={21} />
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold">
-                    সারপ্রাইজ বক্স অপশন (Surprise Box)
-                  </p>
-
-                  <p className="mt-1 text-xs text-[#82748b]">ডিফল্ট: No</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="text-xs">No</span>
-
-                <MiniSwitch
-                  checked={form.surpriseBox}
-                  onChange={(v) => update("surpriseBox", v)}
-                />
-
-                <span className="text-xs text-[#903eaa]">Yes</span>
-              </div>
-            </div>
           </Section>
 
-          {/* PACKAGING */}
+          {/* PRODUCT-LEVEL PACKAGING */}
 
           <Section
             title="ঐচ্ছিক গিফট বক্স প্যাকেজিং (Optional Gift Box)"
             right={
               <span className="text-xs text-[#897a90]">
-                চেকআউটে গ্রাহক নির্বাচন করতে পারবেন
+                প্রতি আইটেমে বক্স নির্বাচন
               </span>
             }
           >
@@ -2065,6 +1945,7 @@ export default function AdminProductFormPage() {
                     <input
                       type="number"
                       min="0"
+                      step="0.01"
                       value={form.premiumBoxPrice}
                       onChange={(e) =>
                         update("premiumBoxPrice", e.target.value)
@@ -2090,14 +1971,14 @@ export default function AdminProductFormPage() {
               title="ক্রয়যোগ্য / উপলব্ধ"
               subtitle="Available for Purchase"
               checked={form.available}
-              onChange={(v) => update("available", v)}
+              onChange={(value) => update("available", value)}
             />
 
             <StatusCard
               title="ফিচার্ড প্রোডাক্ট"
               subtitle="Featured Product"
               checked={form.featured}
-              onChange={(v) => update("featured", v)}
+              onChange={(value) => update("featured", value)}
             />
 
             <StatusCard
@@ -2107,12 +1988,14 @@ export default function AdminProductFormPage() {
               onChange={toggleCustomizable}
             />
 
+            {/* CATEGORY */}
+
             <Field label="ক্যাটাগরি (Category)" required>
               <select
                 value={form.categoryId}
                 onChange={(e) => update("categoryId", e.target.value)}
-                className={`${inputClass} bg-[#f7f0fc]`}
                 disabled={taxonomiesLoading}
+                className={`${inputClass} bg-[#f7f0fc]`}
               >
                 <option value="">ক্যাটাগরি নির্বাচন করুন</option>
 
@@ -2124,7 +2007,7 @@ export default function AdminProductFormPage() {
               </select>
             </Field>
 
-            {/* OCCASIONS: MULTIPLE SELECTION */}
+            {/* OCCASIONS */}
 
             <Field
               label="উপলক্ষ (Occasions)"
@@ -2173,7 +2056,7 @@ export default function AdminProductFormPage() {
             </Field>
           </Section>
 
-          {/* LIVE PREVIEW */}
+          {/* STOREFRONT LIVE PREVIEW */}
 
           <div className="overflow-hidden rounded-xl border border-[#ede4f1] bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-[#eee4f2] bg-[#faf6fc] px-4 py-4">
@@ -2189,7 +2072,6 @@ export default function AdminProductFormPage() {
                 ) : (
                   <div className="flex aspect-square flex-col items-center justify-center gap-3 bg-[#f7f0fc] text-[#a58caf]">
                     <ImageIcon size={48} />
-
                     <span className="text-sm">Product Image Preview</span>
                   </div>
                 )}
@@ -2251,18 +2133,20 @@ export default function AdminProductFormPage() {
                       সব ভ্যারিয়েন্ট অনুপলব্ধ
                     </p>
                   ) : (
-                    <p className="text-xl font-extrabold">
+                    <p className="text-xl font-bold">
                       {minPrice === maxPrice
                         ? money(minPrice)
                         : `${money(minPrice)} – ${money(maxPrice)}`}
                     </p>
                   )}
 
-                  {!form.variantsEnabled && salePrice > 0 && (
-                    <span className="text-sm text-[#998d9c] line-through">
-                      {money(regularPrice)}
-                    </span>
-                  )}
+                  {!form.variantsEnabled &&
+                    salePrice > 0 &&
+                    salePrice < regularPrice && (
+                      <span className="text-sm text-[#998d9c] line-through">
+                        {money(regularPrice)}
+                      </span>
+                    )}
                 </div>
 
                 {form.variantsEnabled && (
@@ -2281,18 +2165,14 @@ export default function AdminProductFormPage() {
                   <p className="text-xs text-[#82758b]">✓ কাস্টম নোট সক্রিয়</p>
                 )}
 
-                {form.surpriseBox && (
-                  <p className="text-xs text-[#82758b]">
-                    ✓ সারপ্রাইজ বক্স অপশন সক্রিয়
-                  </p>
-                )}
-
                 {form.packaging === "premium" && (
                   <p className="text-xs text-[#82758b]">
                     ✓ প্রিমিয়াম বক্স: {money(form.premiumBoxPrice)}
                   </p>
                 )}
               </div>
+
+              {/* SAVE BUTTONS */}
 
               <div className="mt-5 space-y-3 border-t border-[#f0e8f3] pt-5">
                 <button
@@ -2333,15 +2213,16 @@ export default function AdminProductFormPage() {
             <Info size={19} className="mt-0.5 shrink-0 text-[#903eaa]" />
 
             <p>
-              Slug backend-এ স্বয়ংক্রিয়ভাবে তৈরি হবে। প্রতিটি Variant-এর SKU
-              আলাদা হতে হবে।
+              Slug Backend-এ স্বয়ংক্রিয়ভাবে তৈরি হবে। প্রতিটি Variant-এর SKU
+              আলাদা হতে হবে। Customer Customization Fields Backend নিজেই তৈরি
+              করবে।
             </p>
           </div>
 
           {error && (
             <div
               role="alert"
-              className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+              className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
             >
               {error}
             </div>
@@ -2350,7 +2231,7 @@ export default function AdminProductFormPage() {
           {success && (
             <div
               role="status"
-              className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700"
+              className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700"
             >
               {success}
             </div>

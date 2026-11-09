@@ -1,45 +1,41 @@
 import { useContext, useEffect, useState } from "react";
-
 import { Link } from "react-router-dom";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
 import Swal from "sweetalert2";
 
 import {
-  Search,
-  Wallet,
-  Clock3,
+  AlertTriangle,
+  ArrowRight,
+  Banknote,
+  CalendarDays,
   CheckCircle2,
-  XCircle,
-  ShieldCheck,
-  ShieldAlert,
-  Eye,
-  Phone,
-  MessageCircle,
-  Copy,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
-  ArrowRight,
-  UserRound,
-  CalendarDays,
-  ReceiptText,
-  AlertTriangle,
-  ShoppingBag,
-  Loader2,
-  X,
+  Clock3,
+  Copy,
+  Eye,
   ImageOff,
+  Loader2,
+  MessageCircle,
+  Phone,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  ShoppingBag,
+  UserRound,
+  Wallet,
+  X,
+  XCircle,
 } from "lucide-react";
 
 import { API_URL } from "../../utils/siteConfig";
-
 import { AuthContext } from "../../providers/AuthProvider";
 
-// ========================================
-// CONFIG
-// ========================================
-
+// ==========================================
+// CONFIGURATION
+// ==========================================
 
 const PAGE_SIZE = 10;
 
@@ -53,35 +49,74 @@ const METHOD_NAMES = {
 const STATUS_META = {
   pending: {
     label: "যাচাই বাকি",
-    className: "border-amber-200 bg-amber-50 text-amber-700",
+    color: "border-amber-200 bg-amber-50 text-amber-700",
   },
   partially_paid: {
     label: "আংশিক পরিশোধিত",
-    className: "border-blue-200 bg-blue-50 text-blue-700",
+    color: "border-blue-200 bg-blue-50 text-blue-700",
   },
   verified: {
     label: "ভেরিফাইড",
-    className: "border-green-200 bg-green-50 text-green-700",
+    color: "border-green-200 bg-green-50 text-green-700",
   },
   rejected: {
     label: "রিজেক্টেড",
-    className: "border-red-200 bg-red-50 text-red-700",
+    color: "border-red-200 bg-red-50 text-red-700",
   },
 };
 
-const money = (amount) =>
-  `৳${new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(Number(amount) || 0)}`;
+const ORDER_NAMES = {
+  pending: "পেন্ডিং",
+  verified: "যাচাইকৃত",
+  processing: "প্রসেসিং",
+  shipped: "শিপড",
+  delivered: "ডেলিভার্ড",
+  rejected: "রিজেক্টেড",
+  cancelled: "বাতিল",
+};
 
-const formatDate = (value) => {
+// ==========================================
+// AMOUNT HELPERS
+// ==========================================
+
+const toCents = (value) => Math.round((Number(value) || 0) * 100);
+
+const fromCents = (value) => Math.round(value) / 100;
+
+const bn = (value) => Number(value || 0).toLocaleString("bn-BD");
+
+const money = (value) =>
+  `৳${Number(value || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`;
+
+const stopped = (order) => ["cancelled", "rejected"].includes(order?.status);
+
+const dueOf = (order) =>
+  Math.max(0, toCents(order?.total) - toCents(order?.payment?.verifiedAmount)) /
+  100;
+
+const excessOf = (order) =>
+  Math.max(0, toCents(order?.payment?.verifiedAmount) - toCents(order?.total)) /
+  100;
+
+const refundDueOf = (order) =>
+  Math.max(
+    0,
+    toCents(order?.payment?.verifiedAmount) -
+      toCents(order?.payment?.refundedAmount),
+  ) / 100;
+
+// ==========================================
+// GENERAL HELPERS
+// ==========================================
+
+function formatDate(value) {
   if (!value) return "—";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
+  if (Number.isNaN(date.getTime())) return "—";
 
   return date.toLocaleString("bn-BD", {
     timeZone: "Asia/Dhaka",
@@ -91,14 +126,10 @@ const formatDate = (value) => {
     hour: "numeric",
     minute: "2-digit",
   });
-};
+}
 
-const toCents = (value) => Math.round((Number(value) || 0) * 100);
-
-const asAmount = (cents) => Number((cents / 100).toFixed(2));
-
-const getPhoneLink = (phone) => {
-  const digits = String(phone || "").replace(/\D/g, "");
+function phoneForWhatsApp(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
 
   if (/^01[3-9]\d{8}$/.test(digits)) {
     return `88${digits}`;
@@ -109,24 +140,23 @@ const getPhoneLink = (phone) => {
   }
 
   return "";
-};
+}
 
-const getWhatsAppLink = (order) => {
-  const phone = getPhoneLink(order.customer?.phone || order.shipping?.phone);
+function whatsappLink(order) {
+  const phone = phoneForWhatsApp(
+    order.customer?.phone || order.shipping?.phone,
+  );
 
   if (!phone) return "";
 
-  const message =
-    `SokhBilash থেকে যোগাযোগ করছি।\n` +
-    `আপনার অর্ডার ${order.orderNumber} এর ` +
-    `পেমেন্ট সম্পর্কে কিছু তথ্য নিশ্চিত করতে চাই।`;
+  const note = `SokhBilash থেকে যোগাযোগ করছি। আপনার অর্ডার ${order.orderNumber} এর পেমেন্ট সম্পর্কে কিছু তথ্য নিশ্চিত করতে চাই।`;
 
-  return `https://wa.me/${phone}?text=` + encodeURIComponent(message);
-};
+  return `https://wa.me/${phone}?text=` + encodeURIComponent(note);
+}
 
-// ========================================
+// ==========================================
 // AUTHENTICATED ADMIN API
-// ========================================
+// ==========================================
 
 async function adminRequest(user, path, { method = "GET", body, signal } = {}) {
   if (!user) {
@@ -137,22 +167,17 @@ async function adminRequest(user, path, { method = "GET", body, signal } = {}) {
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    signal,
     cache: "no-store",
+    signal,
 
     headers: {
       Accept: "application/json",
-
       Authorization: `Bearer ${token}`,
 
-      ...(body !== undefined
-        ? {
-            "Content-Type": "application/json",
-          }
-        : {}),
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
 
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 
   const data = await response.json().catch(() => ({}));
@@ -164,34 +189,39 @@ async function adminRequest(user, path, { method = "GET", body, signal } = {}) {
   return data;
 }
 
-// ========================================
-// UI COMPONENTS
-// ========================================
+// ==========================================
+// STATUS BADGE
+// ==========================================
 
 function StatusBadge({ status }) {
   const meta = STATUS_META[status];
 
+  const Icon =
+    status === "verified"
+      ? CheckCircle2
+      : status === "rejected"
+        ? XCircle
+        : Clock3;
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
-        meta?.className || "border-base-300 bg-base-200 text-muted"
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-bold ${
+        meta?.color || "border-base-300 bg-base-200 text-muted"
       }`}
     >
-      {status === "verified" ? (
-        <CheckCircle2 size={12} />
-      ) : status === "rejected" ? (
-        <XCircle size={12} />
-      ) : (
-        <Clock3 size={12} />
-      )}
+      <Icon size={12} />
 
       {meta?.label || status || "অজানা"}
     </span>
   );
 }
 
+// ==========================================
+// PAYMENT METHOD BADGE
+// ==========================================
+
 function MethodBadge({ method }) {
-  const styles = {
+  const colors = {
     bkash: "bg-pink-50 text-pink-700",
     nagad: "bg-orange-50 text-orange-700",
     rocket: "bg-purple-50 text-purple-700",
@@ -199,14 +229,18 @@ function MethodBadge({ method }) {
 
   return (
     <span
-      className={`inline-flex rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-        styles[method] || "bg-base-200 text-primary"
+      className={`inline-flex whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+        colors[method] || "bg-base-200 text-primary"
       }`}
     >
       {METHOD_NAMES[method] || method || "—"}
     </span>
   );
 }
+
+// ==========================================
+// STATISTICS CARD
+// ==========================================
 
 function StatCard({ title, subtitle, value, icon: Icon, iconStyle }) {
   return (
@@ -225,99 +259,99 @@ function StatCard({ title, subtitle, value, icon: Icon, iconStyle }) {
         </div>
       </div>
 
-      <p className="mt-4 text-2xl font-bold text-primary sm:text-3xl">
+      <p className="mt-4 break-words text-2xl font-bold text-primary sm:text-3xl">
         {value}
       </p>
     </div>
   );
 }
 
-function ProductThumb({ product, size = "md" }) {
-  const [failed, setFailed] = useState(false);
+// ==========================================
+// PRODUCT THUMBNAIL
+// ==========================================
+
+function ProductThumb({ product, big = false }) {
+  const [broken, setBroken] = useState("");
+
+  const url = product?.image || "";
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-base-300 bg-base-200 ${
-        size === "sm" ? "size-10" : "size-12"
-      }`}
+      className={`flex ${
+        big ? "size-12" : "size-10"
+      } shrink-0 items-center justify-center overflow-hidden rounded-lg border border-base-300 bg-base-200`}
     >
-      {product?.image && !failed ? (
+      {url && broken !== url ? (
         <img
-          src={product.image}
-          alt={product.name || "Product"}
+          src={url}
+          alt={product?.name || "Product"}
           loading="lazy"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover"
+          onError={() => setBroken(url)}
+          className="size-full object-cover"
         />
       ) : (
-        <ImageOff size={size === "sm" ? 15 : 18} className="text-muted" />
+        <ImageOff size={big ? 18 : 15} className="text-muted" />
       )}
     </div>
   );
 }
 
-// ========================================
-// CUSTOMER PROFILE AVATAR
-// ========================================
+// ==========================================
+// CUSTOMER AVATAR
+// ==========================================
 
 function CustomerAvatar({ name, photoUrl }) {
-  const [failed, setFailed] = useState(false);
+  const [broken, setBroken] = useState("");
 
   return (
     <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-secondary/15 bg-secondary/10 text-secondary">
-      {photoUrl && !failed ? (
+      {photoUrl && broken !== photoUrl ? (
         <img
           src={photoUrl}
           alt={name || "Customer"}
           loading="lazy"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover"
+          onError={() => setBroken(photoUrl)}
+          className="size-full object-cover"
         />
       ) : (
-        <UserRound size={19} strokeWidth={1.8} />
+        <UserRound size={19} />
       )}
     </div>
   );
 }
 
-// ========================================
-// PRODUCT PREVIEW - MY ORDERS STYLE
-// ========================================
+// ==========================================
+// PAYMENT PRODUCT PREVIEW
+// ==========================================
 
 function PaymentProductPreview({ order }) {
   const products = Array.isArray(order.items) ? order.items.slice(0, 2) : [];
 
   const quantity =
-    Number(order.itemCount) ||
+    order.itemCount ??
     (order.items || []).reduce(
-      (total, item) => total + (Number(item.quantity) || 0),
+      (n, item) => n + (Number(item.quantity) || 0),
       0,
     );
 
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      {/* OVERLAPPING PRODUCT IMAGES */}
-
       <div className="flex shrink-0 items-center">
-        {products.map((product, index) => (
+        {products.map((product, i) => (
           <div
-            key={`${product.name}-${index}`}
-            className={`rounded-lg border-2 border-white ${
-              index > 0 ? "-ml-2" : ""
-            }`}
+            key={product.cartId || `${product.name}-${i}`}
+            className={`rounded-lg border-2 border-white ${i ? "-ml-2" : ""}`}
           >
-            <ProductThumb product={product} size="sm" />
+            <ProductThumb product={product} />
           </div>
         ))}
 
-        {products.length === 0 && (
+        {!products.length && (
           <div className="flex size-10 items-center justify-center rounded-lg bg-base-200 text-secondary">
             <ShoppingBag size={17} />
           </div>
         )}
       </div>
-
-      {/* PRODUCT NAME + COUNT */}
 
       <div className="min-w-0 flex-1">
         <p
@@ -327,13 +361,15 @@ function PaymentProductPreview({ order }) {
           {products[0]?.name || "অর্ডারের পণ্য"}
         </p>
 
-        <p className="mt-1 text-[11px] text-muted">
-          মোট {quantity.toLocaleString("bn-BD")} পিস
-        </p>
+        <p className="mt-1 text-[11px] text-muted">মোট {bn(quantity)} পিস</p>
       </div>
     </div>
   );
 }
+
+// ==========================================
+// INFO ROW
+// ==========================================
 
 function InfoRow({ label, children }) {
   return (
@@ -341,15 +377,21 @@ function InfoRow({ label, children }) {
       <span className="shrink-0 text-xs text-muted">{label}</span>
 
       <div className="min-w-0 max-w-[65%] break-words text-right text-xs font-semibold text-primary">
-        {children || "—"}
+        {children ?? "—"}
       </div>
     </div>
   );
 }
 
-// ========================================
+// ==========================================
 // PAYMENT REVIEW MODAL
-// ========================================
+//
+// IMPORTANT:
+// verifiedAmount = CUMULATIVE RECEIVED
+//
+// Current Proof amount can be lower/higher
+// than claimedAmount or order total.
+// ==========================================
 
 function PaymentReviewModal({
   order,
@@ -360,38 +402,62 @@ function PaymentReviewModal({
 }) {
   const payment = order.payment || {};
 
-  const previousCents = toCents(payment.verifiedAmount);
+  const previous = toCents(payment.verifiedAmount);
+  const total = toCents(order.total);
+  const claimed = toCents(payment.claimedAmount);
 
-  const totalCents = toCents(order.total);
+  const pending = payment.status === "pending" && order.status === "pending";
 
-  const claimCents = toCents(payment.claimedAmount);
+  const due = Math.max(0, total - previous);
+  const excess = excessOf(order);
 
-  const remainingCents = Math.max(0, totalCents - previousCents);
+  // Current proof's ACTUAL amount
+  const [received, setReceived] = useState(() =>
+    String(fromCents(Math.max(0, claimed))),
+  );
 
-  const maxThisProof = Math.min(claimCents, remainingCents);
-
-  // This input is the amount actually received
-  // for the CURRENT proof, not cumulative total.
-  const [received, setReceived] = useState(String(asAmount(maxThisProof)));
-  const [confirmed, setConfirmed] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [extraAck, setExtraAck] = useState(false);
   const [mode, setMode] = useState("review");
   const [reason, setReason] = useState("");
   const [copied, setCopied] = useState(false);
-  const actualCents = toCents(received);
 
-  const validActual =
-    received.trim() !== "" &&
-    /^\d+(?:\.\d{1,2})?$/.test(received) &&
-    actualCents > 0 &&
-    actualCents <= maxThisProof;
+  // ========================================
+  // AMOUNT VALIDATION
+  // ========================================
 
-  const afterCents = Math.max(0, remainingCents - actualCents);
-  const pending = payment.status === "pending" && order.status === "pending";
-  const canVerify = pending && confirmed && validActual && !saving;
-  const whatsapp = getWhatsAppLink(order);
+  const input = received.trim();
+
+  const validAmount =
+    /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(input) &&
+    Number.isSafeInteger(Math.round(Number(input) * 100)) &&
+    Number(input) > 0;
+
+  const now = validAmount ? toCents(input) : 0;
+
+  const afterReceived = previous + now;
+
+  const afterDue = Math.max(0, total - afterReceived);
+
+  const afterExcess = Math.max(0, afterReceived - total);
+
+  // Extra verification for mismatch/overpay
+  const mismatch = validAmount && now !== claimed;
+
+  const special = validAmount && (afterExcess > 0 || mismatch);
+
+  const validReview =
+    pending && validAmount && ack && (!special || extraAck) && !saving;
+
   const phone = order.customer?.phone || order.shipping?.phone || "";
 
-  const handleCopy = async () => {
+  const whatsapp = whatsappLink(order);
+
+  // ========================================
+  // COPY TRANSACTION
+  // ========================================
+
+  async function copyTransaction() {
     try {
       await navigator.clipboard.writeText(payment.trxId || "");
 
@@ -399,21 +465,32 @@ function PaymentReviewModal({
     } catch {
       setCopied(false);
     }
-  };
+  }
 
-  const handleVerify = () => {
-    if (!canVerify) return;
+  // ========================================
+  // VERIFY PAYMENT
+  // ========================================
 
-    const cumulative = asAmount(previousCents + actualCents);
+  function verify() {
+    if (!validReview) return;
+
+    // Backend expects cumulative total,
+    // NOT this proof's individual amount.
 
     onDecision({
       orderId: order._id,
       decision: "verify",
-      verifiedAmount: cumulative,
+      verifiedAmount: fromCents(afterReceived),
+      previousReceived: fromCents(previous),
+      trxId: payment.trxId,
     });
-  };
+  }
 
-  const handleReject = () => {
+  // ========================================
+  // REJECT PAYMENT
+  // ========================================
+
+  function reject() {
     if (!pending || !reason.trim() || saving) {
       return;
     }
@@ -422,14 +499,20 @@ function PaymentReviewModal({
       orderId: order._id,
       decision: "reject",
       reason: reason.trim(),
+      previousReceived: fromCents(previous),
+      trxId: payment.trxId,
     });
-  };
+  }
+
+  // ========================================
+  // MODAL UI
+  // ========================================
 
   return (
     <div
       role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) {
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !saving) {
           onClose();
         }
       }}
@@ -438,7 +521,7 @@ function PaymentReviewModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="review-title"
+        aria-labelledby="payment-review-title"
         className="flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
       >
         {/* MODAL HEADER */}
@@ -450,7 +533,7 @@ function PaymentReviewModal({
             </p>
 
             <h2
-              id="review-title"
+              id="payment-review-title"
               className="mt-1 break-all text-base font-bold text-primary sm:text-xl"
             >
               {order.orderNumber}
@@ -487,13 +570,13 @@ function PaymentReviewModal({
 
               <div>
                 <p className="text-xs font-bold text-amber-900">
-                  আগে প্রকৃত পেমেন্ট যাচাই করুন
+                  প্রকৃত পেমেন্ট যাচাই করুন
                 </p>
 
                 <p className="mt-1 text-xs leading-6 text-amber-800">
-                  Customer-এর দেওয়া TrxID পেমেন্টের প্রমাণ নয়।
-                  bKash/Nagad/Rocket-এর receiving account-এ TrxID, sender,
-                  amount এবং লেনদেন সফল হয়েছে কি না মিলিয়ে তারপর Verify করুন।
+                  TrxID, Sender ও Amount bKash/Nagad/Rocket receiving account-এ
+                  মিলিয়ে নিন। Customer-এর claim কম/বেশি হলেও বাস্তবে পাওয়া
+                  Amount-ই লিখবেন।
                 </p>
               </div>
             </div>
@@ -502,6 +585,8 @@ function PaymentReviewModal({
           {/* CUSTOMER + TRANSACTION */}
 
           <div className="grid gap-4 md:grid-cols-2">
+            {/* CUSTOMER INFO */}
+
             <div className="rounded-xl border border-base-300 p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-primary">
                 <UserRound size={17} className="text-secondary" />
@@ -511,13 +596,22 @@ function PaymentReviewModal({
               <InfoRow label="ধরন">
                 {order.guest ? "Guest" : "Registered Customer"}
               </InfoRow>
-              <InfoRow label="নাম">{order.customer?.name}</InfoRow>
-              <InfoRow label="ফোন">{phone}</InfoRow>
+
+              <InfoRow label="নাম">{order.customer?.name || "—"}</InfoRow>
+
+              <InfoRow label="ফোন">{phone || "—"}</InfoRow>
+
               <InfoRow label="ইমেইল">{order.customer?.email || "—"}</InfoRow>
+
               <InfoRow label="জেলা">
-                {order.shipping?.district || order.customer?.district}
+                {order.shipping?.district || order.customer?.district || "—"}
               </InfoRow>
-              <InfoRow label="Order Status">{order.status}</InfoRow>
+
+              <InfoRow label="Order Status">
+                {ORDER_NAMES[order.status] || order.status}
+              </InfoRow>
+
+              {/* CONTACT ACTIONS */}
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {phone && (
@@ -544,7 +638,7 @@ function PaymentReviewModal({
               </div>
             </div>
 
-            {/* TRANSACTION */}
+            {/* TRANSACTION INFO */}
 
             <div className="rounded-xl border border-base-300 p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-primary">
@@ -556,13 +650,19 @@ function PaymentReviewModal({
                 <MethodBadge method={payment.method} />
               </InfoRow>
 
-              <InfoRow label="Sender Number">{payment.senderPhone}</InfoRow>
-              <InfoRow label="Claimed Amount">
+              <InfoRow label="Sender Number">
+                {payment.senderPhone || "—"}
+              </InfoRow>
+
+              <InfoRow label="Customer Claimed">
                 {money(payment.claimedAmount)}
               </InfoRow>
+
               <InfoRow label="Order Date">
                 {formatDate(order.createdAt)}
               </InfoRow>
+
+              {/* TrxID */}
 
               <div className="mt-3 rounded-xl bg-base-200 p-3">
                 <p className="text-[11px] text-muted">Transaction ID (TrxID)</p>
@@ -574,7 +674,7 @@ function PaymentReviewModal({
 
                   <button
                     type="button"
-                    onClick={handleCopy}
+                    onClick={copyTransaction}
                     aria-label="Copy TrxID"
                     className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-secondary"
                   >
@@ -585,13 +685,16 @@ function PaymentReviewModal({
 
               {payment.note && (
                 <p className="mt-3 rounded-lg bg-secondary/5 p-3 text-xs leading-5 text-muted">
-                  <strong>Customer Note:</strong> {payment.note}
+                  <strong>Customer Note: </strong>
+                  {payment.note}
                 </p>
               )}
             </div>
           </div>
 
-          {/* FINANCIAL BREAKDOWN */}
+          {/* ==================================
+              FINANCIAL BREAKDOWN
+          ================================== */}
 
           <div className="rounded-xl border border-base-300 p-4">
             <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-primary">
@@ -609,32 +712,64 @@ function PaymentReviewModal({
               </div>
 
               <div className="rounded-xl bg-green-50 p-3">
-                <p className="text-[11px] text-green-700">Already Verified</p>
+                <p className="text-[11px] text-green-700">Already Received</p>
 
                 <p className="mt-2 text-lg font-bold text-green-800">
-                  {money(payment.verifiedAmount)}
+                  {money(fromCents(previous))}
                 </p>
               </div>
 
               <div className="rounded-xl bg-amber-50 p-3">
-                <p className="text-[11px] text-amber-700">Remaining Due</p>
+                <p className="text-[11px] text-amber-700">
+                  {stopped(order) ? "Order Closed" : "Current Due"}
+                </p>
 
                 <p className="mt-2 text-lg font-bold text-amber-800">
-                  {money(asAmount(remainingCents))}
+                  {stopped(order) ? "—" : money(fromCents(due))}
                 </p>
               </div>
 
               <div className="rounded-xl bg-secondary/10 p-3">
-                <p className="text-[11px] text-secondary">Customer Claimed</p>
+                <p className="text-[11px] text-secondary">Claimed for Proof</p>
 
                 <p className="mt-2 text-lg font-bold text-primary">
                   {money(payment.claimedAmount)}
                 </p>
               </div>
             </div>
+
+            {/* MOBILE + CASH BREAKDOWN */}
+
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted">
+              <span>
+                Online Verified:{" "}
+                <strong className="text-primary">
+                  {money(
+                    payment.onlineVerifiedAmount ??
+                      fromCents(previous - toCents(payment.cashCollected)),
+                  )}
+                </strong>
+              </span>
+
+              <span>
+                Cash Collected:{" "}
+                <strong className="text-primary">
+                  {money(payment.cashCollected)}
+                </strong>
+              </span>
+
+              <span>
+                Refunded:{" "}
+                <strong className="text-primary">
+                  {money(payment.refundedAmount)}
+                </strong>
+              </span>
+            </div>
           </div>
 
-          {/* PRODUCTS */}
+          {/* ==================================
+              ORDER PRODUCTS
+          ================================== */}
 
           <div className="rounded-xl border border-base-300 p-4">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-primary">
@@ -643,26 +778,16 @@ function PaymentReviewModal({
             </h3>
 
             <div className="space-y-3">
-              {(order.items || []).map((item, index) => (
+              {(order.items || []).map((item, i) => (
                 <div
-                  key={item.cartId || index}
+                  key={item.cartId || i}
                   className="flex items-center gap-3 rounded-xl bg-base-200/60 p-3"
                 >
-                  <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-base-200">
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <ImageOff size={18} className="text-muted" />
-                    )}
-                  </div>
+                  <ProductThumb product={item} big />
 
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-xs font-bold text-primary">
-                      {item.name}
+                      {item.name || "Product"}
                     </p>
 
                     <p className="mt-1 text-[11px] text-muted">
@@ -679,7 +804,7 @@ function PaymentReviewModal({
                     </p>
 
                     <p className="mt-1 text-[10px] text-muted">
-                      Qty: {item.quantity}
+                      Qty: {bn(item.quantity)}
                     </p>
                   </div>
                 </div>
@@ -687,7 +812,9 @@ function PaymentReviewModal({
             </div>
           </div>
 
-          {/* HISTORICAL DECISIONS */}
+          {/* ==================================
+              PREVIOUS PAYMENT STATUS
+          ================================== */}
 
           {payment.status === "verified" && (
             <div className="rounded-xl border border-green-200 bg-green-50 p-4">
@@ -697,16 +824,16 @@ function PaymentReviewModal({
               </p>
 
               <p className="mt-2 text-xs leading-5 text-green-700">
-                Verified Amount: {money(payment.verifiedAmount)}
-                {" • "}
+                Online:{" "}
+                {money(
+                  payment.onlineVerifiedAmount ??
+                    fromCents(previous - toCents(payment.cashCollected)),
+                )}
+                {" · "}
+                Total received: {money(payment.verifiedAmount)}
+                {" · "}
                 {formatDate(payment.verifiedAt)}
               </p>
-
-              {payment.verifiedBy && (
-                <p className="mt-1 break-all text-[11px] text-green-700">
-                  Verified By: {payment.verifiedBy}
-                </p>
-              )}
             </div>
           )}
 
@@ -720,6 +847,14 @@ function PaymentReviewModal({
               <p className="mt-2 text-xs leading-5 text-red-700">
                 {payment.rejectedReason || "No rejection reason available"}
               </p>
+
+              {stopped(order) && refundDueOf(order) > 0 && (
+                <p className="mt-2 text-xs font-semibold text-red-700">
+                  Refund due: {money(refundDueOf(order))}
+                  {" — "}
+                  Order Details থেকে পরিচালনা করুন।
+                </p>
+              )}
             </div>
           )}
 
@@ -730,16 +865,47 @@ function PaymentReviewModal({
               </p>
 
               <p className="mt-2 text-xs leading-6 text-blue-700">
-                {money(payment.verifiedAmount)} গ্রহণ করা হয়েছে। বাকি{" "}
-                {money(asAmount(remainingCents))} পরিশোধের জন্য Customer-এর নতুন
-                Payment Proof প্রয়োজন।
+                মোট পাওয়া: {money(payment.verifiedAmount)}
+                {" · "}
+                বাকি: {money(dueOf(order))}। এই proof ইতোমধ্যে reviewed; Backend
+                অনুযায়ী বাকি টাকা delivery cash হিসেবে Order Details থেকে Record
+                করতে হবে।
               </p>
             </div>
           )}
 
-          {/* ADMIN VERIFICATION CONTROLS */}
+          {/* ==================================
+              OVERPAYMENT NOTICE
+          ================================== */}
 
-          {pending && (
+          {excess > 0 && !stopped(order) && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs font-bold text-emerald-900">
+                Overpayment: {money(excess)}
+              </p>
+
+              <p className="mt-1 text-xs leading-6 text-emerald-800">
+                {payment.excessResolution?.status === "completed"
+                  ? "Refund / Extra Product settlement সম্পন্ন হয়েছে।"
+                  : "Phone Confirmation-এ Customer-এর সম্মতি নিয়ে Refund / Extra Product settlement করতে হবে।"}
+              </p>
+
+              <Link
+                to={`/admin/orders/${encodeURIComponent(order._id)}`}
+                onClick={onClose}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-emerald-800"
+              >
+                Open Order
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          )}
+
+          {/* ==================================
+              VERIFICATION CONTROLS
+          ================================== */}
+
+          {pending ? (
             <div className="rounded-xl border border-secondary/20 bg-[#faf7fb] p-4">
               <h3 className="flex items-center gap-2 text-sm font-bold text-primary">
                 <ShieldCheck size={18} className="text-secondary" />
@@ -748,77 +914,154 @@ function PaymentReviewModal({
 
               {mode === "review" ? (
                 <div className="mt-4 space-y-4">
-                  <div>
-                    <label
-                      htmlFor="received-amount"
-                      className="block text-xs font-bold text-primary"
-                    >
-                      প্রকৃত প্রাপ্ত Amount (৳)
-                    </label>
+                  {/* ACTUAL AMOUNT INPUT */}
 
+                  <label className="block text-xs font-bold text-primary">
+                    এই TrxID-তে বাস্তবে নতুন Received Amount (৳)
                     <input
-                      id="received-amount"
                       type="number"
                       min="0.01"
                       step="0.01"
-                      max={asAmount(maxThisProof)}
                       value={received}
                       disabled={saving}
-                      onChange={(event) => setReceived(event.target.value)}
+                      onChange={(e) => {
+                        setReceived(e.target.value);
+                        setAck(false);
+                        setExtraAck(false);
+                      }}
                       className="input mt-2 w-full rounded-xl border-base-300 bg-white text-sm focus:border-secondary focus:outline-none"
                     />
+                  </label>
 
-                    <p className="mt-2 text-[11px] text-muted">
-                      এই TrxID থেকে সর্বোচ্চ {money(asAmount(maxThisProof))}{" "}
-                      Verify করা যাবে।
+                  <p className="text-[11px] leading-5 text-muted">
+                    Customer claimed {money(payment.claimedAmount)}; কিন্তু
+                    verified amount claim বা Order Total-এর মধ্যে সীমাবদ্ধ
+                    নয়—বাস্তবে যা এসেছে সেটাই লিখুন।
+                  </p>
+
+                  {/* LIVE CALCULATION */}
+
+                  {validAmount ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-[11px] text-muted">This Proof</p>
+
+                        <p className="mt-1 font-bold text-primary">
+                          {money(fromCents(now))}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-[11px] text-muted">
+                          Cumulative Received
+                        </p>
+
+                        <p className="mt-1 font-bold text-primary">
+                          {money(fromCents(afterReceived))}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-gold-soft/30 p-3">
+                        <p className="text-[11px] text-muted">
+                          After Verification
+                        </p>
+
+                        <p className="mt-1 font-bold text-primary">
+                          {afterExcess > 0
+                            ? `Excess ${money(fromCents(afterExcess))}`
+                            : `Due ${money(fromCents(afterDue))}`}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p
+                      role="alert"
+                      className="rounded-lg bg-red-50 p-3 text-xs text-red-700"
+                    >
+                      সঠিক Amount লিখুন (সর্বোচ্চ ২ ঘর দশমিক; ০-এর বেশি)।
                     </p>
-                  </div>
+                  )}
 
-                  <div className="flex items-center justify-between gap-3 rounded-xl bg-gold-soft/30 p-3">
-                    <span className="text-xs font-bold text-primary">
-                      Verify করার পরে Due
-                    </span>
+                  {/* CLAIM MISMATCH WARNING */}
 
-                    <span className="text-base font-bold text-primary">
-                      {validActual ? money(asAmount(afterCents)) : "—"}
-                    </span>
-                  </div>
+                  {mismatch && (
+                    <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                      <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                      Customer claimed {money(payment.claimedAmount)}, কিন্তু
+                      আপনি {money(fromCents(now))} Verify করছেন। Receiving
+                      Account-এর actual amount নিশ্চিত করুন।
+                    </p>
+                  )}
+
+                  {/* OVERPAYMENT WARNING */}
+
+                  {afterExcess > 0 && (
+                    <p className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900">
+                      <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                      Extra {money(fromCents(afterExcess))} পাওয়া গেলে Verify
+                      করার পর Customer-কে call করে Refund অথবা সমমূল্যের Extra
+                      Product বিষয়ে agreement নিতে হবে।
+                    </p>
+                  )}
+
+                  {/* VERIFICATION CONFIRMATION */}
 
                   <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-base-300 bg-white p-3">
                     <input
                       type="checkbox"
-                      checked={confirmed}
+                      checked={ack}
                       disabled={saving}
-                      onChange={(event) => setConfirmed(event.target.checked)}
+                      onChange={(e) => setAck(e.target.checked)}
                       className="checkbox checkbox-secondary checkbox-sm mt-0.5"
                     />
 
                     <span className="text-xs leading-6 text-primary">
-                      আমি receiving account-এর প্রকৃত transaction history দেখে
-                      TrxID, sender এবং amount মিলিয়ে নিশ্চিত হয়েছি।
+                      Receiving Account-এ TrxID, Sender ও প্রকৃত Received Amount
+                      যাচাই করেছি।
                     </span>
                   </label>
+
+                  {/* ADDITIONAL MISMATCH CONFIRMATION */}
+
+                  {special && (
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <input
+                        type="checkbox"
+                        checked={extraAck}
+                        disabled={saving}
+                        onChange={(e) => setExtraAck(e.target.checked)}
+                        className="checkbox checkbox-secondary checkbox-sm mt-0.5"
+                      />
+
+                      <span className="text-xs leading-6 text-amber-900">
+                        Claim-এর সঙ্গে পার্থক্য / Overpayment বুঝেছি। এই Amount
+                        সত্যিই Receiving Account-এ এসেছে।
+                      </span>
+                    </label>
+                  )}
+
+                  {/* ACTION BUTTONS */}
 
                   <div className="grid gap-2 sm:grid-cols-2">
                     <button
                       type="button"
-                      onClick={handleVerify}
-                      disabled={!canVerify}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-bold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-40"
+                      onClick={verify}
+                      disabled={!validReview}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-bold text-white hover:bg-green-800 disabled:opacity-40"
                     >
                       {saving ? (
                         <Loader2 size={16} className="animate-spin" />
                       ) : (
                         <CheckCircle2 size={16} />
                       )}
-                      Verify Payment
+                      Verify Actual Amount
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setMode("reject")}
                       disabled={saving}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                      onClick={() => setMode("reject")}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
                     >
                       <XCircle size={16} />
                       Reject Payment
@@ -826,30 +1069,35 @@ function PaymentReviewModal({
                   </div>
                 </div>
               ) : (
+                /* REJECTION FORM */
+
                 <div className="mt-4 space-y-3">
-                  <label
-                    htmlFor="reject-reason"
-                    className="block text-xs font-bold text-primary"
-                  >
+                  <label className="block text-xs font-bold text-primary">
                     Rejection Reason
+                    <textarea
+                      rows={3}
+                      maxLength={500}
+                      value={reason}
+                      disabled={saving}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="TrxID not found, wrong sender, invalid transaction..."
+                      className="textarea mt-2 w-full rounded-xl border-base-300 bg-white text-xs focus:border-secondary focus:outline-none"
+                    />
                   </label>
 
-                  <textarea
-                    id="reject-reason"
-                    rows={4}
-                    maxLength={500}
-                    value={reason}
-                    disabled={saving}
-                    onChange={(event) => setReason(event.target.value)}
-                    placeholder="পেমেন্ট কেন রিজেক্ট করা হচ্ছে লিখুন..."
-                    className="textarea w-full rounded-xl border-base-300 bg-white text-xs focus:border-secondary focus:outline-none"
-                  />
+                  {previous > 0 && (
+                    <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+                      Previously received {money(fromCents(previous))} must be
+                      refunded if this Order is rejected. Record actual refund
+                      in Order Details.
+                    </p>
+                  )}
 
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={saving}
                       onClick={() => setMode("review")}
+                      disabled={saving}
                       className="rounded-xl border border-base-300 bg-white px-4 py-3 text-xs font-bold text-primary"
                     >
                       Back
@@ -858,7 +1106,7 @@ function PaymentReviewModal({
                     <button
                       type="button"
                       disabled={!reason.trim() || saving}
-                      onClick={handleReject}
+                      onClick={reject}
                       className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-3 text-xs font-bold text-white disabled:opacity-40"
                     >
                       {saving ? (
@@ -872,7 +1120,15 @@ function PaymentReviewModal({
                 </div>
               )}
             </div>
+          ) : (
+            <p className="rounded-xl bg-secondary/5 p-4 text-xs leading-6 text-muted">
+              এই TrxID আর Pending Verification অবস্থায় নেই। নতুন করে একই proof
+              Verify/Reject করা যাবে না। Phone Confirmation, বকেয়া আদায় বা
+              Refund-এর জন্য Order Details ব্যবহার করুন।
+            </p>
           )}
+
+          {/* ACTION ERROR */}
 
           {actionError && (
             <p
@@ -883,7 +1139,51 @@ function PaymentReviewModal({
             </p>
           )}
 
-          {/* RECENT AUDIT HISTORY */}
+          {/* ==================================
+              PAYMENT REVIEW HISTORY
+          ================================== */}
+
+          {Array.isArray(payment.reviews) && payment.reviews.length > 0 && (
+            <div className="rounded-xl border border-base-300 p-4">
+              <h3 className="mb-3 text-sm font-bold text-primary">
+                Payment Review History
+              </h3>
+
+              <div className="space-y-2">
+                {payment.reviews
+                  .slice(-4)
+                  .reverse()
+                  .map((r, i) => (
+                    <div
+                      key={`${r.trxId || i}-${i}`}
+                      className="rounded-lg bg-base-200/60 p-3 text-xs"
+                    >
+                      <p className="font-bold text-primary">
+                        {r.decision === "verify" ? "Verified" : "Rejected"}
+                        {" · "}
+                        {r.trxId || "—"}
+                      </p>
+
+                      <p className="mt-1 text-muted">
+                        {r.decision === "verify"
+                          ? `For proof: ${money(
+                              r.receivedForProof,
+                            )} · Cumulative: ${money(r.cumulativeReceived)}`
+                          : r.reason || "—"}
+                      </p>
+
+                      <p className="mt-1 text-[11px] text-muted">
+                        {formatDate(r.at)}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* ==================================
+              RECENT ORDER HISTORY
+          ================================== */}
 
           {Array.isArray(order.history) && order.history.length > 0 && (
             <div className="rounded-xl border border-base-300 p-4">
@@ -895,21 +1195,21 @@ function PaymentReviewModal({
                 {order.history
                   .slice(-5)
                   .reverse()
-                  .map((entry, index) => (
+                  .map((h, i) => (
                     <div
-                      key={index}
+                      key={`${h.status || "event"}-${i}`}
                       className="border-l-2 border-secondary/30 pl-3"
                     >
                       <p className="text-xs font-semibold text-primary">
-                        {entry.status}
+                        {String(h.status || "update").replace(/_/g, " ")}
                       </p>
 
-                      <p className="mt-1 text-[11px] text-muted">
-                        {entry.note}
+                      <p className="mt-1 whitespace-pre-wrap break-words text-[11px] text-muted">
+                        {h.note || ""}
                       </p>
 
                       <p className="mt-1 text-[10px] text-muted">
-                        {formatDate(entry.date)}
+                        {formatDate(h.date)}
                       </p>
                     </div>
                   ))}
@@ -944,15 +1244,368 @@ function PaymentReviewModal({
   );
 }
 
-// ========================================
+// ==========================================
+// DESKTOP PAYMENT ROW
+// ==========================================
+
+function PaymentRow({ order, index, onReview }) {
+  const payment = order.payment || {};
+
+  const pending = payment.status === "pending" && order.status === "pending";
+
+  const name = order.customer?.name || "Unknown Customer";
+
+  const phone = order.customer?.phone || "—";
+
+  const detailUrl = `/admin/orders/${encodeURIComponent(order._id)}`;
+
+  const online =
+    payment.onlineVerifiedAmount ??
+    Math.max(
+      0,
+      fromCents(
+        toCents(payment.verifiedAmount) - toCents(payment.cashCollected),
+      ),
+    );
+
+  const closedRefund = stopped(order) ? refundDueOf(order) : 0;
+
+  const excess = !stopped(order) ? excessOf(order) : 0;
+
+  return (
+    <tr
+      className={`transition-colors hover:bg-secondary/5 ${
+        index % 2 ? "bg-[#faf7fb]" : "bg-white"
+      }`}
+    >
+      {/* ORDER */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <p
+          title={order.orderNumber}
+          className="max-w-[190px] truncate text-xs font-bold text-primary"
+        >
+          #{order.orderNumber}
+        </p>
+
+        <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted">
+          <CalendarDays size={13} />
+          {formatDate(order.createdAt)}
+        </p>
+      </td>
+
+      {/* CUSTOMER */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <div className="flex min-w-[175px] items-center gap-2.5">
+          <CustomerAvatar
+            name={name}
+            photoUrl={order.guest ? "" : order.customerPhotoUrl}
+          />
+
+          <div className="min-w-0">
+            <p
+              title={name}
+              className="max-w-[145px] truncate text-sm font-semibold text-primary"
+            >
+              {name}
+            </p>
+
+            <p className="text-[11px] text-muted">{phone}</p>
+
+            <p className="text-[11px] text-secondary">
+              {order.guest ? "Guest Customer" : "Registered Customer"}
+            </p>
+          </div>
+        </div>
+      </td>
+
+      {/* PRODUCTS */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <PaymentProductPreview order={order} />
+      </td>
+
+      {/* PAYMENT METHOD */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <MethodBadge method={payment.method} />
+      </td>
+
+      {/* TRANSACTION */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <p
+          title={payment.trxId}
+          className="max-w-[130px] truncate font-mono text-xs font-semibold text-primary"
+        >
+          {payment.trxId || "—"}
+        </p>
+
+        <p className="mt-1 text-[11px] text-muted">
+          {payment.senderPhone || "—"}
+        </p>
+      </td>
+
+      {/* FINANCIAL SUMMARY */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <p className="whitespace-nowrap text-sm font-bold text-primary">
+          Claim: {money(payment.claimedAmount)}
+        </p>
+
+        <p className="mt-1 whitespace-nowrap text-[11px] text-muted">
+          Order: {money(order.total)}
+        </p>
+
+        <p className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-green-700">
+          Online: {money(online)}
+        </p>
+
+        {Number(payment.cashCollected) > 0 && (
+          <p className="mt-0.5 text-[11px] text-muted">
+            Cash: {money(payment.cashCollected)}
+          </p>
+        )}
+
+        {closedRefund > 0 ? (
+          <p className="mt-0.5 text-[11px] font-semibold text-red-700">
+            Refund due: {money(closedRefund)}
+          </p>
+        ) : excess > 0 ? (
+          <p className="mt-0.5 text-[11px] font-semibold text-amber-700">
+            {payment.excessResolution?.status === "completed"
+              ? "Excess settled"
+              : "Excess pending"}
+            : {money(excess)}
+          </p>
+        ) : (
+          !stopped(order) && (
+            <p className="mt-0.5 text-[11px] text-amber-700">
+              Due: {money(dueOf(order))}
+            </p>
+          )
+        )}
+      </td>
+
+      {/* STATUS */}
+
+      <td className="px-5 py-2.5 align-middle">
+        <StatusBadge status={payment.status} />
+      </td>
+
+      {/* ACTIONS */}
+
+      <td className="px-5 py-2.5 text-right align-middle">
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => onReview(order._id)}
+            className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${
+              pending
+                ? "bg-primary text-white hover:bg-secondary"
+                : "bg-secondary/10 text-secondary hover:bg-secondary/20"
+            }`}
+          >
+            {pending ? <ShieldCheck size={15} /> : <Eye size={15} />}
+
+            {pending ? "Review" : "Details"}
+          </button>
+
+          <Link
+            to={detailUrl}
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-base-300 bg-white px-3 py-2 text-xs font-semibold text-primary hover:text-secondary"
+          >
+            <ShoppingBag size={15} />
+            Order
+          </Link>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ==========================================
+// MOBILE PAYMENT CARD
+// ==========================================
+
+function MobilePaymentCard({ order, onReview }) {
+  const payment = order.payment || {};
+
+  const pending = payment.status === "pending" && order.status === "pending";
+
+  const first = order.items?.[0];
+
+  const online =
+    payment.onlineVerifiedAmount ??
+    Math.max(
+      0,
+      fromCents(
+        toCents(payment.verifiedAmount) - toCents(payment.cashCollected),
+      ),
+    );
+
+  return (
+    <article className="overflow-hidden rounded-xl border border-base-300 bg-white">
+      {/* CARD HEADER */}
+
+      <div className="flex flex-wrap items-start justify-between gap-2 bg-base-200/70 p-3">
+        <div>
+          <p className="break-all text-xs font-bold text-primary">
+            #{order.orderNumber}
+          </p>
+
+          <p className="mt-1 text-[10px] text-muted">
+            {formatDate(order.createdAt)}
+          </p>
+        </div>
+
+        <StatusBadge status={payment.status} />
+      </div>
+
+      <div className="space-y-3 p-3">
+        {/* PRODUCT */}
+
+        <div className="flex items-center gap-3">
+          <ProductThumb product={first} big />
+
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-xs font-bold text-primary">
+              {first?.name || "অর্ডারের পণ্য"}
+            </p>
+
+            <p className="mt-1 text-[10px] text-muted">
+              {order.customer?.name || "—"}
+              {" · "}
+              {order.guest ? "Guest" : "Customer"}
+            </p>
+          </div>
+        </div>
+
+        {/* METHOD + CLAIM */}
+
+        <div className="grid grid-cols-2 gap-3 rounded-lg bg-base-200/60 p-3">
+          <div>
+            <p className="text-[10px] text-muted">Payment Method</p>
+
+            <div className="mt-2">
+              <MethodBadge method={payment.method} />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] text-muted">Claimed Amount</p>
+
+            <p className="mt-1 text-sm font-bold text-primary">
+              {money(payment.claimedAmount)}
+            </p>
+
+            <p className="text-[10px] text-muted">
+              Order: {money(order.total)}
+            </p>
+          </div>
+        </div>
+
+        {/* TRANSACTION */}
+
+        <div className="rounded-lg border border-base-300 p-3">
+          <p className="text-[10px] text-muted">Transaction ID</p>
+
+          <p className="mt-1 break-all font-mono text-xs font-bold text-primary">
+            {payment.trxId || "—"}
+          </p>
+
+          <p className="mt-1 text-[10px] text-muted">
+            Sender: {payment.senderPhone || "—"}
+          </p>
+        </div>
+
+        {/* AMOUNT SUMMARY */}
+
+        <div className="flex flex-wrap gap-3 text-[11px]">
+          <span className="text-green-700">
+            Online Verified: {money(online)}
+          </span>
+
+          {Number(payment.cashCollected) > 0 && (
+            <span className="text-muted">
+              Cash: {money(payment.cashCollected)}
+            </span>
+          )}
+
+          {stopped(order) && refundDueOf(order) > 0 ? (
+            <span className="text-red-700">
+              Refund due: {money(refundDueOf(order))}
+            </span>
+          ) : !stopped(order) && excessOf(order) > 0 ? (
+            <span className="text-amber-700">
+              Excess: {money(excessOf(order))}
+            </span>
+          ) : (
+            !stopped(order) && (
+              <span className="text-amber-700">Due: {money(dueOf(order))}</span>
+            )
+          )}
+        </div>
+
+        {/* ACTIONS */}
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onReview(order._id)}
+            className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2.5 text-xs font-bold text-white"
+          >
+            {pending ? <ShieldCheck size={14} /> : <Eye size={14} />}
+
+            {pending ? "Review" : "Details"}
+          </button>
+
+          <Link
+            to={`/admin/orders/${encodeURIComponent(order._id)}`}
+            className="flex items-center justify-center gap-1 rounded-lg border border-base-300 px-3 py-2.5 text-xs font-bold text-secondary"
+          >
+            <ShoppingBag size={14} />
+            View Order
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+// ==========================================
 // MAIN PAYMENT VERIFICATION PAGE
-// ========================================
+// ==========================================
 
 export default function PaymentVerificationPage() {
-  const { user, loading, role, roleLoading, accountStatus } =
-    useContext(AuthContext);
+  // ========================================
+  // AUTH CONTEXT
+  // ========================================
+
+  const auth = useContext(AuthContext) || {};
+
+  const { user, loading } = auth;
+
+  const role = auth.role ?? auth.roleState?.role;
+
+  const accountStatus = auth.accountStatus ?? auth.roleState?.status;
+
+  const checking = Boolean(
+    loading || (user && (auth.roleLoading || auth.roleState?.checking)),
+  );
+
+  const allowed =
+    !checking &&
+    Boolean(user) &&
+    role === "admin" &&
+    accountStatus === "active";
 
   const queryClient = useQueryClient();
+
+  // ========================================
+  // FILTER STATES
+  // ========================================
 
   const [search, setSearch] = useState("");
 
@@ -968,29 +1621,19 @@ export default function PaymentVerificationPage() {
 
   const [selectedId, setSelectedId] = useState(null);
 
-  const checking = loading || (Boolean(user) && roleLoading);
-
-  const allowed =
-    !checking &&
-    Boolean(user) &&
-    role === "admin" &&
-    accountStatus === "active";
-
-  // ======================================
-  // DEBOUNCED SEARCH
-  // ======================================
+  // ========================================
+  // SEARCH DEBOUNCE
+  // ========================================
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedSearch(search.trim());
-    }, 350);
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 350);
 
-    return () => clearTimeout(timeout);
+    return () => clearTimeout(id);
   }, [search]);
 
-  // ======================================
-  // LIST QUERY
-  // ======================================
+  // ========================================
+  // PAYMENT LIST QUERY
+  // ========================================
 
   const listQuery = useQuery({
     queryKey: [
@@ -1020,14 +1663,15 @@ export default function PaymentVerificationPage() {
       return adminRequest(user, `/admin/payments?${params}`, { signal });
     },
 
-    staleTime: 15 * 1000,
+    staleTime: 15000,
     refetchOnWindowFocus: true,
+    refetchInterval: 60000,
+    retry: 1,
   });
 
-  // ======================================
-  // SINGLE ORDER QUERY
-  // Always fetch fresh order before review.
-  // ======================================
+  // ========================================
+  // FRESH FULL ORDER QUERY
+  // ========================================
 
   const orderQuery = useQuery({
     queryKey: ["admin-payment-order", user?.uid, selectedId],
@@ -1041,15 +1685,47 @@ export default function PaymentVerificationPage() {
 
     staleTime: 0,
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    retry: 1,
   });
 
-  // ======================================
+  // ========================================
   // VERIFY / REJECT MUTATION
-  // ======================================
+  // ========================================
 
   const decisionMutation = useMutation({
-    mutationFn: ({ orderId, decision, verifiedAmount, reason }) =>
-      adminRequest(
+    mutationFn: async ({
+      orderId,
+      decision,
+      verifiedAmount,
+      reason,
+      previousReceived,
+      trxId,
+    }) => {
+      // Check latest order before writing.
+
+      const fresh = await adminRequest(
+        user,
+        `/admin/orders/${encodeURIComponent(orderId)}`,
+      );
+
+      const current = fresh.order;
+
+      if (
+        !current ||
+        current.status !== "pending" ||
+        current.payment?.status !== "pending" ||
+        current.payment?.trxId !== trxId ||
+        toCents(current.payment?.verifiedAmount) !== toCents(previousReceived)
+      ) {
+        throw new Error(
+          "Payment তথ্য পরিবর্তিত হয়েছে। Modal বন্ধ করে Refresh দিয়ে আবার Review করুন।",
+        );
+      }
+
+      // Backend expects cumulative verifiedAmount.
+
+      return adminRequest(
         user,
         `/admin/orders/${encodeURIComponent(orderId)}/payment`,
         {
@@ -1066,85 +1742,104 @@ export default function PaymentVerificationPage() {
                   reason,
                 },
         },
-      ),
+      );
+    },
 
     onSuccess: async () => {
       setSelectedId(null);
 
-      await queryClient.invalidateQueries({
-        queryKey: ["admin-payments"],
-      });
+      // Refresh connected admin pages.
 
-      await queryClient.invalidateQueries({
-        queryKey: ["admin-payment-order"],
-      });
+      await Promise.all(
+        [
+          ["admin-payments"],
+          ["admin-payment-order"],
+          ["admin-orders"],
+          ["admin-order-detail"],
+          ["admin-dashboard"],
+          ["admin-deliveries"],
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({
+            queryKey,
+          }),
+        ),
+      );
 
-      await queryClient.invalidateQueries({
-        queryKey: ["admin-orders"],
-      });
-
-      Swal.fire({
+      void Swal.fire({
         icon: "success",
         title: "পেমেন্ট তথ্য আপডেট হয়েছে",
         toast: true,
         position: "top-end",
         showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true,
+        timer: 1800,
+      });
+    },
+
+    onError: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["admin-payment-order", user?.uid, selectedId],
       });
     },
   });
 
-  // ======================================
+  // ========================================
   // MODAL SCROLL + ESCAPE
-  // ======================================
+  // ========================================
 
   useEffect(() => {
     if (!selectedId) return;
 
-    const previous = document.body.style.overflow;
+    const old = document.body.style.overflow;
 
     document.body.style.overflow = "hidden";
 
-    const handleEscape = (event) => {
+    const onEscape = (event) => {
       if (event.key === "Escape" && !decisionMutation.isPending) {
         setSelectedId(null);
       }
     };
 
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("keydown", onEscape);
 
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = old;
 
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("keydown", onEscape);
     };
   }, [selectedId, decisionMutation.isPending]);
 
-  // ======================================
-  // DATA
-  // ======================================
+  // ========================================
+  // API DATA
+  // ========================================
 
-  const response = listQuery.data || {};
+  const data = listQuery.data || {};
 
-  const payments = Array.isArray(response.payments) ? response.payments : [];
+  const payments = Array.isArray(data.payments) ? data.payments : [];
 
-  const stats = response.stats || {
-    total: 0,
-    pending: 0,
-    partiallyPaid: 0,
-    verified: 0,
-    rejected: 0,
-    verifiedCollection: 0,
-  };
+  const stats = data.stats || {};
 
-  const pagination = response.pagination || {
-    total: 0,
-    totalPages: 1,
-    limit: PAGE_SIZE,
-  };
+  const pagination = data.pagination || {};
+
+  const total = Number(pagination.total || 0);
 
   const totalPages = Math.max(1, Number(pagination.totalPages) || 1);
+
+  // Backend /admin/payments statistics
+  // cover ONLINE PAYMENT ORDERS ONLY.
+
+  const online = Number(stats.verifiedCollection || 0);
+
+  const cash = Number(stats.cashCollection || 0);
+
+  const gross = Number(stats.grossCollection || 0);
+
+  const refunded = Number(stats.refundedCollection || 0);
+
+  const net = Number(stats.netCollection ?? gross - refunded);
+
+  // ========================================
+  // PAYMENT TABS
+  // ========================================
 
   const tabs = [
     {
@@ -1154,7 +1849,7 @@ export default function PaymentVerificationPage() {
     },
     {
       value: "pending",
-      label: "যাচাই বাকি",
+      label: "পেন্ডিং / আংশিক",
       count: stats.pending,
     },
     {
@@ -1174,37 +1869,53 @@ export default function PaymentVerificationPage() {
     },
   ];
 
-  const changeTab = (value) => {
-    setActiveTab(value);
-    setPage(1);
-  };
+  // ========================================
+  // RESET FILTERS
+  // ========================================
 
-  const resetFilters = () => {
+  function resetFilters() {
     setSearch("");
     setDebouncedSearch("");
     setActiveTab("all");
     setMethodFilter("all");
     setDateFilter("all");
     setPage(1);
-  };
+  }
 
-  const openReview = (id) => {
+  // ========================================
+  // OPEN PAYMENT REVIEW
+  // ========================================
+
+  function openReview(id) {
+    if (decisionMutation.isPending) return;
+
     decisionMutation.reset();
-    setSelectedId(id);
-  };
 
-  const closeReview = () => {
-    if (decisionMutation.isPending) {
-      return;
-    }
+    // Remove previous cached detail to
+    // force a fresh GET for this review.
+
+    queryClient.removeQueries({
+      queryKey: ["admin-payment-order", user?.uid, id],
+      exact: true,
+    });
+
+    setSelectedId(id);
+  }
+
+  // ========================================
+  // CLOSE PAYMENT REVIEW
+  // ========================================
+
+  function closeReview() {
+    if (decisionMutation.isPending) return;
 
     setSelectedId(null);
     decisionMutation.reset();
-  };
+  }
 
-  // ======================================
-  // AUTH CHECK
-  // ======================================
+  // ========================================
+  // AUTH LOADING
+  // ========================================
 
   if (checking) {
     return (
@@ -1215,6 +1926,10 @@ export default function PaymentVerificationPage() {
       </div>
     );
   }
+
+  // ========================================
+  // ACCESS DENIED
+  // ========================================
 
   if (!allowed) {
     return (
@@ -1232,13 +1947,15 @@ export default function PaymentVerificationPage() {
     );
   }
 
-  // ======================================
-  // PAGE UI
-  // ======================================
+  // ========================================
+  // MAIN PAGE
+  // ========================================
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
-      {/* PAGE HEADER */}
+      {/* ==================================
+          PAGE HEADER
+      ================================== */}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -1266,43 +1983,91 @@ export default function PaymentVerificationPage() {
         </button>
       </div>
 
-      {/* KPI CARDS */}
+      {/* ==================================
+          FOUR KPI CARDS
+      ================================== */}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="পেমেন্ট যাচাই বাকি"
-          subtitle="Pending + Partial"
-          value={`${stats.pending.toLocaleString("bn-BD")} টি`}
+          title="পেমেন্ট পেন্ডিং / আংশিক"
+          subtitle="Pending + Partially Paid Orders"
+          value={`${bn(stats.pending)} টি`}
           icon={Clock3}
           iconStyle="bg-amber-100 text-amber-700"
         />
 
         <StatCard
           title="ভেরিফাইড পেমেন্ট"
-          subtitle="Fully Verified"
-          value={`${stats.verified.toLocaleString("bn-BD")} টি`}
+          subtitle="Verified Online Payment Orders"
+          value={`${bn(stats.verified)} টি`}
           icon={CheckCircle2}
           iconStyle="bg-green-100 text-green-700"
         />
 
         <StatCard
           title="রিজেক্টেড পেমেন্ট"
-          subtitle="Rejected Proofs"
-          value={`${stats.rejected.toLocaleString("bn-BD")} টি`}
+          subtitle="Rejected Payment Orders"
+          value={`${bn(stats.rejected)} টি`}
           icon={XCircle}
           iconStyle="bg-red-100 text-red-700"
         />
 
         <StatCard
-          title="ভেরিফাইড কালেকশন"
-          subtitle="Includes partial receipts"
-          value={money(stats.verifiedCollection)}
+          title="যাচাইকৃত মোবাইল ব্যাংকিং"
+          subtitle="bKash / Nagad / Rocket · Cash বাদে"
+          value={money(online)}
           icon={Wallet}
           iconStyle="bg-purple-100 text-secondary"
         />
       </div>
 
-      {/* IMPORTANT NOTICE */}
+      {/* ==================================
+          COLLECTION BREAKDOWN
+      ================================== */}
+
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-base-300/70 bg-white p-4 shadow-sm sm:grid-cols-4">
+        <div>
+          <p className="text-[11px] text-muted">
+            Delivery Cash (online orders)
+          </p>
+
+          <p className="mt-1 flex items-center gap-1 text-sm font-bold text-primary">
+            <Banknote size={14} className="text-secondary" />
+
+            {money(cash)}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-[11px] text-muted">Gross Collected</p>
+
+          <p className="mt-1 text-sm font-bold text-primary">{money(gross)}</p>
+        </div>
+
+        <div>
+          <p className="text-[11px] text-muted">Completed Refunds</p>
+
+          <p className="mt-1 text-sm font-bold text-primary">
+            {money(refunded)}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-[11px] text-muted">Net Collected</p>
+
+          <p className="mt-1 text-sm font-bold text-secondary">{money(net)}</p>
+        </div>
+
+        <p className="col-span-full text-[11px] leading-5 text-muted">
+          এই চারটি হিসাব শুধু Mobile Banking দিয়ে করা অর্ডারের; COD Order-এর নগদ
+          সংগ্রহ এখানে অন্তর্ভুক্ত নয়। Total Received = Online + Delivery Cash;
+          Net = Gross − Refunded।
+        </p>
+      </div>
+
+      {/* ==================================
+          IMPORTANT NOTICE
+      ================================== */}
 
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gold-soft/40 text-primary">
@@ -1315,14 +2080,17 @@ export default function PaymentVerificationPage() {
           </p>
 
           <p className="mt-1 text-xs leading-6 text-muted">
-            Customer-এর দেওয়া Amount ও TrxID বাস্তব Payment-এর নিশ্চয়তা নয়।
-            Receiving Account যাচাই করার পরেই Verify করুন। Cash on Delivery এই
-            Online Payment Dashboard-এর বাইরে।
+            Customer-এর দেওয়া Amount ও TrxID টাকা পাওয়ার প্রমাণ নয়। Receiving
+            Account যাচাই করে প্রকৃত Amount Verify করুন— Order Total বা Claimed
+            Amount-এর চেয়ে কম/বেশি হলেও। Overpayment, Refund, Phone Confirmation
+            ও বকেয়া Cash Collection-এর ব্যবস্থা Order Details-এ আছে।
           </p>
         </div>
       </div>
 
-      {/* TABLE CONTAINER */}
+      {/* ==================================
+          PAYMENT TABLE SECTION
+      ================================== */}
 
       <section className="overflow-hidden rounded-2xl border border-base-300/70 bg-white shadow-sm">
         {/* TITLE */}
@@ -1333,22 +2101,28 @@ export default function PaymentVerificationPage() {
               পেমেন্ট সাবমিশনসমূহ
             </h2>
 
-            <p className="mt-1 text-xs text-muted">MongoDB Orders Collection</p>
+            <p className="mt-1 text-xs text-muted">Online Payment Orders</p>
           </div>
 
           <span className="rounded-full bg-secondary/10 px-3 py-1.5 text-xs font-bold text-secondary">
-            {Number(pagination.total).toLocaleString("bn-BD")} Results
+            {bn(total)} Results
           </span>
         </div>
 
-        {/* TABS */}
+        {/* ==================================
+            PAYMENT TABS
+        ================================== */}
 
         <div className="flex gap-2 overflow-x-auto border-b border-base-300 px-4 py-3 sm:px-5">
           {tabs.map((tab) => (
             <button
               key={tab.value}
               type="button"
-              onClick={() => changeTab(tab.value)}
+              aria-pressed={activeTab === tab.value}
+              onClick={() => {
+                setActiveTab(tab.value);
+                setPage(1);
+              }}
               className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                 activeTab === tab.value
                   ? "bg-primary text-white"
@@ -1362,23 +2136,27 @@ export default function PaymentVerificationPage() {
                   activeTab === tab.value ? "bg-white/20" : "bg-white"
                 }`}
               >
-                {tab.count.toLocaleString("bn-BD")}
+                {bn(tab.count)}
               </span>
             </button>
           ))}
         </div>
 
-        {/* FILTERS */}
+        {/* ==================================
+            SEARCH + FILTERS
+        ================================== */}
 
         <div className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1fr)_160px_145px_auto]">
+          {/* SEARCH */}
+
           <label className="flex h-11 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 focus-within:border-secondary">
             <Search size={17} className="shrink-0 text-muted" />
 
             <input
               value={search}
               maxLength={100}
-              onChange={(event) => {
-                setSearch(event.target.value);
+              onChange={(e) => {
+                setSearch(e.target.value);
                 setPage(1);
               }}
               placeholder="Order, TrxID, Name, Phone..."
@@ -1386,33 +2164,47 @@ export default function PaymentVerificationPage() {
             />
           </label>
 
+          {/* METHOD FILTER */}
+
           <select
+            aria-label="Payment Method"
             value={methodFilter}
-            onChange={(event) => {
-              setMethodFilter(event.target.value);
+            onChange={(e) => {
+              setMethodFilter(e.target.value);
               setPage(1);
             }}
             className="h-11 w-full rounded-xl border border-base-300 bg-base-200 px-3 text-xs font-semibold text-primary outline-none"
           >
             <option value="all">সব পেমেন্ট মাধ্যম</option>
+
             <option value="bkash">bKash</option>
+
             <option value="nagad">Nagad</option>
+
             <option value="rocket">Rocket</option>
           </select>
 
+          {/* DATE FILTER */}
+
           <select
+            aria-label="Payment Date"
             value={dateFilter}
-            onChange={(event) => {
-              setDateFilter(event.target.value);
+            onChange={(e) => {
+              setDateFilter(e.target.value);
               setPage(1);
             }}
             className="h-11 w-full rounded-xl border border-base-300 bg-base-200 px-3 text-xs font-semibold text-primary outline-none"
           >
             <option value="all">সব তারিখ</option>
+
             <option value="today">আজ</option>
+
             <option value="week">শেষ ৭ দিন</option>
+
             <option value="month">এই মাস</option>
           </select>
+
+          {/* RESET FILTER */}
 
           <button
             type="button"
@@ -1424,7 +2216,9 @@ export default function PaymentVerificationPage() {
           </button>
         </div>
 
-        {/* FETCH ERROR */}
+        {/* ==================================
+            LIST ERROR
+        ================================== */}
 
         {listQuery.isError && (
           <div
@@ -1443,7 +2237,9 @@ export default function PaymentVerificationPage() {
           </div>
         )}
 
-        {/* LOADING */}
+        {/* ==================================
+            PAYMENT LIST
+        ================================== */}
 
         {listQuery.isPending ? (
           <div className="flex min-h-64 flex-col items-center justify-center">
@@ -1453,326 +2249,56 @@ export default function PaymentVerificationPage() {
           </div>
         ) : !listQuery.isError ? (
           <>
-            {/* ======================================== */}
-            {/* DESKTOP PAYMENT TABLE - UPDATED DESIGN   */}
-            {/* ======================================== */}
+            {/* DESKTOP TABLE */}
 
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1120px] border-collapse text-left">
-                {/* ==================================== */}
-                {/* TABLE HEADER */}
-                {/* ==================================== */}
-
+              <table className="w-full min-w-[1200px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-base-300 bg-secondary/5 text-sm font-bold text-primary/60">
                     <th className="px-5 py-3">Order / Date</th>
+
                     <th className="px-5 py-3">Customer</th>
+
                     <th className="px-5 py-3">Products</th>
+
                     <th className="px-5 py-3">Method</th>
+
                     <th className="px-5 py-3">Transaction</th>
+
                     <th className="px-5 py-3">Amount</th>
+
                     <th className="px-5 py-3">Status</th>
+
                     <th className="px-5 py-3 text-right">Action</th>
                   </tr>
                 </thead>
 
-                {/* ==================================== */}
-                {/* TABLE BODY */}
-                {/* ==================================== */}
-
                 <tbody className="divide-y divide-base-300/60">
-                  {payments.map((order, index) => {
-                    const payment = order.payment || {};
-
-                    const customerName =
-                      order.customer?.name || "Unknown Customer";
-
-                    const customerPhone =
-                      order.customer?.phone || order.shipping?.phone || "—";
-
-                    const customerPhoto = order.customerPhotoUrl || "";
-
-                    const pending =
-                      payment.status === "pending" &&
-                      order.status === "pending";
-
-                    return (
-                      <tr
-                        key={order._id}
-                        className={`transition-colors hover:bg-secondary/5 ${
-                          index % 2 === 0 ? "bg-white" : "bg-[#faf7fb]"
-                        }`}
-                      >
-                        {/* ============================= */}
-                        {/* ORDER NUMBER + DATE */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <p
-                            title={order.orderNumber}
-                            className="max-w-[190px] truncate text-xs font-bold text-primary"
-                          >
-                            #{order.orderNumber}
-                          </p>
-
-                          <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted">
-                            <CalendarDays size={13} />
-
-                            {formatDate(order.createdAt)}
-                          </p>
-                        </td>
-
-                        {/* ============================= */}
-                        {/* CUSTOMER PROFILE + INFORMATION */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <div className="flex min-w-[175px] items-center gap-2.5">
-                            {/* CUSTOMER AVATAR */}
-
-                            <CustomerAvatar
-                              name={customerName}
-                              photoUrl={customerPhoto}
-                            />
-
-                            {/* NAME + PHONE */}
-
-                            <div className="min-w-0 flex-1">
-                              <p
-                                title={customerName}
-                                className="max-w-[145px] truncate whitespace-nowrap text-sm font-semibold text-primary"
-                              >
-                                {customerName}
-                              </p>
-
-                              <p className="whitespace-nowrap text-[11px] text-muted">
-                                {customerPhone}
-                              </p>
-
-                              <p className="text-[11px] font-medium text-secondary">
-                                {order.guest
-                                  ? "Guest Customer"
-                                  : "Registered Customer"}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* ============================= */}
-                        {/* PRODUCT PREVIEW */}
-                        {/* SAME STYLE AS MY ORDERS */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <PaymentProductPreview order={order} />
-                        </td>
-
-                        {/* ============================= */}
-                        {/* PAYMENT METHOD */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <MethodBadge method={payment.method} />
-                        </td>
-
-                        {/* ============================= */}
-                        {/* TRANSACTION ID + SENDER */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <p
-                            title={payment.trxId || ""}
-                            className="max-w-[125px] truncate font-mono text-xs font-semibold text-primary"
-                          >
-                            {payment.trxId || "—"}
-                          </p>
-
-                          <p className="mt-1 whitespace-nowrap text-[11px] text-muted">
-                            {payment.senderPhone || "—"}
-                          </p>
-                        </td>
-
-                        {/* ============================= */}
-                        {/* PAYMENT AMOUNT */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <p className="whitespace-nowrap text-sm font-bold text-primary">
-                            {money(payment.claimedAmount)}
-                          </p>
-
-                          <p className="mt-1 whitespace-nowrap text-[11px] text-muted">
-                            Total: {money(order.total)}
-                          </p>
-
-                          {Number(payment.verifiedAmount) > 0 && (
-                            <p className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-green-700">
-                              Paid: {money(payment.verifiedAmount)}
-                            </p>
-                          )}
-                        </td>
-
-                        {/* ============================= */}
-                        {/* PAYMENT STATUS */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 align-middle">
-                          <StatusBadge status={payment.status} />
-                        </td>
-
-                        {/* ============================= */}
-                        {/* ACTION BUTTONS */}
-                        {/* ============================= */}
-
-                        <td className="px-5 py-2.5 text-right align-middle">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* REVIEW BUTTON */}
-
-                            <button
-                              type="button"
-                              onClick={() => openReview(order._id)}
-                              className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                                pending
-                                  ? "bg-primary text-white hover:bg-secondary"
-                                  : "bg-secondary/10 text-secondary hover:bg-secondary/20"
-                              }`}
-                            >
-                              {pending ? (
-                                <ShieldCheck size={15} />
-                              ) : (
-                                <Eye size={15} />
-                              )}
-
-                              {pending ? "Review" : "Details"}
-                            </button>
-
-                            {/* VIEW ORDER BUTTON */}
-
-                            <Link
-                              to={`/admin/orders/${encodeURIComponent(
-                                order._id,
-                              )}`}
-                              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-base-300 bg-white px-3 py-2 text-xs font-semibold text-primary transition hover:border-secondary/30 hover:text-secondary"
-                            >
-                              <ShoppingBag size={15} />
-                              Order
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {payments.map((order, index) => (
+                    <PaymentRow
+                      key={order._id}
+                      order={order}
+                      index={index}
+                      onReview={openReview}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
 
-            {/* MOBILE / TABLET CARDS */}
+            {/* MOBILE CARDS */}
 
             <div className="space-y-3 p-3 sm:p-4 lg:hidden">
-              {payments.map((order) => {
-                const payment = order.payment || {};
-
-                const first = order.items?.[0];
-
-                return (
-                  <div
-                    key={order._id}
-                    className="overflow-hidden rounded-xl border border-base-300 bg-white"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2 bg-base-200/70 p-3">
-                      <div>
-                        <p className="break-all text-xs font-bold text-primary">
-                          {order.orderNumber}
-                        </p>
-
-                        <p className="mt-1 text-[10px] text-muted">
-                          {formatDate(order.createdAt)}
-                        </p>
-                      </div>
-
-                      <StatusBadge status={payment.status} />
-                    </div>
-
-                    <div className="space-y-3 p-3">
-                      <div className="flex items-center gap-3">
-                        <ProductThumb product={first} />
-
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-xs font-bold text-primary">
-                            {first?.name}
-                          </p>
-
-                          <p className="mt-1 text-[10px] text-muted">
-                            {order.customer?.name}
-                            {" • "}
-                            {order.guest ? "Guest" : "Customer"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 rounded-lg bg-base-200/60 p-3">
-                        <div>
-                          <p className="text-[10px] text-muted">
-                            Payment Method
-                          </p>
-
-                          <div className="mt-2">
-                            <MethodBadge method={payment.method} />
-                          </div>
-                        </div>
-
-                        <div>
-                          <p className="text-[10px] text-muted">
-                            Claimed Amount
-                          </p>
-
-                          <p className="mt-1 text-sm font-bold text-primary">
-                            {money(payment.claimedAmount)}
-                          </p>
-
-                          <p className="text-[10px] text-muted">
-                            Total: {money(order.total)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-base-300 p-3">
-                        <p className="text-[10px] text-muted">Transaction ID</p>
-
-                        <p className="mt-1 break-all font-mono text-xs font-bold text-primary">
-                          {payment.trxId}
-                        </p>
-
-                        <p className="mt-1 text-[10px] text-muted">
-                          Sender: {payment.senderPhone}
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openReview(order._id)}
-                          className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2.5 text-xs font-bold text-white"
-                        >
-                          <Eye size={14} />
-                          Review
-                        </button>
-
-                        <Link
-                          to={`/admin/orders/${order._id}`}
-                          className="flex items-center justify-center gap-1 rounded-lg border border-base-300 px-3 py-2.5 text-xs font-bold text-secondary"
-                        >
-                          <ShoppingBag size={14} />
-                          View Order
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {payments.map((order) => (
+                <MobilePaymentCard
+                  key={order._id}
+                  order={order}
+                  onReview={openReview}
+                />
+              ))}
             </div>
 
-            {/* EMPTY */}
+            {/* EMPTY STATE */}
 
             {payments.length === 0 && (
               <div className="py-16 text-center">
@@ -1798,25 +2324,22 @@ export default function PaymentVerificationPage() {
 
             {/* PAGINATION */}
 
-            {Number(pagination.total) > 0 && (
+            {total > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 p-4 sm:px-5">
                 <p className="text-xs text-muted">
-                  Showing {((page - 1) * PAGE_SIZE + 1).toLocaleString("bn-BD")}
+                  Showing {bn((page - 1) * PAGE_SIZE + 1)}
                   {"–"}
-                  {Math.min(
-                    page * PAGE_SIZE,
-                    Number(pagination.total),
-                  ).toLocaleString("bn-BD")}
+                  {bn(Math.min(page * PAGE_SIZE, total))}
                   {" of "}
-                  {Number(pagination.total).toLocaleString("bn-BD")}
+                  {bn(total)}
                 </p>
 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     aria-label="Previous page"
-                    disabled={page <= 1}
-                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    disabled={page <= 1 || listQuery.isFetching}
+                    onClick={() => setPage((v) => Math.max(1, v - 1))}
                     className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary disabled:opacity-40"
                   >
                     <ChevronLeft size={17} />
@@ -1829,10 +2352,8 @@ export default function PaymentVerificationPage() {
                   <button
                     type="button"
                     aria-label="Next page"
-                    disabled={page >= totalPages}
-                    onClick={() =>
-                      setPage((value) => Math.min(totalPages, value + 1))
-                    }
+                    disabled={page >= totalPages || listQuery.isFetching}
+                    onClick={() => setPage((v) => Math.min(totalPages, v + 1))}
                     className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary disabled:opacity-40"
                   >
                     <ChevronRight size={17} />
@@ -1844,12 +2365,14 @@ export default function PaymentVerificationPage() {
         ) : null}
       </section>
 
-      {/* =================================== */}
-      {/* PAYMENT REVIEW MODAL */}
-      {/* =================================== */}
+      {/* ==================================
+          PAYMENT REVIEW MODAL
+      ================================== */}
 
       {selectedId &&
-        (orderQuery.isPending || orderQuery.isError ? (
+        (orderQuery.isPending ||
+        orderQuery.isError ||
+        !orderQuery.data?.order ? (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-primary/60 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
               {orderQuery.isPending ? (
@@ -1860,7 +2383,7 @@ export default function PaymentVerificationPage() {
                   />
 
                   <p className="mt-3 text-sm text-muted">
-                    Order details লোড হচ্ছে...
+                    Order Details লোড হচ্ছে...
                   </p>
                 </>
               ) : (
@@ -1880,7 +2403,7 @@ export default function PaymentVerificationPage() {
           </div>
         ) : (
           <PaymentReviewModal
-            key={`${orderQuery.data.order._id}-${orderQuery.data.order.payment?.trxId}-${orderQuery.data.order.payment?.status}`}
+            key={`${orderQuery.data.order._id}-${orderQuery.data.order.payment?.trxId}-${orderQuery.data.order.payment?.status}-${orderQuery.data.order.payment?.verifiedAmount}`}
             order={orderQuery.data.order}
             saving={decisionMutation.isPending}
             actionError={decisionMutation.error?.message || ""}

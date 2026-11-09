@@ -1,32 +1,41 @@
-import { Fragment, useContext, useEffect, useId, useState } from "react";
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Swal from "sweetalert2";
 import {
-  Truck,
-  PackageCheck,
-  PackageSearch,
   AlertTriangle,
+  Banknote,
   CalendarDays,
-  Search,
-  RefreshCcw,
-  Eye,
-  Pencil,
-  Save,
-  X,
   ChevronLeft,
   ChevronRight,
-  Loader2,
-  UserRound,
   ExternalLink,
-  ShoppingBag,
-  ShieldCheck,
+  Eye,
   ImageOff,
+  Loader2,
+  PackageCheck,
+  PackageSearch,
+  Pencil,
+  RefreshCcw,
+  Save,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Truck,
+  UserRound,
+  Wallet,
+  X,
 } from "lucide-react";
 import { AuthContext } from "../../providers/AuthProvider";
 import { API_URL } from "../../utils/siteConfig";
 
-const COURIER_STORAGE_KEY = "sokhbilash-admin-courier-names";
+const STORAGE_KEY = "sokhbilash-admin-courier-names";
 const PAGE_SIZE = 10;
 const NEXT_STATUS = {
   verified: "processing",
@@ -54,9 +63,18 @@ const VIEWS = [
   ["upcoming", "আগামী ৭ দিন"],
   ["unassigned", "কুরিয়ার বাকি"],
 ];
+const bn = (n) =>
+  Number(n || 0).toLocaleString("bn-BD", { maximumFractionDigits: 2 });
 const money = (n) =>
   `৳${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-const bn = (n) => Number(n || 0).toLocaleString("bn-BD");
+const round = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const dueAmount = (order) =>
+  Math.max(
+    0,
+    round(
+      Number(order?.total || 0) - Number(order?.payment?.verifiedAmount || 0),
+    ),
+  );
 
 function dateText(value) {
   if (!value) return "—";
@@ -71,9 +89,8 @@ function dateText(value) {
     minute: "2-digit",
   });
 }
-
 function dhakaDateTime(value = new Date()) {
-  if (value == null || value === "") return null;
+  if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -85,60 +102,63 @@ function dhakaDateTime(value = new Date()) {
     minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(date);
-  const part = (type) => parts.find((item) => item.type === type)?.value;
+  const part = (type) => parts.find((p) => p.type === type)?.value;
   return {
     date: `${part("year")}-${part("month")}-${part("day")}`,
     time: `${part("hour")}:${part("minute")}`,
   };
 }
-
-function nextDate(date, days) {
+function addDays(date, days) {
   const [y, m, d] = date.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
-
-function plusMonths(date, months) {
+function addMonths(date, months) {
   const [y, m, d] = date.split("-").map(Number);
   const first = new Date(Date.UTC(y, m - 1 + months, 1));
-  const lastDay = new Date(
+  const last = new Date(
     Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
   ).getUTCDate();
   return new Date(
-    Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(d, lastDay)),
+    Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(d, last)),
   )
     .toISOString()
     .slice(0, 10);
 }
-
-function readCourierNames() {
+function readCouriers() {
   try {
-    const list = JSON.parse(localStorage.getItem(COURIER_STORAGE_KEY) || "[]");
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     return Array.isArray(list)
-      ? list
-          .filter((value) => typeof value === "string" && value.trim())
-          .slice(0, 20)
+      ? list.filter((v) => typeof v === "string" && v.trim()).slice(0, 20)
       : [];
   } catch {
     return [];
   }
 }
-
-function rememberCourier(value) {
-  const name = String(value || "").trim();
+function rememberCourier(name) {
   if (!name) return;
   try {
     const list = [
       name,
-      ...readCourierNames().filter(
+      ...readCouriers().filter(
         (item) => item.toLowerCase() !== name.toLowerCase(),
       ),
     ].slice(0, 20);
-    localStorage.setItem(COURIER_STORAGE_KEY, JSON.stringify(list));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
-    // Browser storage is optional.
+    /* Optional storage */
   }
 }
-
+function safeUrl(value) {
+  if (!value || typeof value !== "string") return "";
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" && !url.username && !url.password
+      ? url.href
+      : "";
+  } catch {
+    return "";
+  }
+}
 function parseWeight(raw) {
   const match = String(raw || "")
     .trim()
@@ -147,58 +167,39 @@ function parseWeight(raw) {
     ? { value: match[1], unit: match[2].toLowerCase() }
     : { value: "", unit: "kg" };
 }
-
-function validateWeight(weight) {
-  const raw = weight.value.trim();
-  if (!raw) return "";
-  if (!/^\d+(?:\.\d{1,2})?$/.test(raw))
-    throw new Error("Weight-এ সর্বোচ্চ ২ ঘর decimal ব্যবহার কর।");
-  const value = Number(raw);
-  const kilograms = weight.unit === "g" ? value / 1000 : value;
-  if (!Number.isFinite(value) || kilograms < 0.1 || kilograms > 100) {
-    throw new Error("Parcel Weight 0.1–100 kg (100–100,000 g) হতে হবে।");
-  }
-  if (weight.unit === "kg") return `${value} kg`;
-  if (!Number.isInteger(value)) throw new Error("Gram অবশ্যই পূর্ণসংখ্যা হবে।");
-  if (value <= 9999) return `${value} g`;
-  // Existing backend allows only up to four digits before a unit.
-  if (value % 10 !== 0) {
-    throw new Error("9999 g-এর বেশি হলে 10 g-এর গুণিতক বা kg ব্যবহার কর।");
-  }
-  return `${Number((value / 1000).toFixed(2))} kg`;
+function weightForBackend(weight) {
+  const text = String(weight.value).trim();
+  if (!text) return "";
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text))
+    throw new Error("ওজনের দশমিক সর্বোচ্চ ২ ঘর হতে হবে।");
+  const amount = Number(text);
+  const kg = weight.unit === "g" ? amount / 1000 : amount;
+  if (!Number.isFinite(kg) || kg < 0.1 || kg > 100)
+    throw new Error("Parcel Weight 0.1–100 kg হতে হবে।");
+  if (weight.unit === "kg") return `${amount} kg`;
+  if (!Number.isInteger(amount)) throw new Error("Gram পূর্ণসংখ্যা হতে হবে।");
+  if (amount <= 9999) return `${amount} g`;
+  if (!Number.isInteger(amount / 10)) throw new Error("বড় ওজন kg-এ লিখুন।");
+  return `${Number((amount / 1000).toFixed(2))} kg`;
 }
-
-function safeTrackingUrl(raw) {
-  if (!raw) return "";
-  try {
-    const url = new URL(raw);
-    return url.protocol === "https:" && !url.username && !url.password
-      ? url.href
-      : "";
-  } catch {
-    return "";
-  }
-}
-
-function isOverdue(order, nowMs) {
+function isOverdue(order, now) {
   if (order.status !== "shipped" || !order.estimatedDelivery) return false;
-  const time = new Date(order.estimatedDelivery).getTime();
-  return Number.isFinite(time) && time < nowMs;
+  const eta = new Date(order.estimatedDelivery).getTime();
+  return Number.isFinite(eta) && eta < now;
 }
-
 async function adminApi(user, path, { method = "GET", body, signal } = {}) {
   if (!user) throw new Error("Admin login required");
   const token = await user.getIdToken();
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    signal,
     cache: "no-store",
+    signal,
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result.success !== true) {
@@ -206,28 +207,26 @@ async function adminApi(user, path, { method = "GET", body, signal } = {}) {
   }
   return result;
 }
-
 function StatusBadge({ status }) {
-  const data = STATUS[status];
+  const meta = STATUS[status];
   return (
     <span
-      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${data?.css || "bg-base-200 text-muted"}`}
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${meta?.css || "bg-base-200 text-muted"}`}
     >
-      {data?.label || status || "—"}
+      {meta?.label || status || "—"}
     </span>
   );
 }
-
 function Avatar({ name, photoUrl }) {
-  const [failedUrl, setFailedUrl] = useState("");
+  const [badUrl, setBadUrl] = useState("");
   return (
     <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-secondary/15 bg-secondary/10 text-secondary">
-      {photoUrl && failedUrl !== photoUrl ? (
+      {photoUrl && photoUrl !== badUrl ? (
         <img
           src={photoUrl}
           alt={name || "Customer"}
           loading="lazy"
-          onError={() => setFailedUrl(photoUrl)}
+          onError={() => setBadUrl(photoUrl)}
           className="size-full object-cover"
         />
       ) : (
@@ -236,18 +235,16 @@ function Avatar({ name, photoUrl }) {
     </div>
   );
 }
-
-function ProductThumb({ item }) {
-  const [failedUrl, setFailedUrl] = useState("");
-  const image = item?.image || "";
+function Thumb({ item }) {
+  const [badUrl, setBadUrl] = useState("");
   return (
     <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-base-200">
-      {image && image !== failedUrl ? (
+      {item?.image && item.image !== badUrl ? (
         <img
-          src={image}
-          alt={item?.name || "Product"}
+          src={item.image}
+          alt={item.name || "Product"}
           loading="lazy"
-          onError={() => setFailedUrl(image)}
+          onError={() => setBadUrl(item.image)}
           className="size-full object-cover"
         />
       ) : (
@@ -256,21 +253,17 @@ function ProductThumb({ item }) {
     </div>
   );
 }
-
 function ProductPreview({ order }) {
   const items = Array.isArray(order.items) ? order.items : [];
   return (
     <div className="flex min-w-0 items-center gap-2">
       <div className="flex shrink-0 items-center">
-        {items.slice(0, 2).map((item, index) => (
-          <div
-            key={item.cartId || `${item.name}-${index}`}
-            className={index ? "-ml-2" : ""}
-          >
-            <ProductThumb item={item} />
+        {items.slice(0, 2).map((item, i) => (
+          <div key={item.cartId || i} className={i ? "-ml-2" : ""}>
+            <Thumb item={item} />
           </div>
         ))}
-        {items.length === 0 && (
+        {!items.length && (
           <div className="flex size-10 items-center justify-center rounded-lg bg-base-200 text-secondary">
             <ShoppingBag size={17} />
           </div>
@@ -290,7 +283,6 @@ function ProductPreview({ order }) {
     </div>
   );
 }
-
 function StatCard({
   label,
   detail,
@@ -304,8 +296,8 @@ function StatCard({
   return (
     <button
       type="button"
-      onClick={() => onSelect(filter)}
       aria-pressed={selected}
+      onClick={() => onSelect(filter)}
       className={`rounded-xl border bg-white p-4 text-left shadow-sm transition hover:border-secondary/40 ${selected ? "border-secondary" : "border-base-300/70"}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -324,14 +316,14 @@ function StatCard({
   );
 }
 
-// Uses the EXISTING /admin/orders/:id/tracking API.
+// Tracking and ETA are saved through the existing backend endpoint.
 function TrackingEditor({ order, saving, onSave, onClose }) {
   const courier = order.courier || {};
-  const formId = useId();
+  const id = useId();
   const previousETA = dhakaDateTime(order.estimatedDelivery);
-  const [suggestions] = useState(readCourierNames);
+  const [suggestions] = useState(readCouriers);
   const [form, setForm] = useState(() => ({
-    name: courier.name || suggestions[0] || "",
+    name: courier.name || "",
     trackingNumber: courier.trackingNumber || "",
     trackingUrl: courier.trackingUrl || "",
     weight: parseWeight(courier.parcelWeight),
@@ -339,35 +331,29 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
     etaTime: previousETA?.time || "18:00",
   }));
   const [error, setError] = useState("");
+  const [limits] = useState(() => {
+    const today = dhakaDateTime().date;
+    return { min: addDays(today, 1), max: addMonths(today, 6) };
+  });
   const update = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
-  const [dateLimits] = useState(() => {
-    const today = dhakaDateTime(new Date()).date;
-    return { min: nextDate(today, 1), max: plusMonths(today, 6) };
-  });
-  const minDate = dateLimits.min;
-  const maxDate = dateLimits.max;
-
   function changeWeightUnit(unit) {
     setForm((current) => {
       const old = current.weight;
-      if (old.value === "") return { ...current, weight: { value: "", unit } };
-      const amount = Number(old.value);
-      if (!Number.isFinite(amount))
+      if (!old.value || !Number.isFinite(Number(old.value)))
         return { ...current, weight: { value: "", unit } };
-      const converted =
+      const value =
         unit === "g" && old.unit === "kg"
-          ? amount * 1000
+          ? Number(old.value) * 1000
           : unit === "kg" && old.unit === "g"
-            ? amount / 1000
-            : amount;
+            ? Number(old.value) / 1000
+            : Number(old.value);
       return {
         ...current,
-        weight: { value: String(Number(converted.toFixed(3))), unit },
+        weight: { value: String(Number(value.toFixed(3))), unit },
       };
     });
   }
-
   async function submit(event) {
     event.preventDefault();
     if (saving) return;
@@ -376,28 +362,20 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
       const name = form.name.trim();
       const trackingNumber = form.trackingNumber.trim();
       const trackingUrl = form.trackingUrl.trim();
-      const parcelWeight = validateWeight({
-        ...form.weight,
-        value: String(form.weight.value),
-      });
-      if (!name && (trackingNumber || trackingUrl || parcelWeight)) {
-        throw new Error("Tracking বা Weight থাকলে Courier Name দিতে হবে।");
-      }
-      if (trackingUrl && !trackingNumber) {
-        throw new Error("Tracking URL দিলে Tracking ID প্রয়োজন।");
-      }
-      if (trackingUrl && !safeTrackingUrl(trackingUrl)) {
-        throw new Error("একটি valid HTTPS Tracking URL দিতে হবে।");
-      }
+      const parcelWeight = weightForBackend(form.weight);
+      if (!name && (trackingNumber || trackingUrl || parcelWeight))
+        throw new Error("Courier Name ছাড়া Tracking/Weight দেওয়া যাবে না।");
+      if (trackingUrl && !trackingNumber)
+        throw new Error("Tracking URL-এর জন্য Tracking ID লাগবে।");
+      if (trackingUrl && !safeUrl(trackingUrl))
+        throw new Error("Tracking URL অবশ্যই valid HTTPS হতে হবে।");
       if (
         order.status === "shipped" &&
         (!name || !trackingNumber || !form.etaDate)
-      ) {
+      )
         throw new Error(
-          "Shipped Order-এর Courier Name, Tracking ID ও ETA প্রয়োজন।",
+          "Shipped Order-এর Courier Name, Tracking ID এবং ETA প্রয়োজন।",
         );
-      }
-
       const payload = { name, trackingNumber, trackingUrl, parcelWeight };
       const newETA = form.etaDate ? `${form.etaDate}T${form.etaTime}` : "";
       const oldETA = previousETA
@@ -406,24 +384,19 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
       if (newETA !== oldETA) {
         if (!form.etaDate) {
           if (order.status === "shipped")
-            throw new Error("Shipped Order-এর ETA খালি করা যাবে না।");
+            throw new Error("Shipped Order-এর ETA মুছা যাবে না।");
           payload.estimatedDelivery = null;
         } else {
-          if (form.etaDate < minDate || form.etaDate > maxDate) {
-            throw new Error(
-              "নতুন Expected Delivery আগামীকাল থেকে ৬ মাসের মধ্যে দাও।",
-            );
-          }
-          if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.etaTime)) {
+          if (form.etaDate < limits.min || form.etaDate > limits.max)
+            throw new Error("নতুন ETA আগামীকাল থেকে ৬ মাসের মধ্যে দিতে হবে।");
+          if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.etaTime))
             throw new Error("Expected Delivery Time সঠিক নয়।");
-          }
           const date = new Date(`${form.etaDate}T${form.etaTime}:00+06:00`);
           if (
             Number.isNaN(date.getTime()) ||
             dhakaDateTime(date)?.date !== form.etaDate
-          ) {
-            throw new Error("Expected Delivery Date সঠিক নয়।");
-          }
+          )
+            throw new Error("Delivery Date সঠিক নয়।");
           payload.estimatedDelivery = date.toISOString();
         }
       }
@@ -434,11 +407,10 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
       setError(err.message || "Courier তথ্য Save করা যায়নি।");
     }
   }
-
   return (
     <form
-      noValidate
       onSubmit={submit}
+      noValidate
       className="rounded-xl border border-secondary/20 bg-[#faf7fb] p-4"
     >
       <div className="mb-3 flex items-center justify-between">
@@ -447,10 +419,10 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
         </h3>
         <button
           type="button"
-          disabled={saving}
           onClick={onClose}
+          disabled={saving}
           aria-label="Close editor"
-          className="rounded-lg p-1.5 text-muted hover:bg-base-200 disabled:opacity-50"
+          className="rounded-lg p-1.5 text-muted hover:bg-base-200"
         >
           <X size={17} />
         </button>
@@ -462,14 +434,14 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
         <label className="space-y-1.5 text-xs font-semibold text-primary">
           Courier Name
           <input
-            list={`${formId}-couriers`}
+            list={`${id}-couriers`}
             maxLength={150}
             value={form.name}
             onChange={(e) => update("name", e.target.value)}
             placeholder="Steadfast / Pathao"
             className="input input-bordered w-full bg-white text-sm"
           />
-          <datalist id={`${formId}-couriers`}>
+          <datalist id={`${id}-couriers`}>
             {suggestions.map((name) => (
               <option key={name} value={name} />
             ))}
@@ -498,14 +470,14 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
         </label>
         <div>
           <label
-            htmlFor={`${formId}-weight`}
+            htmlFor={`${id}-weight`}
             className="text-xs font-semibold text-primary"
           >
             Parcel Weight
           </label>
           <div className="mt-1.5 flex gap-2">
             <input
-              id={`${formId}-weight`}
+              id={`${id}-weight`}
               type="number"
               min={form.weight.unit === "kg" ? 0.1 : 100}
               max={form.weight.unit === "kg" ? 100 : 100000}
@@ -532,8 +504,8 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
           Expected Delivery Date
           <input
             type="date"
-            min={minDate}
-            max={maxDate}
+            min={limits.min}
+            max={limits.max}
             value={form.etaDate}
             onChange={(e) => update("etaDate", e.target.value)}
             className="input input-bordered w-full bg-white text-sm"
@@ -551,8 +523,8 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
         </label>
       </fieldset>
       <p className="mt-2 text-[11px] text-muted">
-        নতুন ETA আগামীকাল থেকে ৬ মাসের মধ্যে। পুরোনো ETA না বদলালে আগের Date
-        বহাল থাকবে। ETA পার হলেও Order auto-delivered হবে না।
+        নতুন ETA আগামীকাল থেকে ৬ মাসের মধ্যে। পুরোনো ETA না বদলালে তা বহাল
+        থাকবে। ETA পার হলেও Order auto-delivered হয় না।
       </p>
       {error && (
         <p
@@ -567,7 +539,7 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
           type="button"
           disabled={saving}
           onClick={onClose}
-          className="rounded-lg border border-base-300 bg-white px-4 py-2.5 text-xs font-bold text-primary disabled:opacity-50"
+          className="rounded-lg border border-base-300 bg-white px-4 py-2.5 text-xs font-bold text-primary"
         >
           Cancel
         </button>
@@ -588,31 +560,191 @@ function TrackingEditor({ order, saving, onSave, onClose }) {
   );
 }
 
+// A collectionId is retained on retries, so an uncertain network result
+// cannot create duplicate cash collection records by pressing Save again.
+function CashCollectionModal({ order, collectionId, saving, onSave, onClose }) {
+  const due = dueAmount(order);
+  const [amount, setAmount] = useState(String(due));
+  const [note, setNote] = useState("");
+  const [ack, setAck] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event) {
+    event.preventDefault();
+    if (saving) return;
+    setError("");
+    const text = String(amount).trim();
+    const value = Number(text);
+    if (
+      !/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(text) ||
+      value <= 0 ||
+      value > due
+    ) {
+      setError(`সঠিক Cash Amount লিখুন (সর্বোচ্চ ${money(due)})।`);
+      return;
+    }
+    if (!note.trim()) {
+      setError("Collection Note লিখুন।");
+      return;
+    }
+    if (!ack) {
+      setError("বাস্তবে টাকা পাওয়ার Confirmation দিতে হবে।");
+      return;
+    }
+    try {
+      await onSave(order._id, {
+        collectionId,
+        amount: value,
+        note: note.trim(),
+      });
+    } catch (err) {
+      setError(err.message || "Cash Collection Save করা যায়নি।");
+    }
+  }
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Record cash collection"
+      className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+    >
+      <div className="flex items-center justify-between border-b border-base-300 bg-secondary/5 px-5 py-4">
+        <div>
+          <h3 className="flex items-center gap-2 font-bold text-primary">
+            <Banknote size={19} className="text-secondary" /> Cash Collection
+          </h3>
+          <p className="mt-1 text-xs text-muted">
+            #{order.orderNumber} ·{" "}
+            {order.payment?.method === "cod" ? "COD" : "Mobile Banking Balance"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={saving}
+          aria-label="Close"
+          className="rounded-lg p-2 text-muted"
+        >
+          <X size={19} />
+        </button>
+      </div>
+      <form noValidate onSubmit={submit} className="space-y-4 p-5">
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="rounded-xl bg-base-200 p-3">
+            <p className="text-muted">Order Total</p>
+            <p className="mt-1 font-bold text-primary">{money(order.total)}</p>
+          </div>
+          <div className="rounded-xl bg-base-200 p-3">
+            <p className="text-muted">Received</p>
+            <p className="mt-1 font-bold text-primary">
+              {money(order.payment?.verifiedAmount)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-gold-soft/30 p-3">
+            <p className="text-muted">বকেয়া</p>
+            <p className="mt-1 font-bold text-primary">{money(due)}</p>
+          </div>
+        </div>
+        <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+          <AlertTriangle size={17} className="mt-0.5 shrink-0" /> শুধু বাস্তবে
+          পাওয়া নগদ টাকা Record করুন। Phone Confirmation বা কথার ভিত্তিতে টাকা
+          প্রাপ্ত হিসেবে Record করবেন না।
+        </p>
+        <label className="block text-xs font-semibold text-primary">
+          Collected Cash (৳) *
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            max={due}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={saving}
+            className="input input-bordered mt-1.5 w-full bg-white text-sm"
+          />
+        </label>
+        <label className="block text-xs font-semibold text-primary">
+          Collection Note *
+          <textarea
+            rows={2}
+            maxLength={500}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            disabled={saving}
+            placeholder="Courier cash / customer handover details"
+            className="textarea textarea-bordered mt-1.5 w-full bg-white text-sm"
+          />
+        </label>
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-secondary/20 bg-secondary/5 p-3 text-xs leading-5 text-primary">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-secondary checkbox-xs mt-0.5"
+            checked={ack}
+            disabled={saving}
+            onChange={(e) => setAck(e.target.checked)}
+          />{" "}
+          আমি নিশ্চিত করছি, এই নগদ টাকা বাস্তবে গ্রহণ করেছি।
+        </label>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg bg-red-50 p-3 text-xs text-red-700"
+          >
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-base-300 px-4 py-2.5 text-xs font-bold text-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving || due <= 0}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Save size={15} />
+            )}{" "}
+            Record Cash
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function AdminDeliveryManagementPage() {
   const auth = useContext(AuthContext) || {};
   const { user, loading } = auth;
   const role = auth.role ?? auth.roleState?.role;
-  const accountStatus = auth.accountStatus ?? auth.roleState?.status;
+  const status = auth.accountStatus ?? auth.roleState?.status;
   const checking = Boolean(
     loading || (user && (auth.roleLoading || auth.roleState?.checking)),
   );
   const allowed =
-    !checking &&
-    Boolean(user) &&
-    role === "admin" &&
-    accountStatus === "active";
+    !checking && Boolean(user) && role === "admin" && status === "active";
+  const queryClient = useQueryClient();
+  const collectionIds = useRef({});
   const [view, setView] = useState("all");
   const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const interval = setInterval(() => setNowMs(Date.now()), 60000);
-    return () => clearInterval(interval);
-  }, []);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState(null);
-  const queryClient = useQueryClient();
+  const [cashOrder, setCashOrder] = useState(null);
+  const [loadingCashId, setLoadingCashId] = useState(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const query = useQuery({
     queryKey: [
@@ -631,16 +763,13 @@ export default function AdminDeliveryManagementPage() {
         sort,
         search: submittedSearch,
       });
-      return adminApi(user, `/admin/deliveries?${params.toString()}`, {
-        signal,
-      });
+      return adminApi(user, `/admin/deliveries?${params}`, { signal });
     },
     staleTime: 15000,
     refetchOnWindowFocus: true,
     refetchInterval: 60000,
     retry: 1,
   });
-
   const action = useMutation({
     mutationFn: ({ id, endpoint, body }) =>
       adminApi(user, `/admin/orders/${encodeURIComponent(id)}/${endpoint}`, {
@@ -648,33 +777,100 @@ export default function AdminDeliveryManagementPage() {
         body,
       }),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["admin-deliveries"] }),
-        queryClient.invalidateQueries({ queryKey: ["admin-orders"] }),
-        queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] }),
-        queryClient.invalidateQueries({ queryKey: ["admin-order-detail"] }),
-      ]);
+      await Promise.all(
+        [
+          ["admin-deliveries"],
+          ["admin-orders"],
+          ["admin-dashboard"],
+          ["admin-order-detail"],
+          ["admin-payments"],
+          ["my-orders"],
+          ["sokhbilash-order-details"],
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
     },
   });
 
-  async function updateTracking(id, body) {
+  async function saveTracking(id, body) {
     await action.mutateAsync({ id, endpoint: "tracking", body });
     void Swal.fire({
+      toast: true,
       icon: "success",
       title: "Courier তথ্য Save হয়েছে",
-      timer: 1400,
-      toast: true,
       position: "top-end",
+      timer: 1400,
       showConfirmButton: false,
     });
   }
-
-  async function updateStatus(order, next) {
+  async function getFullOrder(id) {
+    const result = await adminApi(
+      user,
+      `/admin/orders/${encodeURIComponent(id)}`,
+    );
+    if (!result.order) throw new Error("Full Order Details পাওয়া যায়নি।");
+    return result.order;
+  }
+  function showCashOrder(full) {
     if (
-      action.isPending ||
-      !NEXT_STATUS[order.status] ||
-      NEXT_STATUS[order.status] !== next
+      typeof crypto === "undefined" ||
+      typeof crypto.randomUUID !== "function"
     )
+      throw new Error(
+        "Cash Collection-এর জন্য HTTPS/localhost browser প্রয়োজন।",
+      );
+    collectionIds.current[full._id] ||= crypto.randomUUID();
+    setEditingId(null);
+    setCashOrder(full);
+  }
+  async function openCash(order) {
+    if (action.isPending || loadingCashId) return;
+    setLoadingCashId(order._id);
+    try {
+      const fresh = await getFullOrder(order._id);
+      if (
+        !["verified", "processing", "shipped", "delivered"].includes(
+          fresh.status,
+        )
+      )
+        throw new Error("এই Order-এ Cash Collection করা যাবে না।");
+      if (!fresh.phoneConfirmed)
+        throw new Error(
+          "Order Details থেকে আগে Phone Confirmation সম্পন্ন করুন।",
+        );
+      if (dueAmount(fresh) <= 0) {
+        void Swal.fire({
+          icon: "info",
+          title: "বকেয়া নেই",
+          text: "এই অর্ডারের আর কোনো টাকা সংগ্রহ বাকি নেই।",
+          confirmButtonColor: "#76258A",
+        });
+        return;
+      }
+      showCashOrder(fresh);
+    } catch (error) {
+      void Swal.fire({
+        icon: "error",
+        title: "Cash Collection Blocked",
+        text: error.message,
+        confirmButtonColor: "#76258A",
+      });
+    } finally {
+      setLoadingCashId(null);
+    }
+  }
+  async function recordCash(id, body) {
+    await action.mutateAsync({ id, endpoint: "collect-balance", body });
+    delete collectionIds.current[id];
+    setCashOrder(null);
+    void Swal.fire({
+      icon: "success",
+      title: "Cash Collection Recorded",
+      timer: 1600,
+      showConfirmButton: false,
+    });
+  }
+  async function changeStatus(order, next) {
+    if (action.isPending || loadingCashId || NEXT_STATUS[order.status] !== next)
       return;
     if (
       next === "shipped" &&
@@ -686,12 +882,55 @@ export default function AdminDeliveryManagementPage() {
       void Swal.fire({
         icon: "warning",
         title: "Courier তথ্য অসম্পূর্ণ",
-        text: "Shipped করার আগে Courier Name, Tracking ID ও Expected Delivery Save কর।",
+        text: "Shipped করার আগে Courier Name, Tracking ID ও ETA Save কর।",
         confirmButtonColor: "#76258A",
       });
       return;
     }
+    if (next === "delivered") {
+      try {
+        setLoadingCashId(order._id);
+        const fresh = await getFullOrder(order._id);
+        if (!fresh.phoneConfirmed)
+          throw new Error(
+            "Phone Confirmation বাকি। আগে Order Details থেকে নিশ্চিত করুন।",
+          );
+        if (dueAmount(fresh) > 0) {
+          const answer = await Swal.fire({
+            icon: "warning",
+            title: `বকেয়া ${money(dueAmount(fresh))}`,
+            text: "Delivered করার আগে বাস্তবে আদায় করা টাকা রেকর্ড করুন।",
+            showCancelButton: true,
+            confirmButtonText: "Collect Cash",
+            cancelButtonText: "Back",
+            confirmButtonColor: "#76258A",
+          });
+          if (answer.isConfirmed) showCashOrder(fresh);
+          return;
+        }
+        if (
+          Number(fresh.payment?.verifiedAmount || 0) >
+            Number(fresh.total || 0) &&
+          fresh.payment?.excessResolution?.status !== "completed"
+        ) {
+          throw new Error(
+            "অতিরিক্ত টাকা ফেরত / সমমূল্যের পণ্য দেওয়া এখনো সম্পন্ন হয়নি। Order Details থেকে সমাধান করুন।",
+          );
+        }
+      } catch (error) {
+        void Swal.fire({
+          icon: "error",
+          title: "Delivery Blocked",
+          text: error.message,
+          confirmButtonColor: "#76258A",
+        });
+        return;
+      } finally {
+        setLoadingCashId(null);
+      }
+    }
     const answer = await Swal.fire({
+      icon: "question",
       title:
         next === "delivered"
           ? "ডেলিভারি নিশ্চিত হয়েছে?"
@@ -700,9 +939,8 @@ export default function AdminDeliveryManagementPage() {
             : "প্রসেসিং শুরু করবেন?",
       text:
         next === "delivered"
-          ? "Courier/Customer থেকে ডেলিভারি নিশ্চিত হওয়ার পরই Delivered কর। COD payment আলাদাভাবে যাচাই করতে হবে।"
+          ? "প্রকৃত ডেলিভারি নিশ্চিত হওয়ার পরই Delivered করুন। Backend পুনরায় Payment যাচাই করবে।"
           : "Order Status ম্যানুয়ালি পরিবর্তন হবে।",
-      icon: "question",
       showCancelButton: true,
       confirmButtonText: "Confirm",
       cancelButtonText: "Back",
@@ -725,18 +963,22 @@ export default function AdminDeliveryManagementPage() {
     } catch (error) {
       void Swal.fire({
         icon: "error",
-        title: "Update failed",
+        title: "Update Failed",
         text: error.message,
         confirmButtonColor: "#76258A",
       });
     }
   }
-
-  function changeView(value) {
+  function changeView(next) {
     if (action.isPending) return;
-    setView(value);
+    setView(next);
     setPage(1);
     setEditingId(null);
+  }
+  function toggleEditor(order) {
+    if (action.isPending) return;
+    setEditingId((prev) => (prev === order._id ? null : order._id));
+    action.reset();
   }
 
   const deliveries = Array.isArray(query.data?.deliveries)
@@ -747,26 +989,38 @@ export default function AdminDeliveryManagementPage() {
   const total = Number(pagination.total || 0);
   const pages = Math.max(1, Number(pagination.totalPages) || 1);
 
-  // Hooks MUST stay above conditional returns.
-  if (checking) {
+  // Keep hooks above conditional returns.
+  if (checking)
     return (
       <div className="flex min-h-[60vh] items-center justify-center gap-2 text-secondary">
         <Loader2 className="animate-spin" /> Admin যাচাই হচ্ছে...
       </div>
     );
-  }
-  if (!allowed) {
+  if (!allowed)
     return (
       <div className="rounded-xl bg-white p-12 text-center">
-        <ShieldCheck className="mx-auto text-secondary" size={32} />
+        <ShieldCheck size={32} className="mx-auto text-secondary" />
         <h2 className="mt-3 font-bold text-primary">Access Denied</h2>
         <p className="mt-2 text-xs text-muted">Active Admin Account প্রয়োজন।</p>
       </div>
     );
-  }
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
+      {cashOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-primary/60 p-3 sm:p-6">
+          <CashCollectionModal
+            key={cashOrder._id}
+            order={cashOrder}
+            collectionId={collectionIds.current[cashOrder._id]}
+            saving={action.isPending}
+            onSave={recordCash}
+            onClose={() => {
+              if (!action.isPending) setCashOrder(null);
+            }}
+          />
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-primary sm:text-2xl">
@@ -857,7 +1111,6 @@ export default function AdminDeliveryManagementPage() {
             {bn(total)} Results
           </span>
         </div>
-
         <div className="flex gap-2 overflow-x-auto border-b border-base-300 px-4 py-3 sm:px-5">
           {VIEWS.map(([value, label]) => (
             <button
@@ -872,14 +1125,14 @@ export default function AdminDeliveryManagementPage() {
             </button>
           ))}
         </div>
-
         <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (action.isPending) return;
-            setSubmittedSearch(search.trim());
-            setPage(1);
-            setEditingId(null);
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!action.isPending) {
+              setSubmittedSearch(search.trim());
+              setPage(1);
+              setEditingId(null);
+            }
           }}
           className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:p-5"
         >
@@ -889,7 +1142,7 @@ export default function AdminDeliveryManagementPage() {
               value={search}
               maxLength={80}
               disabled={action.isPending}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Order, Customer, Phone, Courier, Tracking..."
               className="w-full min-w-0 bg-transparent text-xs text-primary outline-none"
             />
@@ -898,8 +1151,8 @@ export default function AdminDeliveryManagementPage() {
             aria-label="Sort deliveries"
             value={sort}
             disabled={action.isPending}
-            onChange={(event) => {
-              setSort(event.target.value);
+            onChange={(e) => {
+              setSort(e.target.value);
               setPage(1);
               setEditingId(null);
             }}
@@ -949,7 +1202,7 @@ export default function AdminDeliveryManagementPage() {
             </button>
           </div>
         )}
-        {action.isError && !editingId && (
+        {action.isError && !editingId && !cashOrder && (
           <p
             role="alert"
             className="m-4 rounded-xl bg-red-50 p-4 text-xs text-red-700"
@@ -957,7 +1210,6 @@ export default function AdminDeliveryManagementPage() {
             {action.error?.message}
           </p>
         )}
-
         {query.isPending ? (
           <div className="flex min-h-60 flex-col items-center justify-center gap-2">
             <Loader2 size={26} className="animate-spin text-secondary" />
@@ -966,7 +1218,6 @@ export default function AdminDeliveryManagementPage() {
         ) : (
           !query.isError && (
             <>
-              {/* Desktop list */}
               <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[1250px] border-collapse text-left">
                   <thead>
@@ -983,11 +1234,9 @@ export default function AdminDeliveryManagementPage() {
                   </thead>
                   <tbody className="divide-y divide-base-300/60">
                     {deliveries.map((order, index) => {
-                      const etaOverdue = isOverdue(order, nowMs);
                       const next = NEXT_STATUS[order.status];
-                      const trackingLink = safeTrackingUrl(
-                        order.courier?.trackingUrl,
-                      );
+                      const overdue = isOverdue(order, nowMs);
+                      const tracking = safeUrl(order.courier?.trackingUrl);
                       return (
                         <Fragment key={order._id}>
                           <tr
@@ -1039,15 +1288,16 @@ export default function AdminDeliveryManagementPage() {
                             </td>
                             <td className="px-5 py-3">
                               <p className="max-w-[155px] truncate text-xs font-semibold text-primary">
-                                {order.courier?.name || "Not assigned"}
+                                {order.courier?.name || "কুরিয়ার যোগ হয়নি"}
                               </p>
-                              <p className="mt-1 max-w-[155px] truncate text-[11px] text-muted">
-                                {order.courier?.trackingNumber ||
-                                  "Tracking pending"}
-                              </p>
-                              {trackingLink && (
+                              {order.courier?.trackingNumber && (
+                                <p className="mt-1 max-w-[155px] truncate text-[11px] text-muted">
+                                  {order.courier.trackingNumber}
+                                </p>
+                              )}
+                              {tracking && (
                                 <a
-                                  href={trackingLink}
+                                  href={tracking}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="mt-1 inline-flex items-center gap-1 text-[11px] text-secondary"
@@ -1058,20 +1308,20 @@ export default function AdminDeliveryManagementPage() {
                             </td>
                             <td className="px-5 py-3">
                               <p
-                                className={`whitespace-nowrap text-xs font-semibold ${etaOverdue ? "text-red-700" : "text-primary"}`}
+                                className={`whitespace-nowrap text-xs font-semibold ${overdue ? "text-red-700" : "text-primary"}`}
                               >
                                 {dateText(order.estimatedDelivery)}
                               </p>
-                              {etaOverdue && (
+                              {overdue && (
                                 <p className="mt-1 text-[11px] text-red-700">
                                   Overdue
                                 </p>
                               )}
                             </td>
-                            <td className="px-5 py-3 flex justify-center items-center flex-col">
+                            <td className="px-5 py-3 text-center">
                               <StatusBadge status={order.status} />
                               {order.payment?.method === "cod" && (
-                                <p className="mt-1 text-[11px] text-amber-700 font-bold rounded-full border border-amber-500/70 text-center w-fit px-4">
+                                <p className="mx-auto mt-1 w-fit rounded-full border border-amber-500/70 px-3 text-[11px] font-bold text-amber-700">
                                   COD
                                 </p>
                               )}
@@ -1081,35 +1331,51 @@ export default function AdminDeliveryManagementPage() {
                                 {next && (
                                   <button
                                     type="button"
-                                    disabled={action.isPending}
-                                    onClick={() => updateStatus(order, next)}
-                                    className="mt-2 rounded-lg bg-primary px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40"
+                                    disabled={
+                                      action.isPending || Boolean(loadingCashId)
+                                    }
+                                    onClick={() => changeStatus(order, next)}
+                                    className="rounded-lg bg-primary px-3 py-2 text-[11px] font-bold text-white disabled:opacity-40"
                                   >
                                     {NEXT_LABEL[next]}
                                   </button>
                                 )}
-
+                                {next && (
+                                  <button
+                                    type="button"
+                                    title="Record received cash"
+                                    disabled={
+                                      action.isPending || Boolean(loadingCashId)
+                                    }
+                                    onClick={() => openCash(order)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-secondary/20 bg-secondary/5 px-2.5 py-2 text-[11px] font-bold text-secondary disabled:opacity-40"
+                                  >
+                                    {loadingCashId === order._id ? (
+                                      <Loader2
+                                        size={13}
+                                        className="animate-spin"
+                                      />
+                                    ) : (
+                                      <Wallet size={13} />
+                                    )}{" "}
+                                    Cash
+                                  </button>
+                                )}
                                 {order.status !== "delivered" && (
                                   <button
                                     type="button"
+                                    title="Edit courier"
                                     disabled={action.isPending}
-                                    onClick={() => {
-                                      setEditingId(
-                                        editingId === order._id
-                                          ? null
-                                          : order._id,
-                                      );
-                                      action.reset();
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-base-300 px-2.5 py-2 text-[11px] font-bold text-primary disabled:opacity-50 hover:bg-secondary/20"
+                                    onClick={() => toggleEditor(order)}
+                                    className="inline-flex items-center rounded-lg border border-base-300 px-2.5 py-2 text-primary hover:bg-secondary/20 disabled:opacity-50"
                                   >
                                     <Pencil size={13} />
                                   </button>
                                 )}
-
                                 <Link
                                   to={`/admin/orders/${encodeURIComponent(order._id)}`}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-secondary/10 px-2.5 py-2 text-[11px] font-bold text-secondary"
+                                  title="Order Details"
+                                  className="rounded-lg bg-secondary/10 px-2.5 py-2 text-secondary"
                                 >
                                   <Eye size={14} />
                                 </Link>
@@ -1123,7 +1389,7 @@ export default function AdminDeliveryManagementPage() {
                                   key={order._id}
                                   order={order}
                                   saving={action.isPending}
-                                  onSave={updateTracking}
+                                  onSave={saveTracking}
                                   onClose={() => setEditingId(null)}
                                 />
                               </td>
@@ -1135,12 +1401,11 @@ export default function AdminDeliveryManagementPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Mobile cards */}
               <div className="space-y-3 p-3 lg:hidden">
                 {deliveries.map((order) => {
                   const next = NEXT_STATUS[order.status];
-                  const etaOverdue = isOverdue(order, nowMs);
+                  const overdue = isOverdue(order, nowMs);
+                  const tracking = safeUrl(order.courier?.trackingUrl);
                   return (
                     <article
                       key={order._id}
@@ -1148,7 +1413,7 @@ export default function AdminDeliveryManagementPage() {
                     >
                       <div className="flex items-center justify-between gap-2 bg-base-200/70 p-3">
                         <div>
-                          <p className="text-xs font-bold text-primary">
+                          <p className="break-all text-xs font-bold text-primary">
                             #{order.orderNumber}
                           </p>
                           <p className="mt-1 text-[11px] text-muted">
@@ -1190,7 +1455,7 @@ export default function AdminDeliveryManagementPage() {
                           <div>
                             <p className="text-muted">Courier</p>
                             <p className="mt-1 font-semibold text-primary">
-                              {order.courier?.name || "Not assigned"}
+                              {order.courier?.name || "এখনো যোগ হয়নি"}
                             </p>
                           </div>
                           <div>
@@ -1198,15 +1463,25 @@ export default function AdminDeliveryManagementPage() {
                             <p className="mt-1 break-all font-semibold text-primary">
                               {order.courier?.trackingNumber || "—"}
                             </p>
+                            {tracking && (
+                              <a
+                                href={tracking}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-flex items-center gap-1 text-secondary"
+                              >
+                                Track <ExternalLink size={12} />
+                              </a>
+                            )}
                           </div>
                           <div>
                             <p className="text-muted">Expected Delivery</p>
                             <p
-                              className={`mt-1 font-semibold ${etaOverdue ? "text-red-700" : "text-primary"}`}
+                              className={`mt-1 font-semibold ${overdue ? "text-red-700" : "text-primary"}`}
                             >
                               {dateText(order.estimatedDelivery)}
                             </p>
-                            {etaOverdue && (
+                            {overdue && (
                               <p className="mt-1 text-red-700">Overdue</p>
                             )}
                           </div>
@@ -1216,30 +1491,42 @@ export default function AdminDeliveryManagementPage() {
                             to={`/admin/orders/${encodeURIComponent(order._id)}`}
                             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-secondary/10 px-3 py-2.5 text-xs font-bold text-secondary"
                           >
-                            <Eye size={15} />
-                            Details
+                            <Eye size={15} /> Details
                           </Link>
                           {order.status !== "delivered" && (
                             <button
                               type="button"
                               disabled={action.isPending}
-                              onClick={() => {
-                                setEditingId(
-                                  editingId === order._id ? null : order._id,
-                                );
-                                action.reset();
-                              }}
+                              onClick={() => toggleEditor(order)}
                               className="inline-flex items-center gap-1.5 rounded-lg border border-base-300 px-3 py-2.5 text-xs font-bold text-primary disabled:opacity-50"
                             >
-                              <Pencil size={15} />
-                              Edit
+                              <Pencil size={15} /> Edit
                             </button>
                           )}
                           {next && (
                             <button
                               type="button"
-                              disabled={action.isPending}
-                              onClick={() => updateStatus(order, next)}
+                              disabled={
+                                action.isPending || Boolean(loadingCashId)
+                              }
+                              onClick={() => openCash(order)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-secondary/20 bg-secondary/5 px-3 py-2.5 text-xs font-bold text-secondary disabled:opacity-40"
+                            >
+                              {loadingCashId === order._id ? (
+                                <Loader2 size={15} className="animate-spin" />
+                              ) : (
+                                <Wallet size={15} />
+                              )}{" "}
+                              Collect Cash
+                            </button>
+                          )}
+                          {next && (
+                            <button
+                              type="button"
+                              disabled={
+                                action.isPending || Boolean(loadingCashId)
+                              }
+                              onClick={() => changeStatus(order, next)}
                               className="rounded-lg bg-primary px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40"
                             >
                               {NEXT_LABEL[next]}
@@ -1251,7 +1538,7 @@ export default function AdminDeliveryManagementPage() {
                             key={order._id}
                             order={order}
                             saving={action.isPending}
-                            onSave={updateTracking}
+                            onSave={saveTracking}
                             onClose={() => setEditingId(null)}
                           />
                         )}
@@ -1260,7 +1547,6 @@ export default function AdminDeliveryManagementPage() {
                   );
                 })}
               </div>
-
               {deliveries.length === 0 && (
                 <div className="py-12 text-center text-sm text-muted">
                   <PackageSearch
@@ -1270,7 +1556,6 @@ export default function AdminDeliveryManagementPage() {
                   এই Filter-এ কোনো ডেলিভারি অর্ডার পাওয়া যায়নি।
                 </div>
               )}
-
               {total > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 p-4 sm:px-5">
                   <p className="text-xs text-muted">
@@ -1283,7 +1568,7 @@ export default function AdminDeliveryManagementPage() {
                       aria-label="Previous page"
                       disabled={page <= 1 || action.isPending}
                       onClick={() => {
-                        setPage((current) => Math.max(1, current - 1));
+                        setPage((v) => Math.max(1, v - 1));
                         setEditingId(null);
                       }}
                       className="rounded-lg border border-base-300 p-2 text-primary disabled:opacity-30"
@@ -1298,7 +1583,7 @@ export default function AdminDeliveryManagementPage() {
                       aria-label="Next page"
                       disabled={page >= pages || action.isPending}
                       onClick={() => {
-                        setPage((current) => Math.min(pages, current + 1));
+                        setPage((v) => Math.min(pages, v + 1));
                         setEditingId(null);
                       }}
                       className="rounded-lg border border-base-300 p-2 text-primary disabled:opacity-30"
@@ -1312,10 +1597,11 @@ export default function AdminDeliveryManagementPage() {
           )
         )}
       </section>
-      <p className="text-[11px] text-muted">
-        Expected Delivery শুধু আনুমানিক সময়। Courier/Customer থেকে প্রকৃত
-        ডেলিভারি নিশ্চিত হওয়ার পরেই Admin Delivered করবেন। COD payment status
-        আলাদা থাকবে।
+      <p className="text-[11px] leading-5 text-muted">
+        Expected Delivery কেবল আনুমানিক সময়। কুরিয়ার বা কাস্টমারের কাছ থেকে
+        প্রকৃত ডেলিভারি নিশ্চিত হওয়ার পরই Delivered করুন। COD / Partial
+        Payment-এর বাকি টাকা বাস্তবে গ্রহণ করে Cash Collection-এ রেকর্ড করতে
+        হবে; শুধু ফোনে নিশ্চিত করলেই Paid ধরা হবে না।
       </p>
     </div>
   );

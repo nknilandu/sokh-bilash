@@ -29,11 +29,13 @@ import {
 
 import {
   getRecentGuestOrderId,
+  getGuestOrderToken,
   orderRequest,
   getOrderPath,
   money,
   PAYMENT_NAMES,
 } from "../../utils/orderApi";
+
 import { app } from "../../../firebase/firebase.config";
 
 const auth = getAuth(app);
@@ -78,23 +80,37 @@ const PAYMENT_STATUS = {
     label: "Verification Pending",
     className: "border-amber-200 bg-amber-50 text-amber-700",
   },
+
   cod_pending: {
     label: "COD Pending",
     className: "border-amber-200 bg-amber-50 text-amber-700",
   },
+
+  // NEW BACKEND PAYMENT STATUS
+  cod_collected: {
+    label: "COD Collected",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+
   partially_paid: {
     label: "Partially Paid",
     className: "border-blue-200 bg-blue-50 text-blue-700",
   },
+
   verified: {
     label: "Payment Verified",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
   },
+
   rejected: {
     label: "Payment Rejected",
     className: "border-red-200 bg-red-50 text-red-700",
   },
 };
+
+// ============================================
+// HELPERS
+// ============================================
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -127,6 +143,7 @@ function StatusBadge({ status, type = "order" }) {
       }`}
     >
       <span className="size-1.5 shrink-0 rounded-full bg-current" />
+
       <span className="break-words">
         {config?.label || status || "Unknown"}
       </span>
@@ -241,7 +258,7 @@ function MobileOrderCard({ order }) {
         <StatusBadge status={order.status} />
       </div>
 
-      {/* PRODUCT */}
+      {/* PRODUCT PREVIEW */}
 
       <div className="mt-3 rounded-xl bg-base-200/50 p-3">
         <ProductPreview order={order} />
@@ -269,11 +286,13 @@ function MobileOrderCard({ order }) {
         </div>
       </div>
 
+      {/* PAYMENT BADGE */}
+
       <div className="mt-3">
         <StatusBadge status={order.payment?.status} type="payment" />
       </div>
 
-      {/* ACTIONS */}
+      {/* ACTION */}
 
       <div className="mt-3 border-t border-base-300/60 pt-3">
         <Link
@@ -290,26 +309,37 @@ function MobileOrderCard({ order }) {
 }
 
 // ============================================
-// MAIN PAGE
+// MAIN MY ORDERS PAGE
 // ============================================
 
 export default function MyOrdersPage() {
-  // Firebase authentication
+  const navigate = useNavigate();
+
+  // ==========================================
+  // FIREBASE AUTH STATE
+  // ==========================================
+
   const [authState, setAuthState] = useState({
     ready: false,
     user: null,
   });
 
+  // ==========================================
+  // FILTER STATE
+  // ==========================================
+
   const [searchInput, setSearchInput] = useState("");
+
   const [search, setSearch] = useState("");
+
   const [status, setStatus] = useState("all");
+
   const [paymentStatus, setPaymentStatus] = useState("all");
+
   const [page, setPage] = useState(1);
 
-  const navigate = useNavigate();
-
   // ==========================================
-  // FIREBASE AUTH
+  // AUTH INITIALIZATION
   // ==========================================
 
   useEffect(() => {
@@ -325,6 +355,13 @@ export default function MyOrdersPage() {
 
   const uid = authState.user?.uid;
 
+  // ==========================================
+  // GUEST RECENT ORDER REDIRECT
+  //
+  // Only redirect when a saved guest
+  // access token is available.
+  // ==========================================
+
   useEffect(() => {
     if (!authState.ready || authState.user) {
       return;
@@ -332,7 +369,11 @@ export default function MyOrdersPage() {
 
     const recentOrderId = getRecentGuestOrderId();
 
-    if (!recentOrderId) {
+    const guestAccessToken = recentOrderId
+      ? getGuestOrderToken(recentOrderId)
+      : "";
+
+    if (!recentOrderId || !guestAccessToken) {
       return;
     }
 
@@ -344,6 +385,9 @@ export default function MyOrdersPage() {
           `/orders/${encodeURIComponent(recentOrderId)}`,
           {
             orderId: recentOrderId,
+
+            accessToken: guestAccessToken,
+
             signal: controller.signal,
           },
         );
@@ -351,6 +395,10 @@ export default function MyOrdersPage() {
         if (!controller.signal.aborted && response.order) {
           navigate(getOrderPath(response.order), {
             replace: true,
+
+            state: {
+              guestAccessToken,
+            },
           });
         }
       } catch (error) {
@@ -399,6 +447,10 @@ export default function MyOrdersPage() {
     retry: 1,
   });
 
+  // ==========================================
+  // NORMALIZE BACKEND RESPONSE
+  // ==========================================
+
   const orders = Array.isArray(data?.orders) ? data.orders : [];
 
   const pagination = data?.pagination || {
@@ -411,6 +463,9 @@ export default function MyOrdersPage() {
   const stats = data?.stats || {
     total: 0,
     pending: 0,
+    verified: 0,
+    processing: 0,
+    shipped: 0,
     delivered: 0,
     cancelled: 0,
   };
@@ -425,12 +480,14 @@ export default function MyOrdersPage() {
     event.preventDefault();
 
     setPage(1);
+
     setSearch(searchInput.trim().replace(/^#/, ""));
   };
 
   const resetFilters = () => {
     setSearchInput("");
     setSearch("");
+
     setStatus("all");
     setPaymentStatus("all");
     setPage(1);
@@ -444,13 +501,20 @@ export default function MyOrdersPage() {
   // ==========================================
 
   const pageNumbers = (() => {
-    if (totalPages <= 0) return [];
+    if (totalPages <= 0) {
+      return [];
+    }
 
     const start = Math.max(1, Math.min(page - 2, Math.max(1, totalPages - 4)));
 
     const end = Math.min(totalPages, start + 4);
 
-    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+    return Array.from(
+      {
+        length: end - start + 1,
+      },
+      (_, index) => start + index,
+    );
   })();
 
   // ==========================================
@@ -509,13 +573,15 @@ export default function MyOrdersPage() {
   }
 
   // ==========================================
-  // MAIN UI
+  // MAIN PAGE UI
   // ==========================================
 
   return (
     <main className="page-bg min-h-screen">
       <div className="page-container pb-12 pt-7 sm:pt-10">
-        {/* BREADCRUMB */}
+        {/* ====================================
+            BREADCRUMB
+        ==================================== */}
 
         <nav
           aria-label="Breadcrumb"
@@ -530,7 +596,9 @@ export default function MyOrdersPage() {
           <span className="font-semibold text-secondary">আমার অর্ডারসমূহ</span>
         </nav>
 
-        {/* HEADER */}
+        {/* ====================================
+            HEADER
+        ==================================== */}
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -559,7 +627,9 @@ export default function MyOrdersPage() {
           </button>
         </div>
 
-        {/* AUTHENTICATED NOTE */}
+        {/* ====================================
+            AUTHENTICATED NOTICE
+        ==================================== */}
 
         <div className="mt-5 flex items-start gap-2 rounded-xl border border-secondary/10 bg-secondary/5 p-3">
           <LockKeyhole size={16} className="mt-0.5 shrink-0 text-secondary" />
@@ -634,7 +704,7 @@ export default function MyOrdersPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-            {/* SEARCH */}
+            {/* SEARCH INPUT */}
 
             <form
               onSubmit={handleSearch}
@@ -671,18 +741,26 @@ export default function MyOrdersPage() {
                 value={status}
                 onChange={(event) => {
                   setStatus(event.target.value);
+
                   setPage(1);
                 }}
                 aria-label="Filter by order status"
                 className="h-11 w-full rounded-xl border border-base-300 bg-base-200/50 px-3 text-xs text-primary outline-none focus:border-secondary sm:text-sm"
               >
                 <option value="all">সব Order Status</option>
+
                 <option value="pending">Pending</option>
+
                 <option value="verified">Verified</option>
+
                 <option value="processing">Processing</option>
+
                 <option value="shipped">Shipped</option>
+
                 <option value="delivered">Delivered</option>
+
                 <option value="rejected">Rejected</option>
+
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
@@ -694,16 +772,24 @@ export default function MyOrdersPage() {
                 value={paymentStatus}
                 onChange={(event) => {
                   setPaymentStatus(event.target.value);
+
                   setPage(1);
                 }}
                 aria-label="Filter by payment status"
                 className="h-11 w-full rounded-xl border border-base-300 bg-base-200/50 px-3 text-xs text-primary outline-none focus:border-secondary sm:text-sm"
               >
                 <option value="all">সব Payment Status</option>
+
                 <option value="pending">Pending</option>
+
                 <option value="cod_pending">COD Pending</option>
+
+                <option value="cod_collected">COD Collected</option>
+
                 <option value="partially_paid">Partially Paid</option>
+
                 <option value="verified">Verified</option>
+
                 <option value="rejected">Rejected</option>
               </select>
             </div>
@@ -711,7 +797,7 @@ export default function MyOrdersPage() {
         </section>
 
         {/* ====================================
-            ORDERS LIST
+            ORDER LIST
         ==================================== */}
 
         <section className="section-card mt-5 overflow-hidden">
@@ -722,7 +808,8 @@ export default function MyOrdersPage() {
               <h2 className="font-bold text-primary">অর্ডার লিস্ট</h2>
 
               <p className="mt-1 text-xs text-muted">
-                মোট {pagination.total}টি অর্ডার পাওয়া গেছে
+                মোট {pagination.total}
+                টি অর্ডার পাওয়া গেছে
               </p>
             </div>
 
@@ -734,7 +821,9 @@ export default function MyOrdersPage() {
             )}
           </div>
 
-          {/* LOADING */}
+          {/* ====================================
+              LOADING
+          ==================================== */}
 
           {isLoading && (
             <div className="flex min-h-64 flex-col items-center justify-center gap-3">
@@ -746,7 +835,9 @@ export default function MyOrdersPage() {
             </div>
           )}
 
-          {/* ERROR */}
+          {/* ====================================
+              ERROR
+          ==================================== */}
 
           {!isLoading && isError && (
             <div className="px-4 py-14 text-center">
@@ -771,7 +862,9 @@ export default function MyOrdersPage() {
             </div>
           )}
 
-          {/* EMPTY STATE */}
+          {/* ====================================
+              EMPTY STATE
+          ==================================== */}
 
           {!isLoading && !isError && orders.length === 0 && (
             <div className="px-5 py-14 text-center">
@@ -810,7 +903,9 @@ export default function MyOrdersPage() {
             </div>
           )}
 
-          {/* RESULTS */}
+          {/* ====================================
+              ORDER RESULTS
+          ==================================== */}
 
           {!isLoading && !isError && orders.length > 0 && (
             <>
@@ -823,10 +918,15 @@ export default function MyOrdersPage() {
                   <thead className="border-b border-base-300/70 bg-base-200/30">
                     <tr className="text-[11px] font-bold uppercase tracking-wide text-muted">
                       <th className="px-4 py-4">Order ID / Date</th>
+
                       <th className="px-4 py-4">Products</th>
+
                       <th className="px-4 py-4">Total</th>
+
                       <th className="px-4 py-4">Payment</th>
+
                       <th className="px-4 py-4">Order Status</th>
+
                       <th className="px-4 py-4 text-right">Action</th>
                     </tr>
                   </thead>
@@ -849,6 +949,7 @@ export default function MyOrdersPage() {
 
                           <p className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted">
                             <CalendarDays size={12} />
+
                             {formatDate(order.createdAt)}
                           </p>
                         </td>
@@ -981,7 +1082,9 @@ export default function MyOrdersPage() {
           )}
         </section>
 
-        {/* FOOTER */}
+        {/* ====================================
+            FOOTER
+        ==================================== */}
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <Link

@@ -26,6 +26,7 @@ import {
   Pencil,
   CheckCircle2,
   ChevronDown,
+  PhoneCall,
 } from "lucide-react";
 
 import useCart from "../../hooks/useCart";
@@ -34,6 +35,10 @@ import { AuthContext } from "../../providers/AuthProvider";
 import ProductCard from "../../components/product/ProductCard";
 import { API_URL } from "../../utils/siteConfig";
 
+// ==========================================
+// CONFIGURATION
+// ==========================================
+
 const WISHLIST_KEY = "sokhbilash-wishlist";
 
 const CHECKOUT_OPTIONS_KEY = "sokhbilash-checkout-gift-options";
@@ -41,7 +46,6 @@ const CHECKOUT_OPTIONS_KEY = "sokhbilash-checkout-gift-options";
 const MAX_QUANTITY = 10;
 const DELIVERY_NARSINGDI = 80;
 const DELIVERY_OUTSIDE = 130;
-const GIFT_WRAP_PRICE = 50;
 
 // ==========================================
 // HELPERS
@@ -58,26 +62,6 @@ const getUnitPrice = (item) => {
   const price = Number(item?.unitPrice ?? item?.price ?? 0);
 
   return Number.isFinite(price) && price >= 0 ? price : 0;
-};
-
-const getProductImage = (product) => {
-  const first = product?.images?.[0];
-
-  return typeof first === "string" ? first : first?.url || product?.image || "";
-};
-
-const getProductPrice = (product) => {
-  const price = Number(product?.price);
-
-  if (product?.price != null && Number.isFinite(price) && price > 0) {
-    return price;
-  }
-
-  const regular = Number(product?.regularPrice || 0);
-
-  const sale = Number(product?.salePrice);
-
-  return Number.isFinite(sale) && sale > 0 && sale < regular ? sale : regular;
 };
 
 const getVariantLabels = (item) => {
@@ -97,6 +81,10 @@ const getVariantLabels = (item) => {
     }));
 };
 
+// ==========================================
+// WISHLIST
+// ==========================================
+
 const readWishlist = () => {
   try {
     const value = JSON.parse(localStorage.getItem(WISHLIST_KEY) || "[]");
@@ -107,30 +95,22 @@ const readWishlist = () => {
   }
 };
 
+// ==========================================
+// CHECKOUT GIFT MESSAGE ONLY
+// ==========================================
+
 const readCheckoutOptions = () => {
   try {
-    const saved = sessionStorage.getItem(CHECKOUT_OPTIONS_KEY);
-
-    if (!saved) {
-      return {
-        giftWrap: false,
-        surpriseBox: false,
-        message: "",
-      };
-    }
-
-    const parsed = JSON.parse(saved);
+    const saved = JSON.parse(
+      sessionStorage.getItem(CHECKOUT_OPTIONS_KEY) || "{}",
+    );
 
     return {
-      giftWrap: parsed?.giftWrap === true,
-      surpriseBox: parsed?.surpriseBox === true,
       message:
-        typeof parsed?.message === "string" ? parsed.message.slice(0, 250) : "",
+        typeof saved?.message === "string" ? saved.message.slice(0, 250) : "",
     };
   } catch {
     return {
-      giftWrap: false,
-      surpriseBox: false,
       message: "",
     };
   }
@@ -138,7 +118,11 @@ const readCheckoutOptions = () => {
 
 const saveCheckoutOptions = (options) => {
   try {
-    sessionStorage.setItem(CHECKOUT_OPTIONS_KEY, JSON.stringify(options));
+    const safeOptions = {
+      message: String(options?.message || "").slice(0, 250),
+    };
+
+    sessionStorage.setItem(CHECKOUT_OPTIONS_KEY, JSON.stringify(safeOptions));
   } catch (error) {
     console.warn("Checkout storage error:", error);
   }
@@ -292,8 +276,6 @@ function CartItem({
 
   const productMeta = (
     <div className="min-w-0">
-      {/* SKU - SINGLE LINE */}
-
       {item.sku && (
         <p
           title={`SKU: ${item.sku}`}
@@ -303,8 +285,6 @@ function CartItem({
         </p>
       )}
 
-      {/* VARIANT TITLE */}
-
       {item.variantTitle && (
         <p
           title={item.variantTitle}
@@ -313,8 +293,6 @@ function CartItem({
           {item.variantTitle}
         </p>
       )}
-
-      {/* VARIANT + PACKAGING */}
 
       <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
         {variantOptions.map((option) => (
@@ -326,27 +304,18 @@ function CartItem({
           </span>
         ))}
 
+        {/* PER-PRODUCT PACKAGING */}
+
         <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-secondary/5 px-2 py-1 text-[10px] text-secondary">
           <Package size={11} className="shrink-0" />
 
           {item.packaging === "premium" ? "Premium Box" : "Regular Box"}
         </span>
-
-        {item.surpriseBox && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
-            <Gift size={11} />
-            Surprise Box
-          </span>
-        )}
       </div>
-
-      {/* UNIT PRICE */}
 
       <p className="mt-2 text-[10px] text-muted sm:text-xs">
         প্রতি পিস: {formatPrice(unitPrice)}
       </p>
-
-      {/* AVAILABILITY */}
 
       {unavailable && (
         <span className="mt-2 inline-flex items-center gap-1 rounded-lg bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
@@ -358,7 +327,7 @@ function CartItem({
   );
 
   // ========================================
-  // QUANTITY CONTROL
+  // QUANTITY CONTROLS
   // ========================================
 
   const quantityControl = (
@@ -412,14 +381,14 @@ function CartItem({
     </button>
   );
 
+  // ========================================
+  // PRODUCT CARD UI
+  // ========================================
+
   return (
     <article className="min-w-0 rounded-2xl border-2 border-dashed border-secondary/30 bg-base-100 p-2.5 transition-colors duration-200 hover:border-secondary/50 sm:p-4">
-      {/* ========================================
-          PRODUCT HEADER
-      ======================================== */}
-
       <div className="flex min-w-0 items-start gap-2.5">
-        {/* IMAGE + MOBILE WISHLIST */}
+        {/* PRODUCT IMAGE */}
 
         <div className="relative size-15 shrink-0 sm:size-17">
           <Link
@@ -441,14 +410,14 @@ function CartItem({
             )}
           </Link>
 
-          {/* WISHLIST OVER IMAGE - MOBILE */}
+          {/* MOBILE WISHLIST */}
 
           <div className="absolute -right-1 -top-1 sm:hidden">
             {wishlistButton}
           </div>
         </div>
 
-        {/* PRODUCT NAME + DESKTOP META */}
+        {/* PRODUCT NAME */}
 
         <div className="min-w-0 flex-1">
           <Link
@@ -458,12 +427,10 @@ function CartItem({
             {item.name}
           </Link>
 
-          {/* DESKTOP META */}
-
           <div className="hidden sm:block">{productMeta}</div>
         </div>
 
-        {/* DESKTOP RIGHT SIDE */}
+        {/* DESKTOP ACTIONS */}
 
         <div className="hidden shrink-0 flex-col items-end gap-2 sm:flex">
           {wishlistButton}
@@ -476,15 +443,11 @@ function CartItem({
         </div>
       </div>
 
-      {/* ========================================
-          MOBILE PRODUCT META
-      ======================================== */}
+      {/* MOBILE META */}
 
       <div className="min-w-0 sm:hidden">{productMeta}</div>
 
-      {/* ========================================
-          MOBILE QUANTITY + TOTAL
-      ======================================== */}
+      {/* MOBILE QUANTITY + TOTAL */}
 
       <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-base-300/60 bg-base-200/50 px-2.5 py-2.5 sm:hidden">
         <div className="shrink-0">
@@ -502,15 +465,11 @@ function CartItem({
         </div>
       </div>
 
-      {/* ========================================
-          COLLAPSIBLE CUSTOMIZATION
-      ======================================== */}
+      {/* CUSTOMIZATION */}
 
       <CustomizationAccordion customization={item.customization} />
 
-      {/* ========================================
-          EDIT + REMOVE
-      ======================================== */}
+      {/* EDIT / REMOVE */}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-base-300/60 pt-3">
         <button
@@ -520,7 +479,6 @@ function CartItem({
           className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-secondary transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Pencil size={13} />
-
           {editing ? "এডিট চলছে" : "প্রোডাক্ট এডিট করুন"}
         </button>
 
@@ -535,9 +493,7 @@ function CartItem({
         </button>
       </div>
 
-      {/* ========================================
-          INLINE EDITOR
-      ======================================== */}
+      {/* PRODUCT EDITOR */}
 
       {editing && (
         <CartItemEditor
@@ -549,69 +505,11 @@ function CartItem({
         />
       )}
 
-      {/* UNAVAILABLE REASON */}
-
       {unavailable && item.unavailableReason && (
         <p className="mt-2 text-[11px] text-red-600">
           {item.unavailableReason}
         </p>
       )}
-    </article>
-  );
-}
-
-// ==========================================
-// RECOMMENDED PRODUCT CARD
-// ==========================================
-
-function RecommendedProductCard({ product }) {
-  const image = getProductImage(product);
-  const price = getProductPrice(product);
-
-  return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-base-300/80 bg-base-100 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <Link
-        to={`/shop/${product._id}`}
-        className="aspect-square overflow-hidden bg-base-200"
-      >
-        {image ? (
-          <img
-            src={image}
-            alt={product.name}
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted">
-            <ImageOff size={27} />
-          </div>
-        )}
-      </Link>
-
-      <div className="flex flex-1 flex-col p-3 sm:p-4">
-        <Link
-          to={`/shop/${product._id}`}
-          className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-primary transition hover:text-secondary"
-        >
-          {product.name}
-        </Link>
-
-        <p className="mt-2 text-base font-extrabold text-primary">
-          {formatPrice(price)}
-        </p>
-
-        {product.variantsEnabled && (
-          <p className="mt-1 text-xs text-muted">বিভিন্ন ভ্যারিয়েন্ট উপলব্ধ</p>
-        )}
-
-        <Link
-          to={`/shop/${product._id}`}
-          className="btn-outline-brand mt-auto w-full rounded-xl px-2 py-2.5 text-center text-xs sm:text-sm"
-        >
-          উপহারটি দেখুন
-          <ArrowRight size={15} />
-        </Link>
-      </div>
     </article>
   );
 }
@@ -623,7 +521,10 @@ function RecommendedProductCard({ product }) {
 export default function CartPage() {
   const navigate = useNavigate();
 
-  // SHOPPING PERMISSION
+  // ========================================
+  // AUTH / ROLE
+  // ========================================
+
   const { user, loading, role, roleLoading, accountStatus } =
     useContext(AuthContext);
 
@@ -632,6 +533,10 @@ export default function CartPage() {
   const canShop =
     !checkingRole &&
     (!user || (role === "customer" && accountStatus === "active"));
+
+  // ========================================
+  // CART PROVIDER
+  // ========================================
 
   const {
     cartItems,
@@ -648,7 +553,7 @@ export default function CartPage() {
     isGuest,
   } = useCart();
 
-  const items = cartItems || [];
+  const items = Array.isArray(cartItems) ? cartItems : [];
 
   // ========================================
   // STATE
@@ -669,22 +574,19 @@ export default function CartPage() {
     message: "",
   });
 
-  const giftWrap = giftOptions.giftWrap;
   const giftMessage = giftOptions.message;
 
   // ========================================
-  // CART CALCULATIONS
+  // CALCULATIONS
   // ========================================
 
   const hasUnavailableItems = items.some((item) => item.unavailable === true);
 
   const safeSubtotal = Number(subtotal) || 0;
 
-  const wrappingCost = giftWrap && items.length > 0 ? GIFT_WRAP_PRICE : 0;
+  const estimatedMinTotal = safeSubtotal + DELIVERY_NARSINGDI;
 
-  const estimatedMinTotal = safeSubtotal + wrappingCost + DELIVERY_NARSINGDI;
-
-  const estimatedMaxTotal = safeSubtotal + wrappingCost + DELIVERY_OUTSIDE;
+  const estimatedMaxTotal = safeSubtotal + DELIVERY_OUTSIDE;
 
   const cartBusy = Boolean(busyCartId) || clearing;
 
@@ -700,7 +602,7 @@ export default function CartPage() {
     !isEditing;
 
   // ========================================
-  // PERSIST GIFT OPTIONS
+  // SAVE CHECKOUT MESSAGE
   // ========================================
 
   useEffect(() => {
@@ -728,7 +630,7 @@ export default function CartPage() {
   }, []);
 
   // ========================================
-  // RECOMMENDATIONS
+  // RECOMMENDED PRODUCTS
   // ========================================
 
   const { data: recommendations = [], isLoading: recommendationsLoading } =
@@ -764,10 +666,10 @@ export default function CartPage() {
           !cartProductIds.has(String(product._id)),
       )
       .slice(0, 4);
-  }, [recommendations, items]);
+  }, [recommendations, cartItems]);
 
   // ========================================
-  // NOTICES
+  // NOTICE HELPERS
   // ========================================
 
   const showNotice = (message, type = "success") => {
@@ -935,7 +837,6 @@ export default function CartPage() {
 
     try {
       await clearCart();
-
       setEditingCartId(null);
 
       showNotice("সম্পূর্ণ কার্ট খালি করা হয়েছে।");
@@ -984,19 +885,13 @@ export default function CartPage() {
   // CHECKOUT
   // ========================================
 
-  // ========================================
-  // CHECKOUT
-  // ========================================
-
   const handleCheckout = () => {
     if (!canShop || !canCheckout) {
       return;
     }
 
     const selectedGiftOptions = {
-      giftWrap: giftOptions.giftWrap === true,
-      surpriseBox: giftOptions.surpriseBox === true,
-      message: giftOptions.message.trim(),
+      message: giftOptions.message.trim().slice(0, 250),
     };
 
     saveCheckoutOptions(selectedGiftOptions);
@@ -1009,10 +904,9 @@ export default function CartPage() {
   };
 
   // ========================================
-  // PAGE UI
+  // ROLE LOADING
   // ========================================
 
-  // ROLE LOADING
   if (checkingRole) {
     return (
       <main className="page-bg flex min-h-[65vh] items-center justify-center">
@@ -1025,7 +919,10 @@ export default function CartPage() {
     );
   }
 
+  // ========================================
   // ADMIN / INACTIVE ACCOUNT BLOCK
+  // ========================================
+
   if (!canShop) {
     return (
       <main className="page-bg flex min-h-[65vh] items-center justify-center px-4">
@@ -1052,7 +949,10 @@ export default function CartPage() {
     );
   }
 
-  // =========
+  // ========================================
+  // PAGE UI
+  // ========================================
+
   return (
     <main className="page-bg min-h-screen">
       <div className="page-container pb-10 pt-7 sm:pt-10">
@@ -1077,7 +977,7 @@ export default function CartPage() {
           <span className="font-semibold text-primary">আপনার শপিং কার্ট</span>
         </nav>
 
-        {/* PAGE HEADER */}
+        {/* HEADER */}
 
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -1104,7 +1004,7 @@ export default function CartPage() {
           </Link>
         </div>
 
-        {/* SECURE CHECKOUT NOTICE */}
+        {/* CHECKOUT INFORMATION */}
 
         <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-secondary/10 bg-secondary/5 p-4">
           <div className="icon-box !h-10 !w-10">
@@ -1117,12 +1017,12 @@ export default function CartPage() {
             </p>
 
             <p className="mt-1 text-xs leading-5 text-muted">
-              কাস্টমাইজেশন, গিফট প্যাকেজিং এবং অর্ডারের সব তথ্য চেকআউটে নিশ্চিত
-              করতে পারবেন।
+              পেমেন্টের পরিমাণ কম, বেশি বা সমান হলেও অর্ডার জমা দিতে পারবেন।
+              প্রতিটি অর্ডার Admin ফোনে নিশ্চিত করবেন।
             </p>
           </div>
 
-          <LockKeyhole size={17} className="text-secondary" />
+          <PhoneCall size={17} className="text-secondary" />
         </div>
 
         {/* CART ERROR */}
@@ -1195,7 +1095,7 @@ export default function CartPage() {
             {/* CART PRODUCTS */}
 
             <div className="section-card overflow-hidden">
-              {/* LIST HEADER */}
+              {/* HEADER */}
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300/70 bg-base-200/70 px-4 py-4 sm:px-6">
                 <div>
@@ -1229,7 +1129,7 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {/* CONTENT */}
+              {/* PRODUCT LIST */}
 
               {cartLoading ? (
                 <div className="flex min-h-56 flex-col items-center justify-center px-5 py-14 text-center">
@@ -1259,7 +1159,7 @@ export default function CartPage() {
                   </button>
                 </div>
               ) : items.length === 0 ? (
-                <div className="px-5 py-15 lg:py-33 text-center">
+                <div className="px-5 py-15 text-center lg:py-33">
                   <div className="icon-box mx-auto mb-4 !h-16 !w-16">
                     <ShoppingBag size={27} />
                   </div>
@@ -1278,7 +1178,6 @@ export default function CartPage() {
                   </Link>
                 </div>
               ) : (
-                /* COMPACT DASHED PRODUCT CARDS */
                 <div className="space-y-3 bg-base-200/30 p-2 sm:space-y-4 sm:p-4">
                   {items.map((item) => (
                     <CartItem
@@ -1300,7 +1199,7 @@ export default function CartPage() {
                 </div>
               )}
 
-              {/* SUBTOTAL */}
+              {/* CART SUBTOTAL */}
 
               {items.length > 0 && cartReady && (
                 <div className="border-t border-base-300/70 bg-base-200/40 px-4 py-3 sm:px-6">
@@ -1313,7 +1212,7 @@ export default function CartPage() {
                   </div>
 
                   <p className="mt-1 text-xs text-muted">
-                    নির্বাচিত Premium Box-এর চার্জ পণ্যমূল্যের মধ্যে
+                    নির্বাচিত Premium Box-এর চার্জ পণ্যমূল্যের মধ্যেই
                     অন্তর্ভুক্ত।
                   </p>
                 </div>
@@ -1332,14 +1231,14 @@ export default function CartPage() {
                   </h3>
 
                   <p className="mt-1 text-xs leading-5 text-amber-800">
-                    চেকআউটের আগে অনুপলব্ধ পণ্যগুলো সরিয়ে ফেলো অথবা প্রোডাক্ট
-                    পেজ থেকে আবার বেছে নিন।
+                    চেকআউটের আগে অনুপলব্ধ পণ্যগুলো সরিয়ে ফেলুন অথবা Product
+                    Details পেজ থেকে আবার নির্বাচন করুন।
                   </p>
                 </div>
               </div>
             )}
 
-            {/* GIFT WRAPPING */}
+            {/* GIFT MESSAGE ONLY */}
 
             {items.length > 0 && cartReady && (
               <section className="section-card p-4 sm:p-6">
@@ -1350,42 +1249,17 @@ export default function CartPage() {
 
                   <div className="min-w-0 flex-1">
                     <h2 className="font-bold text-primary">
-                      গিফট র‍্যাপিং ও শুভেচ্ছা
+                      উপহারের শুভেচ্ছা বার্তা
                     </h2>
 
                     <p className="mt-1 text-xs leading-5 text-muted sm:text-sm">
-                      আপনার উপহারটিকে আরও বিশেষ করে তুলতে একটি মেসেজ যোগ করেন।
+                      উপহারটিকে আরও বিশেষ করতে একটি সুন্দর শুভেচ্ছা বার্তা যোগ
+                      করুন।
                     </p>
                   </div>
                 </div>
 
-                <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-base-300/70 p-3 transition hover:border-secondary/40">
-                  <input
-                    type="checkbox"
-                    checked={giftWrap}
-                    onChange={(event) =>
-                      setGiftOptions((current) => ({
-                        ...current,
-                        giftWrap: event.target.checked,
-                      }))
-                    }
-                    className="checkbox checkbox-secondary mt-0.5"
-                  />
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-primary">
-                      প্রিমিয়াম গিফট র‍্যাপিং
-                    </span>
-
-                    <span className="mt-1 block text-xs text-muted">
-                      সুন্দর প্যাকেজিং ও রিবন দিয়ে সাজানো হবে।
-                    </span>
-                  </span>
-
-                  <span className="shrink-0 text-sm font-bold text-secondary">
-                    +{formatPrice(GIFT_WRAP_PRICE)}
-                  </span>
-                </label>
+                {/* GIFT MESSAGE */}
 
                 <label
                   htmlFor="gift-message"
@@ -1416,7 +1290,7 @@ export default function CartPage() {
               </section>
             )}
 
-            {/* COUPON */}
+            {/* COUPON — DISABLED */}
 
             {items.length > 0 && cartReady && (
               <section className="section-card p-4 sm:p-6">
@@ -1442,7 +1316,9 @@ export default function CartPage() {
             )}
           </section>
 
-          {/* RIGHT SIDE: ORDER SUMMARY */}
+          {/* ===================================
+              RIGHT SIDE: ORDER SUMMARY
+          =================================== */}
 
           <aside className="min-w-0 space-y-4 lg:sticky lg:top-25 lg:col-span-4">
             <section className="section-card overflow-hidden">
@@ -1480,18 +1356,6 @@ export default function CartPage() {
                       : "—"}
                   </span>
                 </div>
-
-                {/* GIFT WRAPPING */}
-
-                {giftWrap && items.length > 0 && (
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-muted">গিফট র‍্যাপিং</span>
-
-                    <span className="font-semibold text-primary">
-                      {formatPrice(wrappingCost)}
-                    </span>
-                  </div>
-                )}
 
                 {/* DELIVERY POLICY */}
 
@@ -1538,6 +1402,32 @@ export default function CartPage() {
                     যাচাই করার পরে চূড়ান্ত মোট মূল্য চেকআউটে দেখানো হবে।
                   </p>
                 </div>
+
+                {/* PAYMENT POLICY */}
+
+                {items.length > 0 && (
+                  <div className="rounded-xl border border-gold-soft/70 bg-gold-soft/15 p-3">
+                    <div className="flex items-start gap-2">
+                      <PhoneCall
+                        size={17}
+                        className="mt-0.5 shrink-0 text-secondary"
+                      />
+
+                      <div>
+                        <p className="text-xs font-bold text-primary">
+                          পেমেন্ট ও অর্ডার নিশ্চিতকরণ
+                        </p>
+
+                        <p className="mt-1 text-[11px] leading-5 text-muted">
+                          বিকাশ, নগদ বা রকেটে কম, বেশি বা সমান টাকা পাঠালেও
+                          অর্ডার করতে পারবেন। বাকি টাকা ডেলিভারিতে পরিশোধ করতে
+                          হবে। অতিরিক্ত টাকা ফেরত বা সমমূল্যের পণ্য দেওয়ার
+                          ব্যবস্থা করা হবে। Admin ফোনে নিশ্চিত করবেন।
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* EDITING WARNING */}
 
@@ -1609,14 +1499,12 @@ export default function CartPage() {
           </aside>
         </div>
 
-        {/* ======================================== */}
-        {/* RECOMMENDED PRODUCTS - EXISTING CARD     */}
-        {/* ======================================== */}
+        {/* ====================================
+            RECOMMENDED PRODUCTS
+        ==================================== */}
 
         {(recommendationsLoading || recommendedProducts.length > 0) && (
           <section className="mt-12 sm:mt-16">
-            {/* SECTION HEADER */}
-
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-secondary">
@@ -1632,8 +1520,6 @@ export default function CartPage() {
                 </p>
               </div>
 
-              {/* DESKTOP VIEW ALL */}
-
               <Link
                 to="/shop"
                 className="hidden items-center gap-1 text-sm font-semibold text-secondary transition hover:text-primary sm:flex"
@@ -1642,8 +1528,6 @@ export default function CartPage() {
                 <ArrowRight size={16} />
               </Link>
             </div>
-
-            {/* PRODUCT GRID */}
 
             {recommendationsLoading ? (
               <div className="flex min-h-40 items-center justify-center">
@@ -1660,8 +1544,6 @@ export default function CartPage() {
                 ))}
               </div>
             )}
-
-            {/* MOBILE VIEW ALL */}
 
             <div className="mt-5 sm:hidden">
               <Link to="/shop" className="btn-outline-brand w-full">

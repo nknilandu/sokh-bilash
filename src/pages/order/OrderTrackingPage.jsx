@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
@@ -12,6 +11,7 @@ import {
   ChevronDown,
   Clock3,
   Copy,
+  ExternalLink,
   Gift,
   Headphones,
   ImageOff,
@@ -29,19 +29,15 @@ import {
   XCircle,
 } from "lucide-react";
 
-import {
-  money,
-  orderRequest,
-  getGuestOrderToken,
-} from "../../utils/orderApi";
+import { money, orderRequest, getGuestOrderToken } from "../../utils/orderApi";
+
 import { app } from "../../../firebase/firebase.config";
 
 const auth = getAuth(app);
 
-// =============================================
+// ==========================================
 // STATUS CONFIGURATION
-// Matches existing commerce.routes.js
-// =============================================
+// ==========================================
 
 const STEPS = [
   {
@@ -99,17 +95,23 @@ const PAYMENT_LABELS = {
   partially_paid: "Partially Verified",
   verified: "Payment Verified",
   rejected: "Payment Rejected",
-  cod_pending: "Phone Confirmation Pending",
+  cod_pending: "Cash on Delivery Pending",
+  cod_collected: "COD Payment Collected",
 };
 
 const HISTORY_LABELS = {
   placed: "অর্ডার গ্রহণ করা হয়েছে",
   payment_verified: "পেমেন্ট যাচাই সম্পন্ন",
-  payment_partially_verified:
-    "আংশিক পেমেন্ট যাচাই সম্পন্ন",
+  payment_fully_verified: "সম্পূর্ণ পেমেন্ট যাচাই হয়েছে",
+  payment_overpaid_verified: "অতিরিক্ত পেমেন্ট যাচাই হয়েছে",
+  payment_partially_verified: "আংশিক পেমেন্ট যাচাই সম্পন্ন",
+  delivery_balance_collected: "ডেলিভারির বাকি টাকা সংগ্রহ",
+  excess_refund_completed: "অতিরিক্ত টাকা ফেরত সম্পন্ন",
+  extra_product_completed: "সমমূল্যের অতিরিক্ত পণ্য প্রদান",
+  cancellation_refund_partial: "আংশিক রিফান্ড সম্পন্ন",
+  cancellation_refund_completed: "রিফান্ড সম্পন্ন",
   payment_rejected: "পেমেন্ট যাচাই ব্যর্থ",
-  payment_resubmitted:
-    "পেমেন্ট তথ্য পুনরায় জমা হয়েছে",
+  payment_resubmitted: "পেমেন্ট তথ্য পুনরায় জমা হয়েছে",
   phone_confirmed: "ফোনে অর্ডার নিশ্চিত",
   phone_unconfirmed: "ফোন নিশ্চিতকরণ অপেক্ষমাণ",
   verified: "অর্ডার নিশ্চিত",
@@ -118,6 +120,36 @@ const HISTORY_LABELS = {
   delivered: "ডেলিভারি সম্পন্ন",
   cancelled: "অর্ডার বাতিল",
   tracking_updated: "ডেলিভারি তথ্য আপডেট",
+};
+
+// ==========================================
+// HELPERS
+// ==========================================
+
+const roundMoney = (value) => {
+  const number = Number(value);
+
+  return Number.isFinite(number) ? Math.round(number * 100) / 100 : 0;
+};
+
+const positiveMoney = (value) => Math.max(0, roundMoney(value));
+
+const safeTrackingUrl = (value) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value.trim());
+
+    if (url.protocol !== "https:" || url.username || url.password) {
+      return "";
+    }
+
+    return url.href;
+  } catch {
+    return "";
+  }
 };
 
 const formatDate = (value) => {
@@ -133,31 +165,22 @@ const formatDate = (value) => {
       });
 };
 
-// =============================================
-// ORDER PROGRESS
-// =============================================
+// ==========================================
+// TRACKING PROGRESS
+// ==========================================
 
 function TrackingProgress({ order }) {
-  const stopped = [
-    "rejected",
-    "cancelled",
-  ].includes(order.status);
+  const stopped = ["rejected", "cancelled"].includes(order.status);
 
-  const activeIndex =
-    STATUS_INDEX[order.status] ?? 0;
+  const activeIndex = STATUS_INDEX[order.status] ?? 0;
 
-  const events = Array.isArray(order.history)
-    ? order.history
-    : [];
+  const events = Array.isArray(order.history) ? order.history : [];
 
   return (
     <section className="section-card p-4 sm:p-6">
       <div className="mb-5">
         <h2 className="flex items-center gap-2 text-base font-bold text-primary">
-          <PackageCheck
-            size={19}
-            className="text-secondary"
-          />
+          <PackageCheck size={19} className="text-secondary" />
           অর্ডারের অগ্রগতি
         </h2>
 
@@ -170,13 +193,9 @@ function TrackingProgress({ order }) {
         {STEPS.map((step, index) => {
           const Icon = step.icon;
 
-          const complete = stopped
-            ? index === 0
-            : index < activeIndex;
+          const complete = stopped ? index === 0 : index < activeIndex;
 
-          const active = stopped
-            ? index === 1
-            : index === activeIndex;
+          const active = stopped ? index === 1 : index === activeIndex;
 
           const matchingEvent = events
             .filter((event) => {
@@ -187,6 +206,7 @@ function TrackingProgress({ order }) {
               if (step.key === "verified") {
                 return [
                   "payment_verified",
+                  "payment_fully_verified",
                   "phone_confirmed",
                   "verified",
                 ].includes(event.status);
@@ -198,8 +218,7 @@ function TrackingProgress({ order }) {
 
           return (
             <div key={step.key} className="flex gap-3">
-
-              {/* ICON + CONNECTOR */}
+              {/* ICON AND CONNECTOR */}
 
               <div className="flex flex-col items-center">
                 <div
@@ -225,18 +244,15 @@ function TrackingProgress({ order }) {
                 {index < STEPS.length - 1 && (
                   <div
                     className={`my-1 min-h-8 w-0.5 flex-1 ${
-                      complete
-                        ? "bg-secondary/60"
-                        : "bg-base-300"
+                      complete ? "bg-secondary/60" : "bg-base-300"
                     }`}
                   />
                 )}
               </div>
 
-              {/* TEXT */}
+              {/* STEP DETAILS */}
 
               <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-2 pb-7">
-
                 <div className="min-w-0">
                   <h3
                     className={`text-xs font-bold sm:text-sm ${
@@ -248,13 +264,13 @@ function TrackingProgress({ order }) {
                     }`}
                   >
                     {stopped && active
-                      ? "অর্ডার যাচাই ব্যর্থ / বাতিল"
+                      ? order.status === "cancelled"
+                        ? "অর্ডার বাতিল"
+                        : "পেমেন্ট যাচাই ব্যর্থ"
                       : step.label}
                   </h3>
 
-                  <p className="mt-1 text-[11px] text-muted">
-                    {step.english}
-                  </p>
+                  <p className="mt-1 text-[11px] text-muted">{step.english}</p>
 
                   {matchingEvent?.date && (
                     <p className="mt-1.5 text-[11px] text-muted">
@@ -288,35 +304,41 @@ function TrackingProgress({ order }) {
         })}
       </div>
 
+      {/* PROGRESS MESSAGE */}
+
       <div
         className={`rounded-xl p-3 text-xs leading-6 ${
-          stopped
-            ? "bg-red-50 text-red-700"
-            : "bg-secondary/5 text-muted"
+          stopped ? "bg-red-50 text-red-700" : "bg-secondary/5 text-muted"
         }`}
       >
         {stopped
-          ? "অর্ডারটি বর্তমানে বন্ধ রয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।"
+          ? order.status === "cancelled"
+            ? "অর্ডারটি বাতিল হয়েছে। টাকা গ্রহণ করা হয়ে থাকলে নিচে রিফান্ডের অবস্থা দেখুন।"
+            : "পেমেন্ট যাচাই ব্যর্থ হয়েছে। প্রয়োজন হলে সাপোর্টে যোগাযোগ করুন।"
           : order.status === "pending"
             ? order.payment?.method === "cod"
               ? "ফোনে নিশ্চিতকরণের পরে অর্ডারের প্রস্তুতি শুরু হবে।"
               : "পেমেন্টের তথ্য যাচাইয়ের অপেক্ষায় রয়েছে।"
-            : "অর্ডারের বর্তমান অবস্থা অনুযায়ী প্রস্তুতি ও ডেলিভারি এগিয়ে চলছে।"}
+            : order.status === "shipped"
+              ? "আপনার অর্ডার কুরিয়ারে পাঠানো হয়েছে।"
+              : order.status === "delivered"
+                ? "আপনার অর্ডার ডেলিভারি সম্পন্ন হয়েছে।"
+                : "অর্ডারের বর্তমান অবস্থা অনুযায়ী প্রস্তুতি ও ডেলিভারি এগিয়ে চলছে।"}
       </div>
     </section>
   );
 }
 
-// =============================================
-// ORDER HISTORY
-// =============================================
+// ==========================================
+// TRACKING HISTORY
+// ==========================================
 
-function TrackingHistory({ history, fullAccess }) {
-  const events = Array.isArray(history)
-    ? [...history].reverse()
-    : [];
+function TrackingHistory({ history }) {
+  const events = Array.isArray(history) ? [...history].reverse() : [];
 
-  if (events.length === 0) return null;
+  if (events.length === 0) {
+    return null;
+  }
 
   return (
     <section className="section-card p-4 sm:p-6">
@@ -338,18 +360,12 @@ function TrackingHistory({ history, fullAccess }) {
             <div className="min-w-0">
               <p className="text-xs font-bold text-primary">
                 {HISTORY_LABELS[event.status] ||
-                  String(event.status).replace(/_/g, " ")}
+                  String(event.status || "update").replace(/_/g, " ")}
               </p>
 
               <p className="mt-1 text-[11px] text-muted">
                 {formatDate(event.date)}
               </p>
-
-              {fullAccess && event.note && (
-                <p className="mt-1 break-words text-xs leading-5 text-muted">
-                  {event.note}
-                </p>
-              )}
             </div>
           </div>
         ))}
@@ -358,15 +374,14 @@ function TrackingHistory({ history, fullAccess }) {
   );
 }
 
-// =============================================
-// FULL ACCESS: PRODUCT ITEM
-// =============================================
+// ==========================================
+// TRACKING PRODUCT
+// ==========================================
 
 function TrackingProduct({ item }) {
   const quantity = Number(item.quantity) || 1;
-  const unitPrice = Number(
-    item.unitPrice ?? item.price ?? 0
-  );
+
+  const unitPrice = Number(item.unitPrice ?? item.price ?? 0);
 
   const custom = item.customization || {};
 
@@ -377,13 +392,12 @@ function TrackingProduct({ item }) {
     ["নোট", custom.note],
   ].filter(([, value]) => Boolean(value));
 
-  const photos = Array.isArray(custom.photos)
-    ? custom.photos
-    : [];
+  const photos = Array.isArray(custom.photos) ? custom.photos : [];
 
   return (
     <article className="min-w-0 rounded-xl border-2 border-dashed border-secondary/25 bg-base-100 p-3">
       <div className="flex min-w-0 items-start gap-2.5">
+        {/* PRODUCT IMAGE */}
 
         <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-base-200">
           {item.image ? (
@@ -399,6 +413,8 @@ function TrackingProduct({ item }) {
             </div>
           )}
         </div>
+
+        {/* PRODUCT DETAILS */}
 
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 text-xs font-bold leading-5 text-primary">
@@ -423,10 +439,10 @@ function TrackingProduct({ item }) {
                 </span>
               ))}
 
+            {/* PER-PRODUCT BOX */}
+
             <span className="rounded-md bg-secondary/5 px-2 py-1 text-[10px] text-secondary">
-              {item.packaging === "premium"
-                ? "Premium Box"
-                : "Regular Box"}
+              {item.packaging === "premium" ? "Premium Box" : "Regular Box"}
             </span>
           </div>
 
@@ -439,6 +455,8 @@ function TrackingProduct({ item }) {
           </p>
         </div>
       </div>
+
+      {/* CUSTOMIZATION */}
 
       {(fields.length > 0 || photos.length > 0) && (
         <details className="group mt-3 rounded-lg bg-secondary/5">
@@ -457,9 +475,7 @@ function TrackingProduct({ item }) {
           <div className="space-y-2 border-t border-secondary/10 p-3">
             {fields.map(([label, value]) => (
               <div key={label}>
-                <p className="text-[11px] font-bold text-primary">
-                  {label}
-                </p>
+                <p className="text-[11px] font-bold text-primary">{label}</p>
 
                 <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-base-100 p-2 text-xs text-muted">
                   {value}
@@ -469,22 +485,26 @@ function TrackingProduct({ item }) {
 
             {photos.length > 0 && (
               <div className="grid grid-cols-4 gap-2">
-                {photos.map((photo, index) => (
-                  <a
-                    key={photo.id || index}
-                    href={photo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="aspect-square overflow-hidden rounded-lg bg-base-200"
-                  >
-                    <img
-                      src={photo.url}
-                      alt={`Customer photo ${index + 1}`}
-                      loading="lazy"
-                      className="size-full object-cover"
-                    />
-                  </a>
-                ))}
+                {photos.map((photo, index) => {
+                  const photoUrl = safeTrackingUrl(photo?.url);
+
+                  return photoUrl ? (
+                    <a
+                      key={photo.id || index}
+                      href={photoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="aspect-square overflow-hidden rounded-lg bg-base-200"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Customer photo ${index + 1}`}
+                        loading="lazy"
+                        className="size-full object-cover"
+                      />
+                    </a>
+                  ) : null;
+                })}
               </div>
             )}
           </div>
@@ -494,21 +514,23 @@ function TrackingProduct({ item }) {
   );
 }
 
-// =============================================
+// ==========================================
 // MAIN TRACKING PAGE
-// =============================================
+// ==========================================
 
 export default function OrderTrackingPage() {
   const { orderId } = useParams();
+
+  // ========================================
+  // STATE
+  // ========================================
 
   const [authState, setAuthState] = useState({
     ready: false,
     uid: null,
   });
 
-  const [orderNumber, setOrderNumber] = useState(
-    orderId || ""
-  );
+  const [orderNumber, setOrderNumber] = useState(orderId || "");
 
   const [phone, setPhone] = useState("");
   const [order, setOrder] = useState(null);
@@ -518,9 +540,16 @@ export default function OrderTrackingPage() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // ===========================================
-  // WAIT FOR FIREBASE AUTH INITIALIZATION
-  // ===========================================
+  const [secureAccessToken, setSecureAccessToken] = useState("");
+
+  const [lookup, setLookup] = useState({
+    identifier: "",
+    phone: "",
+  });
+
+  // ========================================
+  // FIREBASE AUTH INITIALIZATION
+  // ========================================
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
@@ -531,22 +560,40 @@ export default function OrderTrackingPage() {
     });
   }, []);
 
-  // ===========================================
-  // AUTO-LOAD SECURE ORDER BY URL
-  // Logged-in owner or valid Guest Token only
-  // ===========================================
+  // ========================================
+  // RESET WHEN URL ORDER ID CHANGES
+  // ========================================
 
   useEffect(() => {
     setOrderNumber(orderId || "");
     setOrder(null);
     setFullAccess(false);
+    setSecureAccessToken("");
+
+    setLookup({
+      identifier: "",
+      phone: "",
+    });
+
     setError("");
+    setCopied(false);
+  }, [orderId]);
 
-    if (!orderId || !authState.ready) return;
+  // ========================================
+  // SECURE ORDER AUTO-LOAD
+  // ========================================
 
-    const token = getGuestOrderToken(orderId);
+  useEffect(() => {
+    if (!orderId || !authState.ready) {
+      return;
+    }
+
+    const token = getGuestOrderToken(orderId) || "";
 
     if (!authState.uid && !token) {
+      setOrder(null);
+      setFullAccess(false);
+      setSecureAccessToken("");
       return;
     }
 
@@ -554,28 +601,45 @@ export default function OrderTrackingPage() {
 
     const load = async () => {
       setLoading(true);
+      setError("");
+      setOrder(null);
+      setFullAccess(false);
 
       try {
-        const result = await orderRequest(
+        const response = await orderRequest(
           `/orders/${encodeURIComponent(orderId)}`,
           {
             orderId,
-          }
+            accessToken: token,
+          },
         );
 
         if (cancelled) return;
 
-        setOrder(result.order);
+        if (!response?.order) {
+          throw new Error("অর্ডারের তথ্য পাওয়া যায়নি।");
+        }
+
+        setOrder(response.order);
         setFullAccess(true);
-      } catch (error) {
+        setSecureAccessToken(token);
+
+        setLookup({
+          identifier: orderId,
+          phone: "",
+        });
+
+        setOrderNumber(response.order.orderNumber || orderId);
+      } catch {
         if (cancelled) return;
 
         setError(
-          "অর্ডারটি সরাসরি খোলা যায়নি। প্রয়োজন হলে নিচে Order Number ও Phone দিয়ে Status দেখুন।"
+          "Secure Order Details খোলা যায়নি। Order Number ও অর্ডারের মোবাইল নম্বর দিয়ে সার্চ করুন।",
         );
-        console.log(error)
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
@@ -584,57 +648,70 @@ export default function OrderTrackingPage() {
     return () => {
       cancelled = true;
     };
-  }, [
-    orderId,
-    authState.ready,
-    authState.uid,
-  ]);
+  }, [orderId, authState.ready, authState.uid]);
 
-  // ===========================================
-  // TRACK ORDER
-  // Prefer authorized details; otherwise
-  // use the LIMITED public tracking endpoint.
-  // ===========================================
+  // ========================================
+  // TRACKING REQUEST
+  // ========================================
 
   const performTracking = async (identifier, mobile) => {
-    const token = getGuestOrderToken(identifier);
+    const token =
+      getGuestOrderToken(identifier) ||
+      (identifier === order?.orderNumber ? secureAccessToken : "") ||
+      "";
+
+    // Try authorized full details first.
 
     if (auth.currentUser || token) {
       try {
-        const result = await orderRequest(
+        const response = await orderRequest(
           `/orders/${encodeURIComponent(identifier)}`,
-          { orderId: identifier }
+          {
+            orderId: identifier,
+            accessToken: token,
+          },
         );
 
+        if (!response?.order) {
+          throw new Error("Order details unavailable");
+        }
+
         return {
-          order: result.order,
+          order: response.order,
           full: true,
+          token,
         };
       } catch (err) {
-        // Unauthorized lookup may still use
-        // phone-based limited public tracking.
-        if (![401, 403, 404].includes(err.status)) {
+        if (![401, 403, 404].includes(err?.status)) {
           throw err;
         }
       }
     }
 
-    const result = await orderRequest(
-      "/orders/public/track",
-      {
-        method: "POST",
-        body: {
-          orderNumber: identifier,
-          phone: mobile,
-        },
-      }
-    );
+    // Public endpoint returns LIMITED fields.
+
+    const response = await orderRequest("/orders/public/track", {
+      method: "POST",
+      body: {
+        orderNumber: identifier,
+        phone: mobile,
+      },
+    });
+
+    if (!response?.order) {
+      throw new Error("অর্ডার পাওয়া যায়নি।");
+    }
 
     return {
-      order: result.order,
+      order: response.order,
       full: false,
+      token: "",
     };
   };
+
+  // ========================================
+  // HANDLE ORDER SEARCH
+  // ========================================
 
   const handleTrackOrder = async (event) => {
     event.preventDefault();
@@ -642,6 +719,7 @@ export default function OrderTrackingPage() {
     if (loading) return;
 
     const identifier = orderNumber.trim().toUpperCase();
+
     const mobile = phone.trim();
 
     if (!identifier) {
@@ -660,29 +738,35 @@ export default function OrderTrackingPage() {
     setFullAccess(false);
 
     try {
-      const result = await performTracking(
-        identifier,
-        mobile
-      );
+      const result = await performTracking(identifier, mobile);
 
       setOrder(result.order);
       setFullAccess(result.full);
+
+      setSecureAccessToken(result.token || "");
+
+      setLookup({
+        identifier,
+        phone: mobile,
+      });
+
+      setCopied(false);
     } catch (err) {
       setError(
-        err.status === 429
+        err?.status === 429
           ? "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।"
-          : err.status === 404
+          : err?.status === 404
             ? "এই তথ্য দিয়ে কোনো অর্ডার পাওয়া যায়নি।"
-            : err.message || "অর্ডার খুঁজতে সমস্যা হয়েছে।"
+            : err?.message || "অর্ডার খুঁজতে সমস্যা হয়েছে।",
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // ===========================================
-  // REFRESH CURRENT ORDER
-  // ===========================================
+  // ========================================
+  // REFRESH ORDER
+  // ========================================
 
   const handleRefresh = async () => {
     if (!order || loading) return;
@@ -691,52 +775,54 @@ export default function OrderTrackingPage() {
     setError("");
 
     try {
-      let result;
+      let fresh;
 
       if (fullAccess) {
+        const identifier = order._id || lookup.identifier || order.orderNumber;
+
         const response = await orderRequest(
-          `/orders/${encodeURIComponent(
-            order._id || order.orderNumber
-          )}`,
+          `/orders/${encodeURIComponent(identifier)}`,
           {
-            orderId:
-              order._id || order.orderNumber,
-          }
+            orderId: identifier,
+            accessToken:
+              secureAccessToken || getGuestOrderToken(identifier) || "",
+          },
         );
 
-        result = response.order;
+        fresh = response.order;
       } else {
-        const response = await orderRequest(
-          "/orders/public/track",
-          {
-            method: "POST",
-            body: {
-              orderNumber: order.orderNumber,
-              phone: phone.trim(),
-            },
-          }
-        );
+        const response = await orderRequest("/orders/public/track", {
+          method: "POST",
+          body: {
+            orderNumber: lookup.identifier || order.orderNumber,
+            phone: lookup.phone,
+          },
+        });
 
-        result = response.order;
+        fresh = response.order;
       }
 
-      setOrder(result);
+      if (!fresh) {
+        throw new Error("অর্ডারের নতুন তথ্য পাওয়া যায়নি।");
+      }
+
+      setOrder(fresh);
     } catch (err) {
-      setError(
-        err.message || "অর্ডার আপডেট করা যায়নি।"
-      );
+      setError(err?.message || "অর্ডার আপডেট করা যায়নি।");
     } finally {
       setLoading(false);
     }
   };
 
+  // ========================================
+  // COPY ORDER NUMBER
+  // ========================================
+
   const handleCopy = async () => {
     if (!order?.orderNumber) return;
 
     try {
-      await navigator.clipboard.writeText(
-        order.orderNumber
-      );
+      await navigator.clipboard.writeText(order.orderNumber);
 
       setCopied(true);
     } catch {
@@ -744,49 +830,82 @@ export default function OrderTrackingPage() {
     }
   };
 
-  // ===========================================
-  // COMPUTED DATA
-  // ===========================================
+  // ========================================
+  // CALCULATED ORDER DATA
+  // ========================================
 
-  const stopped = [
-    "rejected",
-    "cancelled",
-  ].includes(order?.status);
+  const stopped = ["rejected", "cancelled"].includes(order?.status);
 
-  const isCod =
-    order?.payment?.method === "cod";
+  const isCod = order?.payment?.method === "cod";
 
-  const partialPayment =
-    order?.payment?.status === "partially_paid";
+  const partialPayment = order?.payment?.status === "partially_paid";
 
-  const total = Number(order?.total || 0);
-  const verifiedAmount = Number(
-    order?.payment?.verifiedAmount || 0
+  const total = positiveMoney(order?.total);
+
+  const verifiedAmount = positiveMoney(order?.payment?.verifiedAmount);
+
+  const cashCollected = positiveMoney(order?.payment?.cashCollected);
+
+  const onlineReceived = positiveMoney(
+    order?.payment?.onlineVerifiedAmount ?? verifiedAmount - cashCollected,
   );
 
-  const dueAmount = Math.max(
+  const refundedAmount = positiveMoney(order?.payment?.refundedAmount);
+
+  const dueAmount = Math.max(0, roundMoney(total - verifiedAmount));
+
+  const excessAmount = Math.max(0, roundMoney(verifiedAmount - total));
+
+  const refundRemaining = Math.max(
     0,
-    total - verifiedAmount
+    roundMoney(verifiedAmount - refundedAmount),
   );
 
-  const items = Array.isArray(order?.items)
-    ? order.items
-    : [];
+  const cancellationRefund = order?.payment?.cancellationRefund || null;
+
+  const excessResolution = order?.payment?.excessResolution || null;
+
+  // ========================================
+  // COURIER DATA
+  // ========================================
+
+  const courier = order?.courier || {};
+
+  const courierName = String(courier.name || "").trim();
+
+  const trackingNumber = String(courier.trackingNumber || "").trim();
+
+  const trackingUrl = safeTrackingUrl(courier.trackingUrl);
+
+  const deliveryInfoAvailable = Boolean(
+    courierName || trackingNumber || trackingUrl || order?.estimatedDelivery,
+  );
+
+  // ========================================
+  // PAYMENT STATUS
+  // ========================================
+
+  const paymentLabel =
+    isCod && order?.payment?.status === "cod_pending" && order?.phoneConfirmed
+      ? "ডেলিভারিতে নগদ পেমেন্ট অপেক্ষমাণ"
+      : PAYMENT_LABELS[order?.payment?.status] ||
+        order?.payment?.status ||
+        "Pending";
+
+  const items = Array.isArray(order?.items) ? order.items : [];
 
   const itemCount = items.reduce(
-    (sum, item) =>
-      sum + (Number(item.quantity) || 0),
-    0
+    (sum, item) => sum + (Number(item.quantity) || 0),
+    0,
   );
 
-  // ===========================================
+  // ========================================
   // PAGE UI
-  // ===========================================
+  // ========================================
 
   return (
     <main className="page-bg min-h-screen py-8 sm:py-12">
       <div className="page-container max-w-6xl">
-
         {/* HEADER */}
 
         <div className="mb-8 text-center">
@@ -800,12 +919,13 @@ export default function OrderTrackingPage() {
           </h1>
 
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted">
-            অর্ডার নম্বর ও মোবাইল নম্বর দিয়ে
-            সর্বশেষ অর্ডার স্ট্যাটাস দেখুন।
+            অর্ডার নম্বর ও মোবাইল নম্বর দিয়ে সর্বশেষ অর্ডার স্ট্যাটাস দেখুন।
           </p>
         </div>
 
-        {/* SEARCH FORM */}
+        {/* ==================================
+            SEARCH FORM
+        ================================== */}
 
         <section className="section-card mx-auto mb-8 max-w-3xl overflow-hidden">
           <div className="border-b border-base-300/70 bg-secondary/5 px-4 py-4 sm:px-6">
@@ -815,31 +935,29 @@ export default function OrderTrackingPage() {
             </h2>
 
             <p className="mt-1 text-xs text-muted">
-              লগইন ছাড়াই Order Status দেখা যাবে।
-              ব্যক্তিগত Order Details দেখতে Secure Access প্রয়োজন।
+              লগইন ছাড়াই Order Status দেখা যাবে। ব্যক্তিগত Order Details দেখতে
+              Secure Access প্রয়োজন।
             </p>
           </div>
 
-          <form
-            onSubmit={handleTrackOrder}
-            className="p-4 sm:p-6"
-          >
+          <form onSubmit={handleTrackOrder} className="p-4 sm:p-6">
             <div className="grid gap-4 sm:grid-cols-2">
+              {/* ORDER NUMBER */}
 
               <label className="block text-xs font-semibold text-primary">
                 Order Number / Order ID
                 <input
                   type="text"
                   value={orderNumber}
-                  onChange={(event) =>
-                    setOrderNumber(event.target.value)
-                  }
+                  onChange={(event) => setOrderNumber(event.target.value)}
                   maxLength={100}
                   placeholder="SKB-XXXX অথবা Order ID"
                   className="input input-bordered mt-2 h-12 w-full rounded-xl bg-base-200/50 text-sm"
                   required
                 />
               </label>
+
+              {/* MOBILE NUMBER */}
 
               <label className="block text-xs font-semibold text-primary">
                 অর্ডারের মোবাইল নম্বর
@@ -848,11 +966,7 @@ export default function OrderTrackingPage() {
                   inputMode="numeric"
                   value={phone}
                   onChange={(event) =>
-                    setPhone(
-                      event.target.value
-                        .replace(/\D/g, "")
-                        .slice(0, 11)
-                    )
+                    setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))
                   }
                   maxLength={11}
                   placeholder="01XXXXXXXXX"
@@ -862,18 +976,20 @@ export default function OrderTrackingPage() {
               </label>
             </div>
 
+            {/* ERROR */}
+
             {error && (
               <p
                 role="alert"
                 className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700"
               >
-                <AlertCircle
-                  size={16}
-                  className="shrink-0"
-                />
+                <AlertCircle size={16} className="shrink-0" />
+
                 {error}
               </p>
             )}
+
+            {/* SEARCH BUTTON */}
 
             <button
               type="submit"
@@ -882,10 +998,7 @@ export default function OrderTrackingPage() {
             >
               {loading ? (
                 <>
-                  <Loader2
-                    size={17}
-                    className="animate-spin"
-                  />
+                  <Loader2 size={17} className="animate-spin" />
                   খোঁজা হচ্ছে...
                 </>
               ) : (
@@ -898,17 +1011,16 @@ export default function OrderTrackingPage() {
             </button>
 
             <p className="mt-4 flex items-start justify-center gap-2 text-center text-[11px] leading-5 text-muted">
-              <LockKeyhole
-                size={13}
-                className="mt-0.5 shrink-0"
-              />
-              অর্ডারের পূর্ণ তথ্য শুধুমাত্র অনুমোদিত
-              Account বা Guest Access Token দিয়ে দেখা যাবে।
+              <LockKeyhole size={13} className="mt-0.5 shrink-0" />
+              অর্ডারের পূর্ণ তথ্য শুধুমাত্র অনুমোদিত Account বা Guest Access
+              Token দিয়ে দেখা যাবে।
             </p>
           </form>
         </section>
 
-        {/* EMPTY STATE */}
+        {/* ==================================
+            EMPTY STATE
+        ================================== */}
 
         {!order && !loading && (
           <div className="mx-auto max-w-lg py-5 text-center">
@@ -926,11 +1038,12 @@ export default function OrderTrackingPage() {
           </div>
         )}
 
-        {/* ORDER RESULTS */}
+        {/* ==================================
+            ORDER RESULTS
+        ================================== */}
 
         {order && (
           <div className="space-y-6">
-
             {/* ACCESS STATUS */}
 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-secondary/10 bg-secondary/5 px-4 py-3">
@@ -956,15 +1069,14 @@ export default function OrderTrackingPage() {
               </button>
             </div>
 
-            {/* ORDER HEADER */}
+            {/* ==================================
+                ORDER HEADER
+            ================================== */}
 
             <section className="section-card p-4 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
-
                 <div className="min-w-0">
-                  <p className="text-xs text-muted">
-                    আপনার অর্ডার
-                  </p>
+                  <p className="text-xs text-muted">আপনার অর্ডার</p>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <h2 className="break-all text-lg font-bold text-primary sm:text-xl">
@@ -977,11 +1089,7 @@ export default function OrderTrackingPage() {
                       className="rounded-lg p-1.5 text-secondary hover:bg-secondary/10"
                       aria-label="অর্ডার নম্বর কপি"
                     >
-                      {copied ? (
-                        <Check size={15} />
-                      ) : (
-                        <Copy size={15} />
-                      )}
+                      {copied ? <Check size={15} /> : <Copy size={15} />}
                     </button>
                   </div>
 
@@ -990,6 +1098,8 @@ export default function OrderTrackingPage() {
                     {formatDate(order.createdAt)}
                   </p>
                 </div>
+
+                {/* STATUS BADGE */}
 
                 <span
                   className={`rounded-full px-3 py-1.5 text-xs font-bold ${
@@ -1000,41 +1110,34 @@ export default function OrderTrackingPage() {
                         : "bg-gold-soft/50 text-primary"
                   }`}
                 >
-                  {STATUS_LABELS[order.status] ||
-                    order.status}
+                  {STATUS_LABELS[order.status] || order.status}
                 </span>
               </div>
 
-              {/* SUMMARY */}
+              {/* SUMMARY CARDS */}
 
-              <div className={`mt-5 grid gap-3 ${
-                fullAccess
-                  ? "sm:grid-cols-3"
-                  : "sm:grid-cols-2"
-              }`}>
+              <div
+                className={`mt-5 grid gap-3 ${
+                  fullAccess ? "sm:grid-cols-3" : "sm:grid-cols-2"
+                }`}
+              >
+                {/* ORDER STATUS */}
 
                 <div className="rounded-xl bg-secondary/5 p-4">
-                  <p className="text-xs text-muted">
-                    অর্ডার স্ট্যাটাস
-                  </p>
+                  <p className="text-xs text-muted">অর্ডার স্ট্যাটাস</p>
 
                   <p className="mt-2 text-sm font-bold text-primary">
-                    {STATUS_LABELS[order.status] ||
-                      order.status}
+                    {STATUS_LABELS[order.status] || order.status}
                   </p>
                 </div>
 
+                {/* PAYMENT STATUS */}
+
                 <div className="rounded-xl bg-secondary/5 p-4">
-                  <p className="text-xs text-muted">
-                    পেমেন্ট স্ট্যাটাস
-                  </p>
+                  <p className="text-xs text-muted">পেমেন্ট স্ট্যাটাস</p>
 
                   <p className="mt-2 text-sm font-bold text-primary">
-                    {PAYMENT_LABELS[
-                      order.payment?.status
-                    ] ||
-                      order.payment?.status ||
-                      "Pending"}
+                    {paymentLabel}
                   </p>
 
                   {partialPayment && (
@@ -1044,11 +1147,11 @@ export default function OrderTrackingPage() {
                   )}
                 </div>
 
+                {/* TOTAL — FULL ACCESS ONLY */}
+
                 {fullAccess && (
                   <div className="rounded-xl bg-gold-soft/20 p-4">
-                    <p className="text-xs text-primary">
-                      সর্বমোট অর্ডার মূল্য
-                    </p>
+                    <p className="text-xs text-primary">সর্বমোট অর্ডার মূল্য</p>
 
                     <p className="mt-2 text-xl font-bold text-primary">
                       {money(total)}
@@ -1058,26 +1161,23 @@ export default function OrderTrackingPage() {
               </div>
             </section>
 
-            {/* MAIN TWO COLUMNS */}
+            {/* ==================================
+                TWO COLUMN LAYOUT
+            ================================== */}
 
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-
-              {/* LEFT: PROGRESS + HISTORY */}
+              {/* LEFT */}
 
               <div className="space-y-5">
                 <TrackingProgress order={order} />
 
-                <TrackingHistory
-                  history={order.history}
-                  fullAccess={fullAccess}
-                />
+                <TrackingHistory history={order.history} />
               </div>
 
-              {/* RIGHT: PRODUCTS + SHIPPING */}
+              {/* RIGHT */}
 
               <div className="space-y-5">
-
-                {/* PUBLIC VIEW NOTICE */}
+                {/* LIMITED ACCESS NOTICE */}
 
                 {!fullAccess && (
                   <section className="section-card p-4 sm:p-5">
@@ -1092,28 +1192,27 @@ export default function OrderTrackingPage() {
                         </h3>
 
                         <p className="mt-2 text-xs leading-6 text-muted">
-                          Customer Address, Product
-                          Customization, TrxID ও Payment
-                          Amount এখানে প্রকাশ করা হয়নি।
-                          নিজের Account-এ Login অথবা
-                          Guest Secure Order Link ব্যবহার
-                          করে পূর্ণ তথ্য দেখতে পারবেন।
+                          Customer Address, Product Customization, TrxID ও
+                          Payment Amount এখানে প্রকাশ করা হয়নি। নিজের Account-এ
+                          Login অথবা Guest Secure Order Link ব্যবহার করে পূর্ণ
+                          তথ্য দেখতে পারবেন।
                         </p>
                       </div>
                     </div>
                   </section>
                 )}
 
-                {/* FULL DETAILS ONLY */}
+                {/* ==================================
+                    FULL ORDER DETAILS
+                ================================== */}
 
                 {fullAccess && (
                   <>
+                    {/* PRODUCTS */}
+
                     <section className="section-card p-4 sm:p-5">
                       <h2 className="mb-4 flex items-center gap-2 font-bold text-primary">
-                        <ShoppingBag
-                          size={18}
-                          className="text-secondary"
-                        />
+                        <ShoppingBag size={18} className="text-secondary" />
                         অর্ডারের পণ্যসমূহ ({itemCount})
                       </h2>
 
@@ -1126,105 +1225,234 @@ export default function OrderTrackingPage() {
                         ))}
                       </div>
 
-                      {/* PRICE BREAKDOWN */}
+                      {/* ==================================
+                          FINANCIAL DETAILS
+                      ================================== */}
 
                       <div className="mt-5 space-y-3 border-t border-base-300 pt-4 text-xs">
+                        {/* SUBTOTAL */}
+
                         <div className="flex justify-between gap-2">
-                          <span className="text-muted">
-                            পণ্যের মূল্য
-                          </span>
+                          <span className="text-muted">পণ্যের মূল্য</span>
+
                           <strong className="text-primary">
                             {money(order.subtotal)}
                           </strong>
                         </div>
 
+                        {/* DELIVERY */}
+
                         <div className="flex justify-between gap-2">
-                          <span className="text-muted">
-                            ডেলিভারি
-                          </span>
+                          <span className="text-muted">ডেলিভারি</span>
+
                           <strong className="text-primary">
                             {money(order.deliveryCharge)}
                           </strong>
                         </div>
 
+                        {/* LEGACY GIFT WRAP */}
+
                         {Number(order.giftWrapCharge) > 0 && (
                           <div className="flex justify-between gap-2">
                             <span className="text-muted">
-                              গিফট র‍্যাপিং
+                              আগের অর্ডারের গিফট র‍্যাপিং
                             </span>
+
                             <strong className="text-primary">
                               {money(order.giftWrapCharge)}
                             </strong>
                           </div>
                         )}
 
+                        {/* TOTAL */}
+
                         <div className="flex justify-between gap-2 rounded-lg bg-secondary/10 p-3 font-bold">
-                          <span className="text-primary">
-                            সর্বমোট
-                          </span>
-                          <span className="text-primary">
-                            {money(total)}
-                          </span>
+                          <span className="text-primary">সর্বমোট</span>
+
+                          <span className="text-primary">{money(total)}</span>
                         </div>
+
+                        {/* CUSTOMER CLAIM */}
 
                         {!isCod && (
                           <div className="flex justify-between gap-2">
-                            <span className="text-muted">
-                              দাবিকৃত পেমেন্ট
-                            </span>
+                            <span className="text-muted">দাবিকৃত পেমেন্ট</span>
+
                             <strong className="text-primary">
                               {money(order.payment?.claimedAmount)}
                             </strong>
                           </div>
                         )}
 
+                        {/* ONLINE PAYMENT */}
+
                         {!isCod && (
                           <div className="flex justify-between gap-2">
                             <span className="text-muted">
-                              যাচাইকৃত পেমেন্ট
+                              যাচাইকৃত মোবাইল ব্যাংকিং
                             </span>
+
+                            <strong className="text-emerald-700">
+                              {money(onlineReceived)}
+                            </strong>
+                          </div>
+                        )}
+
+                        {/* CASH PAYMENT */}
+
+                        {cashCollected > 0 && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-muted">
+                              ডেলিভারিতে নগদ সংগ্রহ
+                            </span>
+
+                            <strong className="text-primary">
+                              {money(cashCollected)}
+                            </strong>
+                          </div>
+                        )}
+
+                        {/* TOTAL RECEIVED */}
+
+                        {verifiedAmount > 0 && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-muted">মোট প্রাপ্ত টাকা</span>
+
                             <strong className="text-emerald-700">
                               {money(verifiedAmount)}
                             </strong>
                           </div>
                         )}
 
+                        {/* REFUNDED */}
+
+                        {refundedAmount > 0 && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-muted">ফেরত দেওয়া টাকা</span>
+
+                            <strong className="text-emerald-700">
+                              -{money(refundedAmount)}
+                            </strong>
+                          </div>
+                        )}
+
+                        {/* BALANCE */}
+
                         <div className="flex justify-between gap-2 rounded-lg bg-gold-soft/20 p-3">
                           <strong className="text-primary">
                             অবশিষ্ট ব্যালেন্স
                           </strong>
+
                           <strong className="text-primary">
-                            {stopped
-                              ? "অর্ডার বন্ধ"
-                              : money(dueAmount)}
+                            {stopped ? "অর্ডার বন্ধ" : money(dueAmount)}
                           </strong>
                         </div>
+
+                        {/* ==================================
+                            CANCELLATION REFUND
+                        ================================== */}
+
+                        {stopped && verifiedAmount > 0 && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
+                            <p className="font-bold">
+                              {refundRemaining > 0
+                                ? "রিফান্ড প্রক্রিয়াধীন"
+                                : "রিফান্ড সম্পন্ন"}
+                            </p>
+
+                            <p className="mt-1">
+                              {refundRemaining > 0
+                                ? `ফেরত দেওয়ার বাকি ${money(refundRemaining)}।`
+                                : "প্রাপ্ত টাকার রিফান্ড রেকর্ড সম্পন্ন হয়েছে।"}
+                            </p>
+
+                            {cancellationRefund?.status && (
+                              <p className="mt-1 text-[11px]">
+                                Status:{" "}
+                                {cancellationRefund.status.replace(/_/g, " ")}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ==================================
+                            OVERPAYMENT
+                        ================================== */}
+
+                        {!stopped && excessAmount > 0 && (
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-6 text-emerald-900">
+                            <p className="font-bold">
+                              যাচাইকৃত অতিরিক্ত: {money(excessAmount)}
+                            </p>
+
+                            <p className="mt-1">
+                              {excessResolution?.type
+                                ? `${
+                                    excessResolution.type === "refund"
+                                      ? "টাকা ফেরত"
+                                      : "সমমূল্যের অতিরিক্ত পণ্য"
+                                  } · ${
+                                    excessResolution.status === "completed"
+                                      ? "সম্পন্ন"
+                                      : "প্রক্রিয়াধীন"
+                                  }`
+                                : "Admin ফোনে যোগাযোগ করে টাকা ফেরত বা সমমূল্যের পণ্যের সিদ্ধান্ত নেবেন।"}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* GIFT MESSAGE */}
+
+                        {order.giftOptions?.message && (
+                          <div className="rounded-xl bg-gold-soft/15 p-3 text-xs text-primary">
+                            <p className="flex items-center gap-2 font-bold">
+                              <Gift size={14} />
+                              শুভেচ্ছা বার্তা
+                            </p>
+
+                            <p className="mt-1 whitespace-pre-wrap break-words leading-5 text-muted">
+                              {order.giftOptions.message}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </section>
 
-                    {/* DELIVERY */}
+                    {/* ==================================
+                        DELIVERY INFORMATION
+                    ================================== */}
 
                     <section className="section-card p-4 sm:p-5">
                       <h2 className="mb-4 flex items-center gap-2 font-bold text-primary">
-                        <Truck
-                          size={18}
-                          className="text-secondary"
-                        />
+                        <Truck size={18} className="text-secondary" />
                         ডেলিভারি তথ্য
                       </h2>
 
                       <div className="space-y-4 text-xs">
+                        {/* ADDRESS */}
+
                         <div>
                           <p className="font-semibold text-primary">
                             ডেলিভারি ঠিকানা
                           </p>
 
                           <p className="mt-1 break-words leading-6 text-muted">
-                            {order.customer?.address},{" "}
-                            {order.customer?.district},{" "}
-                            {order.customer?.division}
+                            {[
+                              order.shipping?.address ||
+                                order.customer?.address,
+
+                              order.shipping?.district ||
+                                order.customer?.district,
+
+                              order.shipping?.division ||
+                                order.customer?.division,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}
                           </p>
                         </div>
+
+                        {/* RECIPIENT */}
 
                         <div>
                           <p className="font-semibold text-primary">
@@ -1232,36 +1460,72 @@ export default function OrderTrackingPage() {
                           </p>
 
                           <p className="mt-1 text-muted">
-                            {order.customer?.name} ·{" "}
-                            {order.customer?.phone}
+                            {order.shipping?.recipientName ||
+                              order.customer?.name ||
+                              "—"}
+                            {" · "}
+                            {order.shipping?.phone ||
+                              order.customer?.phone ||
+                              "—"}
                           </p>
                         </div>
 
-                        <div>
-                          <p className="font-semibold text-primary">
-                            সম্ভাব্য ডেলিভারি
-                          </p>
+                        {/* ESTIMATED DELIVERY */}
 
-                          <p className="mt-1 text-muted">
-                            {formatDate(order.estimatedDelivery)}
-                          </p>
-                        </div>
+                        {order.estimatedDelivery && (
+                          <div>
+                            <p className="font-semibold text-primary">
+                              সম্ভাব্য ডেলিভারি
+                            </p>
 
-                        <div>
-                          <p className="font-semibold text-primary">
-                            কুরিয়ার পার্টনার
-                          </p>
+                            <p className="mt-1 text-muted">
+                              {formatDate(order.estimatedDelivery)}
+                            </p>
+                          </div>
+                        )}
 
-                          <p className="mt-1 text-muted">
-                            {order.courier?.name ||
-                              "এখনো নির্ধারিত হয়নি"}
-                          </p>
-                        </div>
+                        {/* COURIER NAME */}
 
-                        {order.courier?.trackingNumber && (
+                        {courierName && (
+                          <div>
+                            <p className="font-semibold text-primary">
+                              কুরিয়ার পার্টনার
+                            </p>
+
+                            <p className="mt-1 text-muted">{courierName}</p>
+                          </div>
+                        )}
+
+                        {/* TRACKING NUMBER */}
+
+                        {trackingNumber && (
                           <p className="break-all text-xs text-secondary">
-                            Tracking:{" "}
-                            {order.courier.trackingNumber}
+                            Tracking Number: {trackingNumber}
+                          </p>
+                        )}
+
+                        {/* COURIER TRACKING URL */}
+
+                        {trackingUrl && (
+                          <a
+                            href={trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-primary"
+                          >
+                            <Truck size={15} />
+                            কুরিয়ারে ট্র্যাক করুন
+                            <ExternalLink size={14} />
+                          </a>
+                        )}
+
+                        {/* NO DATA YET */}
+
+                        {!deliveryInfoAvailable && (
+                          <p className="rounded-lg bg-secondary/5 p-3 text-xs leading-5 text-muted">
+                            {stopped
+                              ? "অর্ডারের ডেলিভারি কার্যক্রম বন্ধ রয়েছে।"
+                              : "ডেলিভারির সময় ও কুরিয়ারের তথ্য নিশ্চিত হলে এখানে দেখানো হবে।"}
                           </p>
                         )}
                       </div>
@@ -1269,9 +1533,11 @@ export default function OrderTrackingPage() {
                   </>
                 )}
 
-                {/* DELIVERY ESTIMATE FOR LIMITED VIEW */}
+                {/* ==================================
+                    LIMITED ACCESS DELIVERY
+                ================================== */}
 
-                {!fullAccess && (
+                {!fullAccess && order.estimatedDelivery && (
                   <section className="section-card p-4">
                     <p className="text-xs font-semibold text-primary">
                       সম্ভাব্য ডেলিভারি
@@ -1283,7 +1549,9 @@ export default function OrderTrackingPage() {
                   </section>
                 )}
 
-                {/* SUPPORT */}
+                {/* ==================================
+                    SUPPORT CARD
+                ================================== */}
 
                 <section className="rounded-2xl bg-secondary/5 p-4">
                   <div className="flex items-start gap-3">
@@ -1297,8 +1565,7 @@ export default function OrderTrackingPage() {
                       </h3>
 
                       <p className="mt-1 text-xs leading-5 text-muted">
-                        অর্ডার বা ডেলিভারি সংক্রান্ত
-                        প্রশ্ন থাকলে যোগাযোগ করুন।
+                        অর্ডার বা ডেলিভারি সংক্রান্ত প্রশ্ন থাকলে যোগাযোগ করুন।
                       </p>
                     </div>
                   </div>
@@ -1313,7 +1580,9 @@ export default function OrderTrackingPage() {
               </div>
             </div>
 
-            {/* ACTIONS */}
+            {/* ==================================
+                ACTION BUTTONS
+            ================================== */}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <button
@@ -1322,6 +1591,7 @@ export default function OrderTrackingPage() {
                   setOrder(null);
                   setError("");
                   setFullAccess(false);
+                  setSecureAccessToken("");
                   setCopied(false);
                 }}
                 className="btn-outline-brand w-full rounded-xl text-sm"
@@ -1330,10 +1600,7 @@ export default function OrderTrackingPage() {
                 অন্য অর্ডার খুঁজুন
               </button>
 
-              <Link
-                to="/shop"
-                className="btn-brand w-full rounded-xl text-sm"
-              >
+              <Link to="/shop" className="btn-brand w-full rounded-xl text-sm">
                 <ShoppingBag size={16} />
                 আরও উপহার দেখুন
                 <ArrowRight size={16} />

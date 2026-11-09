@@ -1,5 +1,6 @@
-import { useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Swal from "sweetalert2";
 
 import {
@@ -19,30 +20,168 @@ import {
   Layers3,
   ShieldCheck,
   ArrowUpDown,
+  AlertTriangle,
+  Tag,
 } from "lucide-react";
+
 import { AuthContext } from "../../providers/AuthProvider";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL } from "../../utils/siteConfig";
 
+// ==========================================
+// CONFIGURATION
+// ==========================================
 
-const money = (value) => `৳${Number(value || 0).toLocaleString("bn-BD")}`;
+const PAGE_SIZE = 10;
 
-const formatDate = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("bn-BD", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
+const bn = (value) => Number(value || 0).toLocaleString("bn-BD");
+
+const money = (value) =>
+  Number.isFinite(Number(value)) && value !== null && value !== ""
+    ? `৳${Number(value).toLocaleString("bn-BD", {
+        maximumFractionDigits: 2,
+      })}`
     : "—";
 
-// ================= STAT CARD =================
+// ==========================================
+// DATE FORMAT
+// ==========================================
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleDateString("bn-BD", {
+    timeZone: "Asia/Dhaka",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// ==========================================
+// BASE PRODUCT PRICING
+//
+// Admin list API returns regularPrice
+// and salePrice, not variant prices.
+// ==========================================
+
+function getBasePrice(product) {
+  const regular = Number(product.regularPrice);
+  const sale = Number(product.salePrice);
+
+  const hasRegular = Number.isFinite(regular) && regular > 0;
+
+  const hasSale =
+    hasRegular &&
+    product.salePrice !== null &&
+    product.salePrice !== undefined &&
+    product.salePrice !== "" &&
+    Number.isFinite(sale) &&
+    sale > 0 &&
+    sale < regular;
+
+  return {
+    price: hasRegular ? (hasSale ? sale : regular) : null,
+
+    original: hasSale ? regular : null,
+
+    discount: hasSale ? Math.round(((regular - sale) / regular) * 100) : 0,
+  };
+}
+
+// ==========================================
+// PRODUCT IMAGE URL
+// ==========================================
+
+function getMainImage(product) {
+  const first = Array.isArray(product?.images) ? product.images[0] : null;
+
+  if (typeof first === "string") {
+    return first.trim();
+  }
+
+  return typeof first?.url === "string" ? first.url.trim() : "";
+}
+
+// ==========================================
+// AUTHENTICATED ADMIN API
+// ==========================================
+
+async function adminProductRequest(
+  user,
+  path,
+  { method = "GET", body, signal } = {},
+) {
+  if (!user) {
+    throw new Error("Admin login required");
+  }
+
+  const token = await user.getIdToken();
+
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    signal,
+    cache: "no-store",
+
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+
+      ...(body === undefined
+        ? {}
+        : {
+            "Content-Type": "application/json",
+          }),
+    },
+
+    ...(body === undefined
+      ? {}
+      : {
+          body: JSON.stringify(body),
+        }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || result.success !== true) {
+    throw new Error(result.message || `Request failed (${response.status})`);
+  }
+
+  return result;
+}
+
+// ==========================================
+// NOTIFICATION
+// ==========================================
+
+function toast(icon, title) {
+  void Swal.fire({
+    icon,
+    title,
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: icon === "success" ? 1800 : 3000,
+    timerProgressBar: true,
+  });
+}
+
+// ==========================================
+// STATISTICS CARD
+// ==========================================
+
 function StatCard({ title, value, icon: Icon, iconClass, note }) {
   return (
     <div className="rounded-2xl border border-base-300/80 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-primary">{title}</p>
+
           <p className="mt-1 text-xs text-muted">{note}</p>
         </div>
 
@@ -53,35 +192,29 @@ function StatCard({ title, value, icon: Icon, iconClass, note }) {
         </span>
       </div>
 
-      <p className="mt-4 text-xl font-bold text-primary">
-        {Number(value || 0).toLocaleString("bn-BD")}
-      </p>
+      <p className="mt-4 text-xl font-bold text-primary">{bn(value)}</p>
     </div>
   );
 }
 
-// ================= PRODUCT IMAGE =================
+// ==========================================
+// PRODUCT IMAGE
+// ==========================================
 
 function ProductImage({ product }) {
-  const [failed, setFailed] = useState(false);
+  const [failedUrl, setFailedUrl] = useState("");
 
-  const image = product.images?.[0];
-
-  const src = typeof image === "string" ? image : image?.url || "";
-
-  useEffect(() => {
-    setFailed(false);
-  }, [src]);
+  const src = getMainImage(product);
 
   return (
     <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-200">
-      {src && !failed ? (
+      {src && failedUrl !== src ? (
         <img
           src={src}
-          alt={product.name}
+          alt={product.name || "Product"}
           loading="lazy"
-          className="h-full w-full object-cover"
-          onError={() => setFailed(true)}
+          className="size-full object-cover"
+          onError={() => setFailedUrl(src)}
         />
       ) : (
         <ImageOff size={21} className="text-muted" />
@@ -90,7 +223,9 @@ function ProductImage({ product }) {
   );
 }
 
-// ================= AVAILABILITY BADGE =================
+// ==========================================
+// AVAILABILITY BADGE
+// ==========================================
 
 function AvailabilityBadge({ available }) {
   return (
@@ -108,292 +243,426 @@ function AvailabilityBadge({ available }) {
   );
 }
 
-// ================= MAIN PAGE =================
+// ==========================================
+// PRICE DISPLAY
+// ==========================================
+
+function PriceDisplay({ product, compact = false }) {
+  const pricing = getBasePrice(product);
+
+  return (
+    <div className="min-w-0">
+      <p
+        className={`whitespace-nowrap font-bold ${
+          compact ? "text-sm text-secondary" : "text-sm text-primary"
+        }`}
+      >
+        {money(pricing.price)}
+      </p>
+
+      {pricing.original !== null && (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted line-through">
+            {money(pricing.original)}
+          </span>
+
+          {pricing.discount > 0 && (
+            <span className="rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+              -{pricing.discount}%
+            </span>
+          )}
+        </div>
+      )}
+
+      {product.variantsEnabled === true && (
+        <p className="mt-1 text-[10px] font-medium text-muted">
+          Base price · Variants available
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// PRODUCT LABELS
+// ==========================================
+
+function ProductLabels({ product }) {
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {product.customizable === true && (
+        <span className="inline-flex rounded-md bg-secondary/10 px-2 py-0.5 text-[10px] font-medium text-secondary">
+          Customizable
+        </span>
+      )}
+
+      {product.variantsEnabled === true && (
+        <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+          <Layers3 size={11} />
+          Variants
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// MAIN ADMIN PRODUCTS PAGE
+// ==========================================
 
 export default function AdminProductsPage() {
   const navigate = useNavigate();
+
   const queryClient = useQueryClient();
 
-  const {
-    user,
-    loading: authLoading,
-    role,
-    roleLoading,
-    accountStatus,
-  } = useContext(AuthContext);
+  // ========================================
+  // AUTHORIZATION
+  // ========================================
+
+  const auth = useContext(AuthContext) || {};
+
+  const { user, loading: authLoading } = auth;
+
+  const role = auth.role ?? auth.roleState?.role;
+
+  const accountStatus = auth.accountStatus ?? auth.roleState?.status;
+
+  const roleLoading = auth.roleLoading ?? auth.roleState?.checking ?? false;
+
+  const checking = Boolean(authLoading || (user && roleLoading));
+
+  const isAdmin =
+    !checking &&
+    Boolean(user) &&
+    role === "admin" &&
+    accountStatus === "active";
+
+  // ========================================
+  // FILTER STATE
+  // ========================================
 
   const [search, setSearch] = useState("");
+
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [status, setStatus] = useState("all");
+
   const [category, setCategory] = useState("all");
+
   const [sort, setSort] = useState("newest");
+
   const [page, setPage] = useState(1);
 
+  // ========================================
+  // ACTION STATE
+  // ========================================
+
   const [updatingId, setUpdatingId] = useState(null);
+
   const [deletingId, setDeletingId] = useState(null);
 
-  const isAdmin = !!user && role === "admin" && accountStatus === "active";
+  const busy = Boolean(updatingId || deletingId);
 
-  // ================= SEARCH DEBOUNCE =================
+  // ========================================
+  // DEBOUNCED SEARCH
+  // ========================================
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(search.trim());
+      setDebouncedSearch(search.trim().slice(0, 100));
     }, 400);
 
     return () => clearTimeout(timer);
   }, [search]);
 
-  // ================= GET CATEGORIES =================
+  // ========================================
+  // GET CATEGORIES
+  //
+  // GET /categories
+  // ========================================
 
-  const { data: categoryData } = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ["catalogCategories"],
-    enabled: isAdmin,
-    queryFn: async () => {
-      const res = await fetch(`${API_URL}/categories`);
 
-      if (!res.ok) {
-        throw new Error("Failed to fetch categories");
+    enabled: isAdmin,
+
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`${API_URL}/categories`, {
+        signal,
+
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const result = await res.json().catch(() => ({}));
+
+      if (
+        !res.ok ||
+        result.success !== true ||
+        !Array.isArray(result.categories)
+      ) {
+        throw new Error(result.message || "Category list load failed");
       }
 
-      return res.json();
+      return result.categories;
     },
+
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
-  const categories = categoryData?.categories || [];
+  const categories = Array.isArray(categoriesQuery.data)
+    ? categoriesQuery.data
+    : [];
 
   const categoryMap = Object.fromEntries(
     categories.map((item) => [item.id, item.name]),
   );
 
-  // ================= GET ADMIN PRODUCTS =================
+  // ========================================
+  // GET ADMIN PRODUCTS
+  //
+  // GET /admin/products
+  // ========================================
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
-    queryKey: ["adminProducts", debouncedSearch, status, category, sort, page],
+  const productQuery = useQuery({
+    queryKey: [
+      "adminProducts",
+      user?.uid,
+      debouncedSearch,
+      status,
+      category,
+      sort,
+      page,
+    ],
 
-    enabled: isAdmin && !authLoading && !roleLoading,
+    enabled: isAdmin,
 
-    queryFn: async ({ signal }) => {
-      const token = await user.getIdToken();
-
+    queryFn: ({ signal }) => {
       const params = new URLSearchParams({
         search: debouncedSearch,
         status,
         category,
         sort,
         page: String(page),
-        limit: "10",
+        limit: String(PAGE_SIZE),
       });
 
-      const res = await fetch(
-        `${API_URL}/admin/products?${params.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          signal,
-        },
-      );
-
-      const result = await res.json().catch(() => ({}));
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.message || "Failed to fetch products");
-      }
-
-      return result;
+      return adminProductRequest(user, `/admin/products?${params}`, { signal });
     },
 
-    staleTime: 10000,
+    staleTime: 10_000,
     refetchOnWindowFocus: true,
+    retry: 1,
   });
 
-  const products = data?.products || [];
+  // ========================================
+  // BACKEND RESPONSE
+  // ========================================
 
-  const stats = data?.stats || {
-    total: 0,
-    available: 0,
-    unavailable: 0,
-    featured: 0,
-  };
+  const data = productQuery.data || {};
 
-  const pagination = data?.pagination || {
-    page: 1,
-    total: 0,
-    limit: 10,
-    totalPages: 1,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  };
+  const products = Array.isArray(data.products) ? data.products : [];
 
-  // Keep page valid after filters or deletion
-  useEffect(() => {
-    if (data?.pagination && page > data.pagination.totalPages) {
-      setPage(data.pagination.totalPages);
+  const stats = data.stats || {};
+
+  const pagination = data.pagination || {};
+
+  const total = Number(pagination.total) || 0;
+
+  const totalPages = Math.max(1, Number(pagination.totalPages) || 1);
+
+  const currentPage = Math.max(1, Number(pagination.page) || page);
+
+  const start = total ? (currentPage - 1) * PAGE_SIZE + 1 : 0;
+
+  const end = Math.min(currentPage * PAGE_SIZE, total);
+
+  // ========================================
+  // PAGINATION NUMBERS
+  // ========================================
+
+  const pageNumbers = Array.from(
+    {
+      length: Math.min(5, totalPages),
+    },
+    (_, index) => {
+      const first = Math.max(1, Math.min(page - 2, totalPages - 4));
+
+      return first + index;
+    },
+  );
+
+  // ========================================
+  // INVALIDATE PRODUCT CACHES
+  // ========================================
+
+  async function refreshRelated() {
+    await Promise.all(
+      [
+        ["adminProducts"],
+        ["products"],
+        ["shopProducts"],
+        ["featuredProducts"],
+      ].map((queryKey) =>
+        queryClient.invalidateQueries({
+          queryKey,
+        }),
+      ),
+    );
+  }
+
+  // ========================================
+  // UPDATE AVAILABILITY
+  //
+  // PATCH /admin/products/:id/availability
+  // ========================================
+
+  async function toggleAvailability(product, available) {
+    if (busy || !product?._id || product.available === available) {
+      return;
     }
-  }, [data, page]);
-
-  // ================= UPDATE AVAILABILITY =================
-
-  const toggleAvailability = async (product, available) => {
-    if (updatingId || deletingId) return;
 
     setUpdatingId(product._id);
 
     try {
-      const token = await user.getIdToken();
-
-      const res = await fetch(
-        `${API_URL}/admin/products/${product._id}/availability`,
+      await adminProductRequest(
+        user,
+        `/admin/products/${encodeURIComponent(product._id)}/availability`,
         {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+
+          body: {
+            available,
           },
-          body: JSON.stringify({ available }),
         },
       );
 
-      const result = await res.json().catch(() => ({}));
+      await refreshRelated();
 
-      if (!res.ok || !result.success) {
-        throw new Error(result.message || "Availability update failed");
-      }
-
-      await queryClient.invalidateQueries({
-        queryKey: ["adminProducts"],
-      });
-
-      Swal.fire({
-        title: available
+      toast(
+        "success",
+        available
           ? "প্রোডাক্ট Available করা হয়েছে!"
           : "প্রোডাক্ট Unavailable করা হয়েছে!",
-        icon: "success",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true,
-      });
+      );
     } catch (error) {
-      Swal.fire({
-        title: error.message,
-        icon: "error",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2500,
-        timerProgressBar: true,
-      });
+      toast("error", error.message || "Availability update failed");
     } finally {
       setUpdatingId(null);
     }
-  };
+  }
 
-  // ================= DELETE PRODUCT =================
+  // ========================================
+  // DELETE PRODUCT
+  //
+  // DELETE /admin/products/:id
+  // ========================================
 
-  const handleDelete = async (product) => {
-    if (updatingId || deletingId) return;
+  async function handleDelete(product) {
+    if (busy || !product?._id) {
+      return;
+    }
 
-    const confirmation = await Swal.fire({
+    const safeName = String(product.name || "Product")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+
+    const answer = await Swal.fire({
       title: "প্রোডাক্ট ডিলিট করবেন?",
-      text: `${product.name} স্থায়ীভাবে মুছে যাবে।`,
+
+      html: `<strong>${safeName}</strong><br/>এই প্রোডাক্ট স্থায়ীভাবে মুছে যাবে।`,
+
       icon: "warning",
+
       showCancelButton: true,
+
       confirmButtonText: "হ্যাঁ, ডিলিট করুন",
+
       cancelButtonText: "বাতিল",
+
       confirmButtonColor: "#DC2626",
       cancelButtonColor: "#76258A",
     });
 
-    if (!confirmation.isConfirmed) return;
+    if (!answer.isConfirmed) {
+      return;
+    }
 
     setDeletingId(product._id);
 
     try {
-      const token = await user.getIdToken();
-
-      const res = await fetch(`${API_URL}/admin/products/${product._id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
+      await adminProductRequest(
+        user,
+        `/admin/products/${encodeURIComponent(product._id)}`,
+        {
+          method: "DELETE",
         },
-      });
+      );
 
-      const result = await res.json().catch(() => ({}));
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.message || "Product delete failed");
-      }
-
-      // If last product on the page is deleted,
-      // move to the previous page.
+      // Last product deleted on current page
       if (products.length === 1 && page > 1) {
-        setPage((prev) => prev - 1);
+        setPage((current) => Math.max(1, current - 1));
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ["adminProducts"],
-      });
+      await refreshRelated();
 
-      Swal.fire({
-        title: "প্রোডাক্ট সফলভাবে ডিলিট হয়েছে!",
-        icon: "success",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true,
-      });
+      toast("success", "প্রোডাক্ট সফলভাবে ডিলিট হয়েছে!");
     } catch (error) {
-      Swal.fire({
-        title: error.message,
-        icon: "error",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2500,
-        timerProgressBar: true,
-      });
+      toast("error", error.message || "Product delete failed");
     } finally {
       setDeletingId(null);
     }
-  };
+  }
 
-  // ================= FILTER HANDLERS =================
+  // ========================================
+  // RESET FILTERS
+  // ========================================
 
-  const resetFilters = () => {
+  function resetFilters() {
     setSearch("");
     setDebouncedSearch("");
     setStatus("all");
     setCategory("all");
     setSort("newest");
     setPage(1);
-  };
+  }
+
+  // ========================================
+  // STATUS TABS
+  // ========================================
 
   const tabs = [
-    { id: "all", label: "সব প্রোডাক্ট", count: stats.total },
-    { id: "available", label: "Available", count: stats.available },
-    { id: "unavailable", label: "Unavailable", count: stats.unavailable },
-    { id: "featured", label: "Featured", count: stats.featured },
+    {
+      id: "all",
+      label: "সব প্রোডাক্ট",
+      count: stats.total,
+    },
+    {
+      id: "available",
+      label: "Available",
+      count: stats.available,
+    },
+    {
+      id: "unavailable",
+      label: "Unavailable",
+      count: stats.unavailable,
+    },
+    {
+      id: "featured",
+      label: "Featured",
+      count: stats.featured,
+    },
   ];
 
-  const totalPages = pagination.totalPages;
+  // ========================================
+  // AUTH LOADING
+  // ========================================
 
-  const pageNumbers = Array.from(
-    { length: totalPages },
-    (_, index) => index + 1,
-  ).filter(
-    (number) =>
-      number === 1 || number === totalPages || Math.abs(number - page) <= 1,
-  );
-
-  // ================= AUTH LOADING =================
-
-  if (authLoading || roleLoading) {
+  if (checking) {
     return (
       <div className="flex min-h-80 items-center justify-center">
         <LoaderCircle size={30} className="animate-spin text-secondary" />
@@ -401,23 +670,35 @@ export default function AdminProductsPage() {
     );
   }
 
+  // ========================================
+  // ACCESS DENIED
+  // ========================================
+
   if (!isAdmin) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
         <ShieldCheck size={30} className="mx-auto text-red-500" />
+
         <p className="mt-3 text-sm font-bold text-red-700">
-          এই পেজটি শুধু Admin-এর জন্য।
+          এই পেজটি শুধু Active Admin-এর জন্য।
         </p>
       </div>
     );
   }
 
+  // ========================================
+  // MAIN PAGE
+  // ========================================
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
-      {/* ================= PAGE HEADER ================= */}
+      {/* ==================================
+          ORIGINAL PURPLE / GOLD HEADER
+      ================================== */}
 
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-[#4b1558] to-secondary p-5 text-white shadow-md sm:p-6">
         <div className="absolute -right-10 -top-14 size-44 rounded-full bg-white/5" />
+
         <div className="absolute bottom-0 right-32 size-24 rounded-full bg-gold-soft/10 blur-xl" />
 
         <div className="relative flex flex-wrap items-center justify-between gap-5">
@@ -448,7 +729,9 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
-      {/* ================= KPI CARDS ================= */}
+      {/* ==================================
+          FOUR KPI CARDS
+      ================================== */}
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
@@ -484,10 +767,13 @@ export default function AdminProductsPage() {
         />
       </div>
 
-      {/* ================= PRODUCT LIST ================= */}
+      {/* ==================================
+          PRODUCT LIST
+      ================================== */}
 
       <section className="overflow-hidden rounded-2xl border border-base-300/80 bg-white shadow-sm">
-        {/* Section Header */}
+        {/* SECTION TITLE */}
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 p-4 sm:p-5">
           <div>
             <h2 className="text-base font-bold text-primary">
@@ -500,14 +786,14 @@ export default function AdminProductsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {isFetching && (
+            {productQuery.isFetching && (
               <LoaderCircle size={17} className="animate-spin text-secondary" />
             )}
 
             <button
               type="button"
-              onClick={() => refetch()}
-              disabled={isFetching}
+              onClick={() => productQuery.refetch()}
+              disabled={productQuery.isFetching || busy}
               className="inline-flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2 text-sm font-medium text-secondary hover:bg-base-200 disabled:opacity-50"
             >
               <RefreshCw size={16} />
@@ -516,13 +802,16 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* ================= STATUS TABS ================= */}
+        {/* ==================================
+            STATUS TABS
+        ================================== */}
 
         <div className="flex gap-2 overflow-x-auto border-b border-base-300 px-4 py-3 sm:px-5">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
+              aria-pressed={status === tab.id}
               onClick={() => {
                 setStatus(tab.id);
                 setPage(1);
@@ -542,24 +831,28 @@ export default function AdminProductsPage() {
                     : "bg-white text-secondary"
                 }`}
               >
-                {tab.count}
+                {bn(tab.count)}
               </span>
             </button>
           ))}
         </div>
 
-        {/* ================= SEARCH + FILTERS ================= */}
+        {/* ==================================
+            SEARCH + FILTERS
+        ================================== */}
 
         <div className="grid gap-3 border-b border-base-300 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1fr)_220px_190px_auto]">
-          {/* Search */}
+          {/* SEARCH */}
+
           <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3 focus-within:border-secondary focus-within:bg-white">
             <Search size={19} className="shrink-0 text-secondary" />
 
             <input
               type="search"
+              maxLength={100}
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
+              onChange={(e) => {
+                setSearch(e.target.value);
                 setPage(1);
               }}
               placeholder="বাংলা, English, Banglish, SKU..."
@@ -567,11 +860,13 @@ export default function AdminProductsPage() {
             />
           </label>
 
-          {/* Category Filter */}
+          {/* CATEGORY */}
+
           <select
+            aria-label="Product category"
             value={category}
-            onChange={(event) => {
-              setCategory(event.target.value);
+            onChange={(e) => {
+              setCategory(e.target.value);
               setPage(1);
             }}
             className="h-11 min-w-0 rounded-xl border border-base-300 bg-base-200 px-3 text-sm text-primary outline-none focus:border-secondary"
@@ -585,27 +880,33 @@ export default function AdminProductsPage() {
             ))}
           </select>
 
-          {/* Sorting */}
+          {/* SORTING */}
+
           <label className="flex h-11 items-center gap-2 rounded-xl border border-base-300 bg-base-200 px-3">
             <ArrowUpDown size={16} className="shrink-0 text-secondary" />
 
             <select
               value={sort}
-              onChange={(event) => {
-                setSort(event.target.value);
+              onChange={(e) => {
+                setSort(e.target.value);
                 setPage(1);
               }}
               className="w-full min-w-0 bg-transparent text-sm text-primary outline-none"
             >
               <option value="newest">Newest First</option>
+
               <option value="oldest">Oldest First</option>
+
               <option value="price_low">Price: Low to High</option>
+
               <option value="price_high">Price: High to Low</option>
+
               <option value="name">Name A–Z</option>
             </select>
           </label>
 
-          {/* Reset */}
+          {/* RESET */}
+
           <button
             type="button"
             onClick={resetFilters}
@@ -616,41 +917,67 @@ export default function AdminProductsPage() {
           </button>
         </div>
 
-        {/* ================= RESULT BAR ================= */}
+        {/* ==================================
+            RESULTS INFO
+        ================================== */}
 
         <div className="flex flex-wrap items-center justify-between gap-2 bg-[#faf7fc] px-4 py-3 sm:px-5">
           <p className="text-sm text-primary">
             মোট ফলাফল:{" "}
-            <span className="font-bold text-secondary">
-              {pagination.total.toLocaleString("bn-BD")}টি
-            </span>
+            <span className="font-bold text-secondary">{bn(total)}টি</span>
           </p>
 
-          <span className="text-xs text-muted">প্রতি পেজে ১০টি প্রোডাক্ট</span>
+          <span className="text-xs text-muted">
+            প্রতি পেজে {bn(PAGE_SIZE)}টি প্রোডাক্ট
+          </span>
         </div>
 
-        {/* ================= LOADING ================= */}
+        {/* CATEGORY ERROR */}
 
-        {isLoading && (
+        {categoriesQuery.isError && (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+            Category list লোড হয়নি।
+            <button
+              type="button"
+              onClick={() => categoriesQuery.refetch()}
+              className="font-bold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* ==================================
+            LOADING
+        ================================== */}
+
+        {productQuery.isPending && (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3">
             <LoaderCircle size={32} className="animate-spin text-secondary" />
+
             <p className="text-sm text-muted">প্রোডাক্ট লোড হচ্ছে...</p>
           </div>
         )}
 
-        {/* ================= ERROR ================= */}
+        {/* ==================================
+            ERROR
+        ================================== */}
 
-        {isError && !isLoading && (
-          <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-4 text-center">
+        {productQuery.isError && !productQuery.isPending && (
+          <div
+            role="alert"
+            className="flex min-h-64 flex-col items-center justify-center gap-3 px-4 text-center"
+          >
             <XCircle size={34} className="text-red-500" />
 
             <p className="text-sm font-semibold text-red-600">
-              {error?.message || "প্রোডাক্ট লোড করা যায়নি"}
+              {productQuery.error?.message || "প্রোডাক্ট লোড করা যায়নি"}
             </p>
 
             <button
               type="button"
-              onClick={() => refetch()}
+              onClick={() => productQuery.refetch()}
               className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white"
             >
               আবার চেষ্টা করুন
@@ -658,21 +985,32 @@ export default function AdminProductsPage() {
           </div>
         )}
 
-        {/* ================= TABLE ================= */}
+        {/* ==================================
+            PRODUCT RESULTS
+        ================================== */}
 
-        {!isLoading && !isError && (
+        {!productQuery.isPending && !productQuery.isError && (
           <>
-            {/* Desktop Table */}
+            {/* =============================
+                  DESKTOP TABLE
+              ============================= */}
+
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[1010px] border-collapse text-left">
                 <thead className="bg-[#f3ecf6]">
                   <tr className="text-xs font-bold text-primary">
                     <th className="px-4 py-4">প্রোডাক্ট</th>
+
                     <th className="px-4 py-4">ক্যাটাগরি</th>
+
                     <th className="px-4 py-4">মূল্য</th>
+
                     <th className="px-4 py-4">Availability</th>
+
                     <th className="px-4 py-4">Featured</th>
+
                     <th className="px-4 py-4">তারিখ</th>
+
                     <th className="px-4 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -682,10 +1020,11 @@ export default function AdminProductsPage() {
                     <tr
                       key={product._id}
                       className={`border-b border-base-300/60 transition hover:bg-secondary/5 ${
-                        index % 2 === 0 ? "bg-white" : "bg-[#fbf8fc]"
+                        index % 2 ? "bg-[#fbf8fc]" : "bg-white"
                       }`}
                     >
-                      {/* Product */}
+                      {/* PRODUCT */}
+
                       <td className="px-4 py-4">
                         <div className="flex min-w-[230px] items-center gap-3">
                           <ProductImage product={product} />
@@ -696,61 +1035,60 @@ export default function AdminProductsPage() {
                             </p>
 
                             <p className="mt-1 text-xs text-muted">
-                              SKU: {product.sku}
+                              SKU: {product.sku || "—"}
                             </p>
 
-                            {product.customizable && (
-                              <span className="mt-1 inline-flex rounded-md bg-secondary/10 px-2 py-0.5 text-xs text-secondary">
-                                Customizable
-                              </span>
-                            )}
+                            <ProductLabels product={product} />
                           </div>
                         </div>
                       </td>
 
-                      {/* Category */}
+                      {/* CATEGORY */}
+
                       <td className="px-4 py-4 text-sm text-primary">
                         {categoryMap[product.categoryId] ||
                           product.categoryId ||
                           "—"}
                       </td>
 
-                      {/* Price */}
-                      <td className="px-4 py-4">
-                        <p className="whitespace-nowrap text-sm font-bold text-primary">
-                          {money(product.salePrice ?? product.regularPrice)}
-                        </p>
+                      {/* PRICE */}
 
-                        {product.salePrice != null && (
-                          <p className="mt-1 text-xs text-muted line-through">
-                            {money(product.regularPrice)}
-                          </p>
-                        )}
+                      <td className="px-4 py-4">
+                        <PriceDisplay product={product} />
                       </td>
 
-                      {/* Availability */}
+                      {/* AVAILABILITY */}
+
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={product.available === true}
-                            disabled={!!updatingId || !!deletingId}
-                            onChange={(event) =>
-                              toggleAvailability(product, event.target.checked)
+                            disabled={busy}
+                            onChange={(e) =>
+                              toggleAvailability(product, e.target.checked)
                             }
                             aria-label={`Availability for ${product.name}`}
                             className="toggle toggle-sm toggle-success"
                           />
 
-                          <AvailabilityBadge
-                            available={product.available === true}
-                          />
+                          {updatingId === product._id ? (
+                            <LoaderCircle
+                              size={15}
+                              className="animate-spin text-secondary"
+                            />
+                          ) : (
+                            <AvailabilityBadge
+                              available={product.available === true}
+                            />
+                          )}
                         </div>
                       </td>
 
-                      {/* Featured */}
+                      {/* FEATURED */}
+
                       <td className="px-4 py-4">
-                        {product.featured ? (
+                        {product.featured === true ? (
                           <span className="inline-flex items-center gap-1 rounded-lg bg-gold-soft/50 px-2.5 py-1.5 text-xs font-semibold text-primary">
                             <Star size={14} />
                             Featured
@@ -760,20 +1098,27 @@ export default function AdminProductsPage() {
                         )}
                       </td>
 
-                      {/* Date */}
+                      {/* DATE */}
+
                       <td className="whitespace-nowrap px-4 py-4 text-xs text-muted">
                         {formatDate(product.createdAt)}
                       </td>
 
-                      {/* Actions */}
+                      {/* ACTIONS */}
+
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
+                            disabled={busy}
                             onClick={() =>
-                              navigate(`/admin/products/edit/${product._id}`)
+                              navigate(
+                                `/admin/products/edit/${encodeURIComponent(
+                                  product._id,
+                                )}`,
+                              )
                             }
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 px-3 py-2 text-sm font-medium text-secondary transition hover:bg-secondary hover:text-white"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-secondary/10 px-3 py-2 text-sm font-medium text-secondary transition hover:bg-secondary hover:text-white disabled:opacity-50"
                           >
                             <Pencil size={15} />
                             Edit
@@ -781,7 +1126,7 @@ export default function AdminProductsPage() {
 
                           <button
                             type="button"
-                            disabled={!!deletingId || !!updatingId}
+                            disabled={busy}
                             onClick={() => handleDelete(product)}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-600 hover:text-white disabled:opacity-50"
                           >
@@ -803,14 +1148,18 @@ export default function AdminProductsPage() {
               </table>
             </div>
 
-            {/* ================= MOBILE CARDS ================= */}
+            {/* =============================
+                  MOBILE / TABLET CARDS
+              ============================= */}
 
             <div className="space-y-3 p-3 lg:hidden">
               {products.map((product) => (
-                <div
+                <article
                   key={product._id}
                   className="rounded-xl border border-base-300 bg-white p-4 shadow-sm"
                 >
+                  {/* PRODUCT HEADER */}
+
                   <div className="flex items-start gap-3">
                     <ProductImage product={product} />
 
@@ -819,17 +1168,29 @@ export default function AdminProductsPage() {
                         {product.name}
                       </p>
 
-                      <p className="mt-1 text-xs text-muted">{product.sku}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        SKU: {product.sku || "—"}
+                      </p>
 
                       <p className="mt-1 text-xs text-muted">
-                        {categoryMap[product.categoryId] || "—"}
+                        {categoryMap[product.categoryId] ||
+                          product.categoryId ||
+                          "—"}
                       </p>
 
-                      <p className="mt-2 text-sm font-bold text-secondary">
-                        {money(product.salePrice ?? product.regularPrice)}
-                      </p>
+                      {/* PRICE */}
+
+                      <div className="mt-2">
+                        <PriceDisplay product={product} compact />
+                      </div>
+
+                      {/* LABELS */}
+
+                      <ProductLabels product={product} />
                     </div>
                   </div>
+
+                  {/* AVAILABILITY */}
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-200 p-3">
                     <AvailabilityBadge available={product.available === true} />
@@ -837,29 +1198,38 @@ export default function AdminProductsPage() {
                     <input
                       type="checkbox"
                       checked={product.available === true}
-                      disabled={!!updatingId || !!deletingId}
-                      onChange={(event) =>
-                        toggleAvailability(product, event.target.checked)
+                      disabled={busy}
+                      onChange={(e) =>
+                        toggleAvailability(product, e.target.checked)
                       }
                       className="toggle toggle-sm toggle-success"
                       aria-label={`Availability for ${product.name}`}
                     />
                   </div>
 
-                  {product.featured && (
+                  {/* FEATURED */}
+
+                  {product.featured === true && (
                     <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-secondary">
                       <Star size={14} />
                       Featured Product
                     </p>
                   )}
 
+                  {/* ACTIONS */}
+
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
+                      disabled={busy}
                       onClick={() =>
-                        navigate(`/admin/products/edit/${product._id}`)
+                        navigate(
+                          `/admin/products/edit/${encodeURIComponent(
+                            product._id,
+                          )}`,
+                        )
                       }
-                      className="flex items-center justify-center gap-2 rounded-lg bg-secondary/10 px-3 py-2.5 text-sm font-medium text-secondary"
+                      className="flex items-center justify-center gap-2 rounded-lg bg-secondary/10 px-3 py-2.5 text-sm font-medium text-secondary disabled:opacity-50"
                     >
                       <Pencil size={16} />
                       Edit
@@ -867,19 +1237,25 @@ export default function AdminProductsPage() {
 
                     <button
                       type="button"
-                      disabled={!!deletingId || !!updatingId}
+                      disabled={busy}
                       onClick={() => handleDelete(product)}
                       className="flex items-center justify-center gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm font-medium text-red-600 disabled:opacity-50"
                     >
-                      <Trash2 size={16} />
+                      {deletingId === product._id ? (
+                        <LoaderCircle size={16} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
                       Delete
                     </button>
                   </div>
-                </div>
+                </article>
               ))}
             </div>
 
-            {/* ================= EMPTY STATE ================= */}
+            {/* =============================
+                  EMPTY STATE
+              ============================= */}
 
             {products.length === 0 && (
               <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
@@ -895,41 +1271,55 @@ export default function AdminProductsPage() {
                   সার্চ বা ফিল্টার পরিবর্তন করে দেখুন।
                 </p>
 
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="mt-4 rounded-lg bg-secondary px-4 py-2.5 text-sm font-medium text-white"
-                >
-                  ফিল্টার রিসেট করুন
-                </button>
+                {page > totalPages ? (
+                  <button
+                    type="button"
+                    onClick={() => setPage(totalPages)}
+                    className="mt-4 rounded-lg bg-secondary px-4 py-2.5 text-sm font-medium text-white"
+                  >
+                    শেষ পেজে যান
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="mt-4 rounded-lg bg-secondary px-4 py-2.5 text-sm font-medium text-white"
+                  >
+                    ফিল্টার রিসেট করুন
+                  </button>
+                )}
               </div>
             )}
 
-            {/* ================= PAGINATION ================= */}
+            {/* =============================
+                  PAGINATION
+              ============================= */}
 
-            {pagination.total > 0 && (
+            {total > 0 && (
               <div className="flex flex-col gap-3 border-t border-base-300 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <p className="text-sm text-muted">
-                  {((pagination.page - 1) * 10 + 1).toLocaleString("bn-BD")}
+                  {bn(start)}
                   {" – "}
-                  {Math.min(
-                    pagination.page * 10,
-                    pagination.total,
-                  ).toLocaleString("bn-BD")}
+                  {bn(end)}
                   {" / "}
-                  {pagination.total.toLocaleString("bn-BD")}
-                  {"টি প্রোডাক্ট"}
+                  {bn(total)}
+                  টি প্রোডাক্ট
                 </p>
 
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {/* PREVIOUS */}
+
                   <button
                     type="button"
-                    disabled={!pagination.hasPreviousPage}
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    aria-label="Previous page"
+                    disabled={page <= 1 || busy || productQuery.isFetching}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
                     className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary hover:bg-base-200 disabled:opacity-40"
                   >
                     <ChevronLeft size={18} />
                   </button>
+
+                  {/* PAGE NUMBERS */}
 
                   {pageNumbers.map((number, index) => (
                     <div key={number} className="flex items-center gap-1.5">
@@ -939,8 +1329,10 @@ export default function AdminProductsPage() {
 
                       <button
                         type="button"
+                        disabled={busy || productQuery.isFetching}
                         onClick={() => setPage(number)}
-                        className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition ${
+                        aria-current={page === number ? "page" : undefined}
+                        className={`flex size-9 items-center justify-center rounded-lg text-sm font-semibold transition disabled:opacity-50 ${
                           page === number
                             ? "bg-secondary text-white"
                             : "bg-base-200 text-primary hover:bg-secondary/10"
@@ -951,10 +1343,15 @@ export default function AdminProductsPage() {
                     </div>
                   ))}
 
+                  {/* NEXT */}
+
                   <button
                     type="button"
-                    disabled={!pagination.hasNextPage}
-                    onClick={() => setPage((prev) => prev + 1)}
+                    aria-label="Next page"
+                    disabled={
+                      page >= totalPages || busy || productQuery.isFetching
+                    }
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     className="flex size-9 items-center justify-center rounded-lg border border-base-300 text-primary hover:bg-base-200 disabled:opacity-40"
                   >
                     <ChevronRight size={18} />
@@ -965,6 +1362,17 @@ export default function AdminProductsPage() {
           </>
         )}
       </section>
+
+      {/* ==================================
+          PRODUCT VARIANT INFORMATION
+      ================================== */}
+
+      <p className="flex items-start gap-2 text-[11px] leading-5 text-muted">
+        <Tag size={14} className="mt-0.5 shrink-0" />
+        Variant-enabled product-এর এখানে Base Price দেখানো হয়। Variant-এর আলাদা
+        Price, Availability এবং Featured সেটিংস Edit Product Page থেকে পরিবর্তন
+        করুন।
+      </p>
     </div>
   );
 }

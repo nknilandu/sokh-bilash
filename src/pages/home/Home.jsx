@@ -11,8 +11,8 @@ const Home = () => {
     <>
       <Hero />
       <GiftCategories />
-      <OccasionGifts />
       <PopularProducts />
+      <OccasionGifts />
       <GiftBuilderSteps />
       <OrderSteps />
       <Testimonials />
