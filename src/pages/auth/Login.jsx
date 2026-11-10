@@ -75,31 +75,6 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  //=============== Demo login ====================
-  const handleDemoLogin = async (role) => {
-    if (submitting) return;
-
-    const email =
-      role === "admin" ? "admin@example.com" : "customer@example.com";
-
-    setSubmitting(true);
-    setFormError("");
-
-    try {
-      await setPersistence(firebaseAuth, browserSessionPersistence);
-
-      await authContext.loginUser(email, "12345678");
-
-      navigate(role === "admin" ? "/admin" : "/", {
-        replace: true,
-      });
-    } catch (error) {
-      setFormError(getFirebaseError(error));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   // ================= Validation =================
 
   const validateField = (name, value) => {
@@ -439,49 +414,6 @@ const Login = () => {
             )}
           </button>
         </form>
-
-        
-{/* DEMO LOGIN */}
-<div className="mt-4">
-  <div className="mb-3 flex items-center gap-3">
-    <div className="h-px flex-1 bg-base-300" />
-    <span className="text-[10px] font-medium text-muted">
-      Quick Demo Access
-    </span>
-    <div className="h-px flex-1 bg-base-300" />
-  </div>
-
-  <div className="grid grid-cols-2 gap-2.5">
-    {/* CUSTOMER */}
-    <button
-      type="button"
-      disabled={submitting}
-      onClick={() => handleDemoLogin("customer")}
-      className="flex items-center justify-center gap-2 rounded-xl border border-secondary/20 bg-secondary/5 px-3 py-3 text-xs font-semibold text-secondary transition hover:border-secondary/40 hover:bg-secondary/10 disabled:opacity-50"
-    >
-      <UserRound size={17} />
-      Customer
-      <span className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-bold">
-        Demo
-      </span>
-    </button>
-
-    {/* ADMIN */}
-    <button
-      type="button"
-      disabled={submitting}
-      onClick={() => handleDemoLogin("admin")}
-      className="flex items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3 text-xs font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/10 disabled:opacity-50"
-    >
-      <ShieldCheck size={17} />
-      Admin
-      <span className="rounded-md bg-gold-soft px-1.5 py-0.5 text-[9px] font-bold">
-        Demo
-      </span>
-    </button>
-  </div>
-</div>
-
 
         {/* Divider */}
         <div className="my-6 border-t border-base-300/70" />
