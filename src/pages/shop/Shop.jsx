@@ -166,12 +166,12 @@ const readShopUrl = (urlSearch) => {
         .filter((value) => /^[a-z0-9_-]{1,60}$/i.test(value)),
     ),
   ];
-  const requestedSort = params.get("sort") || "featured";
+  const requestedSort = params.get("sort") || "newest";
   return {
     search: params.get("search") || "",
     categories: readIds("categories", "category"),
     occasions: readIds("occasions", "occasion"),
-    sort: ["featured", "newest", "price-low", "price-high"].includes(
+    sort: ["newest", "featured", "price-low", "price-high"].includes(
       requestedSort,
     )
       ? requestedSort
@@ -803,9 +803,9 @@ export default function Shop() {
                   className="select select-ghost select-sm max-w-40 text-xs font-medium text-primary focus:outline-none"
                   aria-label="পণ্য সাজান"
                 >
-                  <option value="featured">ফিচার্ড</option>
-
                   <option value="newest">নতুন প্রোডাক্ট</option>
+
+                  <option value="featured">ফিচার্ড</option>
 
                   <option value="price-low">দাম: কম থেকে বেশি</option>
 

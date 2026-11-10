@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Swal from "sweetalert2";
 import { getAuth } from "firebase/auth";
 
@@ -27,6 +27,7 @@ import { API_URL } from "../../utils/siteConfig";
 
 const MAX_IMAGES = 5;
 const MAX_VARIANTS = 100;
+const OPTION_TYPES = ["size", "color", "type"];
 
 const inputClass =
   "w-full min-w-0 rounded-lg border border-[#e8ddec] bg-white px-3 py-2.5 text-sm text-[#310039] placeholder:text-[#a89aad] outline-none transition focus:border-[#903eaa] focus:ring-2 focus:ring-[#903eaa]/10";
@@ -40,6 +41,17 @@ const softButton =
 // ==========================================
 // HELPERS
 // ==========================================
+
+const normalizeLabel = (value) =>
+  String(value ?? "")
+    .normalize("NFKC")
+    .replace(/\p{Cf}/gu, "")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .toLowerCase();
+
+const isReservedOption = (value) =>
+  ["default", "ডিফল্ট", "ডিফল্ট্"].includes(normalizeLabel(value));
 
 const uid = () =>
   globalThis.crypto?.randomUUID?.() ||
@@ -67,50 +79,397 @@ const validUrl = (value) => {
 const makeHash = (text) => {
   let hash = 2166136261;
 
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
 
   return (hash >>> 0).toString(36).toUpperCase();
 };
 
-const createImage = (url = "") => ({
-  id: uid(),
-  url,
-});
+const isRecord = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
-const createProduct = () => ({
-  id: "",
-  name: "",
-  sku: makeSku(),
-  autoSku: true,
+const toast = (title, icon = "success") =>
+  Swal.fire({
+    title,
+    icon,
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 2600,
+  });
 
-  regularPrice: "",
-  salePrice: "",
-  description: "",
-  categoryId: "",
-  occasionIds: [],
+const optionSignature = (options = {}) =>
+  JSON.stringify(
+    OPTION_TYPES.map((type) => [type, normalizeLabel(options[type])]),
+  );
 
-  images: [createImage()],
+function parseOptionIds(key) {
+  const result = {};
 
-  available: true,
-  featured: false,
-  customizable: false,
-  variantsEnabled: false,
+  for (const part of String(key || "").split("|")) {
+    const separator = part.indexOf(":");
+    if (separator < 1) continue;
 
-  options: {
-    size: { enabled: true, values: [] },
-    color: { enabled: true, values: [] },
-    type: { enabled: false, values: [] },
-  },
+    const type = part.slice(0, separator);
+    const id = part.slice(separator + 1);
 
-  variantOverrides: {},
-  customerFieldType: "none",
+    if (OPTION_TYPES.includes(type) && /^[a-zA-Z0-9_-]+$/.test(id)) {
+      result[type] = id;
+    }
+  }
 
-  packaging: "regular",
-  premiumBoxPrice: "250",
-});
+  return result;
+}
+
+function emptyProduct() {
+  return {
+    id: "",
+    name: "",
+    sku: "",
+    autoSku: true,
+    regularPrice: "",
+    salePrice: "",
+    description: "",
+    categoryId: "",
+    occasionIds: [],
+    images: [{ id: "product-image-1", url: "" }],
+    available: true,
+    featured: false,
+    customizable: false,
+    variantsEnabled: false,
+    options: {
+      size: { enabled: true, values: [] },
+      color: { enabled: true, values: [] },
+      type: { enabled: false, values: [] },
+    },
+    variantOverrides: {},
+    customerFieldType: "none",
+    packaging: "regular",
+    premiumBoxPrice: "0",
+  };
+}
+
+function generateCombinations(options, enabled) {
+  if (!enabled) return { rows: [], count: 0 };
+
+  const groups = OPTION_TYPES.map((type) => [type, options[type]]).filter(
+    ([, group]) => group?.enabled && group.values.length > 0,
+  );
+
+  if (!groups.length) return { rows: [], count: 0 };
+
+  const count = groups.reduce(
+    (total, [, group]) => total * group.values.length,
+    1,
+  );
+
+  if (count > MAX_VARIANTS) {
+    return { rows: [], count };
+  }
+
+  let rows = [{ parts: [] }];
+
+  for (const [type, group] of groups) {
+    rows = rows.flatMap((row) =>
+      group.values.map((option) => ({
+        parts: [
+          ...row.parts,
+          {
+            type,
+            id: option.id,
+            label: option.label,
+          },
+        ],
+      })),
+    );
+  }
+
+  return {
+    count,
+    rows: rows.map((row) => ({
+      ...row,
+      combinationKey: row.parts
+        .map((part) => `${part.type}:${part.id}`)
+        .join("|"),
+      title: row.parts.map((part) => part.label).join(" / "),
+      options: Object.fromEntries(
+        row.parts.map((part) => [part.type, part.label]),
+      ),
+    })),
+  };
+}
+
+// ==========================================
+// RESTORE SAVED PRODUCT
+// Saved variants are the source for real data.
+// Overrides are kept as editing metadata.
+// ==========================================
+
+function hydrateProduct(existing) {
+  const defaults = emptyProduct();
+
+  const savedVariants = Array.isArray(existing.variants)
+    ? existing.variants
+    : [];
+
+  const rawOverrides = isRecord(existing.variantOverrides)
+    ? existing.variantOverrides
+    : {};
+
+  const options = {};
+
+  for (const type of OPTION_TYPES) {
+    const rawGroup = existing.options?.[type];
+    const groupExists = isRecord(rawGroup);
+
+    const rawValues = Array.isArray(rawGroup?.values) ? rawGroup.values : [];
+
+    const values = [];
+    const labelSet = new Set();
+    const idSet = new Set();
+
+    const appendValue = (rawValue) => {
+      const label = String(
+        typeof rawValue === "string" ? rawValue : rawValue?.label || "",
+      ).trim();
+
+      if (!label) return;
+
+      const normalized = normalizeLabel(label);
+
+      if (labelSet.has(normalized)) return;
+
+      // Recover an ID from a saved key when the option
+      // object does not contain its original ID.
+      const matchingVariant = savedVariants.find(
+        (variant) => normalizeLabel(variant.options?.[type]) === normalized,
+      );
+
+      const recoveredId = matchingVariant
+        ? parseOptionIds(matchingVariant.key)[type]
+        : "";
+
+      const originalId =
+        typeof rawValue === "object" && rawValue
+          ? String(rawValue.id || "")
+          : "";
+
+      let id =
+        originalId || recoveredId || `legacy-${type}-${values.length + 1}`;
+
+      if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+        throw new Error(
+          `${type}: saved option ID সঠিক নয়। Data migration ছাড়া এটি save করা নিরাপদ নয়।`,
+        );
+      }
+
+      if (idSet.has(id)) {
+        throw new Error(`${type}: একাধিক option-এর একই ID পাওয়া গেছে।`);
+      }
+
+      values.push({ id, label });
+      labelSet.add(normalized);
+      idSet.add(id);
+    };
+
+    rawValues.forEach(appendValue);
+
+    // Recover missing option labels from existing variants.
+    savedVariants.forEach((variant) => {
+      const label = String(variant.options?.[type] || "").trim();
+      if (label) appendValue(label);
+    });
+
+    const inferredEnabled = savedVariants.some((variant) =>
+      String(variant.options?.[type] || "").trim(),
+    );
+
+    options[type] = {
+      enabled: groupExists
+        ? rawGroup.enabled === true ||
+          (rawGroup.enabled === undefined && inferredEnabled)
+        : inferredEnabled,
+      values,
+    };
+  }
+
+  const variantsEnabled = existing.variantsEnabled === true;
+
+  const { rows, count } = generateCombinations(options, variantsEnabled);
+
+  if (variantsEnabled && count > MAX_VARIANTS) {
+    throw new Error(
+      `Saved options থেকে ${count}টি combination হচ্ছে। সর্বোচ্চ ${MAX_VARIANTS}টি অনুমোদিত।`,
+    );
+  }
+
+  const rowsBySignature = new Map(
+    rows.map((row) => [optionSignature(row.options), row]),
+  );
+
+  const restoredOverrides = {};
+  const usedKeys = new Set();
+  const usedCombinations = new Set();
+
+  // First retain overrides for combinations without
+  // a materialized saved variant.
+  for (const row of rows) {
+    const savedOverride = rawOverrides[row.combinationKey];
+
+    if (isRecord(savedOverride)) {
+      restoredOverrides[row.combinationKey] = {
+        ...savedOverride,
+        savedKey: row.combinationKey,
+      };
+    }
+  }
+
+  for (const variant of savedVariants) {
+    if (!isRecord(variant)) {
+      throw new Error("Saved variant data সঠিক নয়।");
+    }
+
+    const row = rowsBySignature.get(optionSignature(variant.options));
+
+    if (!row) {
+      // Do not silently drop saved variants.
+      if (variantsEnabled) {
+        throw new Error(
+          `"${variant.title || variant.key}" variant-এর options মেলেনি। ভুল data দিয়ে overwrite বন্ধ করা হয়েছে।`,
+        );
+      }
+
+      continue;
+    }
+
+    const key = String(variant.key || row.combinationKey);
+
+    if (key.length > 200 || !/^[a-zA-Z0-9_:|-]+$/.test(key)) {
+      throw new Error(
+        `"${variant.title || key}" variant-এর saved key সঠিক নয়।`,
+      );
+    }
+
+    if (usedKeys.has(key) || usedCombinations.has(row.combinationKey)) {
+      throw new Error(
+        "একই key বা একই option combination-এর duplicate saved variant পাওয়া গেছে।",
+      );
+    }
+
+    usedKeys.add(key);
+    usedCombinations.add(row.combinationKey);
+
+    const metadata =
+      rawOverrides[key] || rawOverrides[row.combinationKey] || {};
+
+    // Preserve explicit base-price inheritance if metadata
+    // says the price field was intentionally left empty.
+    const price =
+      metadata.price === ""
+        ? ""
+        : variant.price !== undefined && variant.price !== null
+          ? String(variant.price)
+          : metadata.price == null
+            ? ""
+            : String(metadata.price);
+
+    restoredOverrides[row.combinationKey] = {
+      savedKey: key,
+      sku: String(variant.sku ?? metadata.sku ?? ""),
+      autoSku:
+        typeof variant.autoSku === "boolean"
+          ? variant.autoSku
+          : (metadata.autoSku ?? false),
+      price,
+      imageUrl: String(variant.imageUrl ?? metadata.imageUrl ?? ""),
+      available:
+        typeof variant.available === "boolean"
+          ? variant.available
+          : metadata.available !== false,
+    };
+  }
+
+  const images = (Array.isArray(existing.images) ? existing.images : []).map(
+    (image, index) => ({
+      id:
+        typeof image === "object" && image?.id
+          ? String(image.id)
+          : `saved-image-${index + 1}`,
+      url: String(typeof image === "string" ? image : image?.url || ""),
+    }),
+  );
+
+  return {
+    ...defaults,
+    id: String(existing._id || existing.id || ""),
+    name: String(existing.name || ""),
+    sku: String(existing.sku || ""),
+    autoSku: existing.autoSku === true,
+    regularPrice: String(existing.regularPrice ?? ""),
+    salePrice: existing.salePrice == null ? "" : String(existing.salePrice),
+    description: String(existing.description || ""),
+    categoryId: existing.categoryId || "",
+    occasionIds: Array.isArray(existing.occasionIds)
+      ? existing.occasionIds
+      : [],
+    images: images.length ? images : defaults.images,
+    available: existing.available === true,
+    featured: existing.featured === true,
+    customizable: existing.customizable === true,
+    variantsEnabled,
+    options,
+    variantOverrides: restoredOverrides,
+    customerFieldType: existing.customerFieldType || "none",
+    packaging: existing.packaging === "premium" ? "premium" : "regular",
+    premiumBoxPrice: String(existing.premiumBoxPrice ?? 0),
+  };
+}
+
+async function getToken() {
+  const auth = getAuth(app);
+
+  if (typeof auth.authStateReady === "function") {
+    await auth.authStateReady();
+  }
+
+  if (!auth.currentUser) {
+    throw new Error("প্রোডাক্ট পরিচালনা করতে লগইন করুন।");
+  }
+
+  return auth.currentUser.getIdToken();
+}
+
+async function fetchTaxonomies({ signal }) {
+  const [categoryResponse, occasionResponse] = await Promise.all([
+    fetch(`${API_URL}/categories`, { signal }),
+    fetch(`${API_URL}/occasions`, { signal }),
+  ]);
+
+  const [categoryData, occasionData] = await Promise.all([
+    categoryResponse.json().catch(() => ({})),
+    occasionResponse.json().catch(() => ({})),
+  ]);
+
+  if (
+    !categoryResponse.ok ||
+    !occasionResponse.ok ||
+    !categoryData.success ||
+    !occasionData.success
+  ) {
+    throw new Error("ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
+  }
+
+  return {
+    categories: Array.isArray(categoryData.categories)
+      ? categoryData.categories
+      : [],
+    occasions: Array.isArray(occasionData.occasions)
+      ? occasionData.occasions
+      : [],
+  };
+}
 
 // ==========================================
 // REUSABLE COMPONENTS
@@ -126,7 +485,6 @@ function Section({ title, right, children }) {
         </h2>
         {right}
       </div>
-
       <div className="space-y-4 p-4 sm:p-5">{children}</div>
     </section>
   );
@@ -139,9 +497,7 @@ function Field({ label, required = false, hint, children }) {
         {label}
         {required && <span className="ml-1 text-red-500">*</span>}
       </p>
-
       {children}
-
       {hint && (
         <p className="mt-1.5 text-xs leading-relaxed text-[#82748b]">{hint}</p>
       )}
@@ -159,7 +515,6 @@ function MiniSwitch({ checked, onChange, disabled = false }) {
         onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"
       />
-
       <span className="h-6 w-11 rounded-full bg-[#ddd2e3] transition peer-checked:bg-[#903eaa] peer-focus-visible:ring-2 peer-focus-visible:ring-[#903eaa] peer-disabled:opacity-50" />
       <span className="absolute left-[3px] top-[3px] size-[18px] rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
     </label>
@@ -196,27 +551,25 @@ function StatusCard({ title, subtitle, checked, onChange }) {
         <p className="text-sm font-bold">{title}</p>
         <p className="mt-1 text-xs text-[#82748b]">{subtitle}</p>
       </div>
-
       <MiniSwitch checked={checked} onChange={onChange} />
     </div>
   );
 }
 
-// ==========================================
-// VARIANT OPTION GROUP
-// ==========================================
-
 function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
   const [draft, setDraft] = useState("");
 
   const addValues = () => {
-    draft
+    const values = draft
       .split(",")
       .map((value) => value.trim())
-      .filter(Boolean)
-      .forEach((value) => onAdd(type, value));
+      .filter(Boolean);
 
-    setDraft("");
+    if (!values.length) return;
+
+    if (onAdd(type, values)) {
+      setDraft("");
+    }
   };
 
   const colorDot = (label) => {
@@ -228,6 +581,7 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
     if (/white|সাদা/.test(value)) return "#ffffff";
     if (/blue|নীল/.test(value)) return "#397ec4";
     if (/green|সবুজ/.test(value)) return "#42965a";
+    if (/pink|গোলাপি/.test(value)) return "#ed91bf";
 
     return "#903eaa";
   };
@@ -240,12 +594,10 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-sm font-bold">{title}</p>
-
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-[#903eaa]">
             {group.enabled ? "সক্রিয়" : "বন্ধ"}
           </span>
-
           <MiniSwitch
             checked={group.enabled}
             onChange={(value) => onToggle(type, value)}
@@ -254,64 +606,69 @@ function OptionGroup({ title, type, group, onToggle, onAdd, onRemove }) {
       </div>
 
       {group.enabled && (
-        <div className="flex flex-wrap items-center gap-2">
-          {group.values.map((option) => (
-            <span
-              key={option.id}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#e4d6e9] bg-[#eee2f4] px-2.5 py-1.5 text-xs font-medium"
-            >
-              {type === "color" && (
-                <span
-                  className="size-3 rounded-full border border-black/10"
-                  style={{
-                    backgroundColor: colorDot(option.label),
-                  }}
-                />
-              )}
-
-              {option.label}
-
-              <button
-                type="button"
-                onClick={() => onRemove(type, option.id)}
-                className="text-[#8f7796] hover:text-red-500"
-                aria-label={`Remove ${option.label}`}
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {group.values.map((option) => (
+              <span
+                key={option.id}
+                className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+                  isReservedOption(option.label)
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-[#e4d6e9] bg-[#eee2f4]"
+                }`}
               >
-                <X size={14} />
-              </button>
-            </span>
-          ))}
+                {type === "color" && (
+                  <span
+                    className="size-3 rounded-full border border-black/10"
+                    style={{
+                      backgroundColor: colorDot(option.label),
+                    }}
+                  />
+                )}
+                {option.label}
+                <button
+                  type="button"
+                  onClick={() => onRemove(type, option.id)}
+                  className="text-[#8f7796] hover:text-red-500"
+                  aria-label={`Remove ${option.label}`}
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            ))}
 
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === ",") {
-                event.preventDefault();
-                addValues();
-              }
-            }}
-            placeholder="+ নতুন অপশন"
-            className="min-w-[120px] max-w-56 flex-1 rounded-lg border border-[#e9dcec] bg-white px-3 py-2 text-sm outline-none focus:border-[#903eaa]"
-          />
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === ",") {
+                  event.preventDefault();
+                  addValues();
+                }
+              }}
+              placeholder="+ নতুন অপশন"
+              className="min-w-[120px] max-w-56 flex-1 rounded-lg border border-[#e9dcec] bg-white px-3 py-2 text-sm outline-none focus:border-[#903eaa]"
+            />
 
-          <button
-            type="button"
-            onClick={addValues}
-            className="flex size-9 items-center justify-center rounded-lg bg-[#903eaa] text-white"
-            aria-label="Add option"
-          >
-            <Plus size={17} />
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={addValues}
+              className="flex size-9 items-center justify-center rounded-lg bg-[#903eaa] text-white"
+              aria-label="Add option"
+            >
+              <Plus size={17} />
+            </button>
+          </div>
+
+          <p className="mt-3 text-xs leading-5 text-[#82748b]">
+            Default স্বয়ংক্রিয়ভাবে customer page-এ থাকবে। এখানে Default নামে
+            option যোগ করবেন না।
+          </p>
+        </>
       )}
     </div>
   );
 }
-
-// ==========================================
-// VARIANT CARD
-// ==========================================
 
 function VariantCard({ variant, onChange, coverImage, basePrice }) {
   return (
@@ -335,7 +692,6 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
           >
             {variant.title}
           </p>
-
           <p
             className="mt-1 truncate font-mono text-xs text-[#8b7792]"
             title={variant.sku}
@@ -348,7 +704,6 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
           <span className="hidden text-xs text-[#8a788f] 2xl:inline">
             উপলব্ধ
           </span>
-
           <MiniSwitch
             checked={variant.available}
             onChange={(value) => onChange({ available: value })}
@@ -406,7 +761,6 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
                 }
                 className="checkbox checkbox-sm border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
               />
-
               <span className="hidden 2xl:inline">Auto</span>
             </label>
           </div>
@@ -423,339 +777,121 @@ function VariantCard({ variant, onChange, coverImage, basePrice }) {
 }
 
 // ==========================================
-// MAIN PAGE
+// FORM EDITOR
+// Mounted only after the edit data is loaded.
 // ==========================================
 
-export default function AdminProductFormPage() {
+function ProductEditor({ initialForm, productId }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { productId } = useParams();
-
   const isEdit = Boolean(productId);
 
-  const [form, setForm] = useState(createProduct);
+  const [form, setForm] = useState(() => initialForm);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
-
   const [variantQuery, setVariantQuery] = useState("");
   const [variantFilter, setVariantFilter] = useState("all");
-
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [categories, setCategories] = useState([]);
-  const [occasions, setOccasions] = useState([]);
-  const [taxonomiesLoading, setTaxonomiesLoading] = useState(true);
-
-  const [productLoading, setProductLoading] = useState(isEdit);
-  const [productLoaded, setProductLoaded] = useState(!isEdit);
-
   const draggingId = useRef(null);
   const submittingRef = useRef(false);
 
-  // ========================================
-  // LOAD CATEGORIES & OCCASIONS
-  // ========================================
+  const taxonomyQuery = useQuery({
+    queryKey: ["admin-product-taxonomies"],
+    queryFn: fetchTaxonomies,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    let ignore = false;
+  const categories = taxonomyQuery.data?.categories || [];
+  const occasions = taxonomyQuery.data?.occasions || [];
+  const taxonomiesLoading = taxonomyQuery.isPending;
 
-    const loadTaxonomies = async () => {
-      setTaxonomiesLoading(true);
-
-      try {
-        const [categoryRes, occasionRes] = await Promise.all([
-          fetch(`${API_URL}/categories`),
-          fetch(`${API_URL}/occasions`),
-        ]);
-
-        const [categoryData, occasionData] = await Promise.all([
-          categoryRes.json(),
-          occasionRes.json(),
-        ]);
-
-        if (
-          !categoryRes.ok ||
-          categoryData.success !== true ||
-          !occasionRes.ok ||
-          occasionData.success !== true
-        ) {
-          throw new Error("ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
-        }
-
-        if (!ignore) {
-          setCategories(categoryData.categories || []);
-          setOccasions(occasionData.occasions || []);
-        }
-      } catch (err) {
-        if (!ignore) {
-          setError(err.message || "ক্যাটাগরি ও উপলক্ষ লোড করা যায়নি।");
-        }
-      } finally {
-        if (!ignore) {
-          setTaxonomiesLoading(false);
-        }
-      }
-    };
-
-    loadTaxonomies();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  // ========================================
-  // LOAD EXISTING PRODUCT
-  // ========================================
-
-  useEffect(() => {
-    let ignore = false;
-
-    const loadProduct = async () => {
-      setError("");
-      setSuccess("");
-      setSelectedPhoto(null);
-      setVariantQuery("");
-      setVariantFilter("all");
-
-      if (!productId) {
-        if (ignore) return;
-
-        setForm(createProduct());
-        setProductLoading(false);
-        setProductLoaded(true);
-        return;
-      }
-
-      setProductLoading(true);
-      setProductLoaded(false);
-
-      try {
-        const auth = getAuth(app);
-
-        if (typeof auth.authStateReady === "function") {
-          await auth.authStateReady();
-        }
-
-        const currentUser = auth.currentUser;
-
-        if (!currentUser) {
-          throw new Error("প্রোডাক্ট এডিট করতে লগইন করুন।");
-        }
-
-        const token = await currentUser.getIdToken();
-
-        const response = await fetch(
-          `${API_URL}/admin/products/${encodeURIComponent(productId)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            cache: "no-store",
-          },
-        );
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok || result.success !== true || !result.product) {
-          throw new Error(result.message || "প্রোডাক্ট লোড করা যায়নি।");
-        }
-
-        if (ignore) return;
-
-        const existing = result.product;
-        const defaults = createProduct();
-
-        const images = (Array.isArray(existing.images) ? existing.images : [])
-          .map((image) => {
-            if (typeof image === "string") {
-              return createImage(image);
-            }
-
-            return {
-              id: image?.id || uid(),
-              url: image?.url || "",
-            };
-          })
-          .slice(0, MAX_IMAGES);
-
-        const options = Object.fromEntries(
-          Object.entries(defaults.options).map(([type, defaultGroup]) => {
-            const savedGroup = existing.options?.[type] || {};
-
-            return [
-              type,
-              {
-                ...defaultGroup,
-                ...savedGroup,
-                values: Array.isArray(savedGroup.values)
-                  ? savedGroup.values.map((value) => ({
-                      id: value.id || uid(),
-                      label: String(value.label || ""),
-                    }))
-                  : [],
-              },
-            ];
-          }),
-        );
-
-        setForm({
-          ...defaults,
-          ...existing,
-
-          id: String(existing._id || existing.id || ""),
-          name: existing.name || "",
-          sku: existing.sku || "",
-          autoSku: existing.autoSku === true,
-          description: existing.description || "",
-
-          regularPrice: String(existing.regularPrice ?? ""),
-          salePrice:
-            existing.salePrice == null ? "" : String(existing.salePrice),
-
-          categoryId: existing.categoryId || "",
-          occasionIds: Array.isArray(existing.occasionIds)
-            ? existing.occasionIds
-            : [],
-
-          images: images.length ? images : [createImage()],
-
-          available: existing.available === true,
-          featured: existing.featured === true,
-          customizable: existing.customizable === true,
-          variantsEnabled: existing.variantsEnabled === true,
-
-          options,
-          variantOverrides:
-            existing.variantOverrides &&
-            typeof existing.variantOverrides === "object" &&
-            !Array.isArray(existing.variantOverrides)
-              ? existing.variantOverrides
-              : {},
-
-          customerFieldType: existing.customerFieldType || "none",
-          packaging: existing.packaging === "premium" ? "premium" : "regular",
-          premiumBoxPrice: String(existing.premiumBoxPrice ?? 250),
-        });
-
-        setProductLoaded(true);
-      } catch (err) {
-        if (!ignore) {
-          setError(err.message || "প্রোডাক্ট লোড করা যায়নি।");
-          setProductLoaded(false);
-        }
-      } finally {
-        if (!ignore) {
-          setProductLoading(false);
-        }
-      }
-    };
-
-    loadProduct();
-
-    return () => {
-      ignore = true;
-    };
-  }, [productId]);
-
-  // ========================================
-  // FORM UPDATES
-  // ========================================
-
-  const update = (key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-
-    setError("");
-    setSuccess("");
+  const reportError = (message) => {
+    setError(message);
+    void toast(message, "error");
   };
 
-  const updateMultiple = (patch) => {
-    setForm((prev) => ({
-      ...prev,
-      ...patch,
+  const update = (key, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [key]: value,
     }));
-
     setError("");
     setSuccess("");
   };
 
   const chooseCustomerMode = (type) => {
-    updateMultiple({
+    setForm((previous) => ({
+      ...previous,
       customerFieldType: type,
       customizable: type !== "none",
-    });
+    }));
   };
 
   const toggleCustomizable = (enabled) => {
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       customizable: enabled,
       customerFieldType: enabled
-        ? prev.customerFieldType === "none"
+        ? previous.customerFieldType === "none"
           ? "frame"
-          : prev.customerFieldType
+          : previous.customerFieldType
         : "none",
     }));
   };
 
   // ========================================
-  // PRODUCT IMAGES
+  // PRODUCT PHOTOS
   // ========================================
 
   const addPhoto = () => {
-    setForm((prev) =>
-      prev.images.length >= MAX_IMAGES
-        ? prev
-        : {
-            ...prev,
-            images: [...prev.images, createImage()],
-          },
-    );
+    if (form.images.length >= MAX_IMAGES) return;
+
+    const image = { id: uid(), url: "" };
+
+    setForm((previous) => ({
+      ...previous,
+      images:
+        previous.images.length >= MAX_IMAGES
+          ? previous.images
+          : [...previous.images, image],
+    }));
   };
 
   const updatePhoto = (id, url) => {
-    setForm((prev) => ({
-      ...prev,
-      images: prev.images.map((image) =>
+    setForm((previous) => ({
+      ...previous,
+      images: previous.images.map((image) =>
         image.id === id ? { ...image, url } : image,
       ),
     }));
   };
 
   const removePhoto = (id) => {
-    setForm((prev) => ({
-      ...prev,
-      images: prev.images.filter((image) => image.id !== id),
+    setForm((previous) => ({
+      ...previous,
+      images: previous.images.filter((image) => image.id !== id),
     }));
 
-    if (selectedPhoto === id) {
-      setSelectedPhoto(null);
-    }
+    if (selectedPhoto === id) setSelectedPhoto(null);
   };
 
   const reorderPhoto = (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
 
-    setForm((prev) => {
-      const images = [...prev.images];
-
+    setForm((previous) => {
+      const images = [...previous.images];
       const from = images.findIndex((image) => image.id === fromId);
       const to = images.findIndex((image) => image.id === toId);
 
-      if (from < 0 || to < 0) return prev;
+      if (from < 0 || to < 0) return previous;
 
       const [moved] = images.splice(from, 1);
       images.splice(to, 0, moved);
 
-      return {
-        ...prev,
-        images,
-      };
+      return { ...previous, images };
     });
   };
 
@@ -771,63 +907,87 @@ export default function AdminProductFormPage() {
     gallery.find((image) => image.id === selectedPhoto) || gallery[0];
 
   // ========================================
-  // VARIANT OPTIONS
+  // OPTIONS
   // ========================================
 
   const toggleOption = (type, enabled) => {
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       options: {
-        ...prev.options,
+        ...previous.options,
         [type]: {
-          ...prev.options[type],
+          ...previous.options[type],
           enabled,
         },
       },
     }));
   };
 
-  const addOption = (type, label) => {
-    const value = label.trim();
+  const addOption = (type, labels) => {
+    if (labels.some(isReservedOption)) {
+      reportError(
+        "Default নামে option যোগ করা যাবে না। এটি স্বয়ংক্রিয়ভাবে থাকবে।",
+      );
+      return false;
+    }
 
-    if (!value) return;
+    const existingLabels = new Set(
+      form.options[type].values.map((option) => normalizeLabel(option.label)),
+    );
 
-    setForm((prev) => {
-      const group = prev.options[type];
+    const additions = [];
 
-      const exists = group.values.some(
-        (option) => option.label.toLowerCase() === value.toLowerCase(),
+    for (const label of labels) {
+      const clean = label.trim();
+      const normalized = normalizeLabel(clean);
+
+      if (!clean || existingLabels.has(normalized)) continue;
+
+      existingLabels.add(normalized);
+      additions.push({ id: uid(), label: clean });
+    }
+
+    if (form.options[type].values.length + additions.length > 100) {
+      reportError("প্রতি group-এ সর্বোচ্চ ১০০টি option রাখা যাবে।");
+      return false;
+    }
+
+    setForm((previous) => {
+      const currentLabels = new Set(
+        previous.options[type].values.map((option) =>
+          normalizeLabel(option.label),
+        ),
       );
 
-      if (exists) return prev;
-
       return {
-        ...prev,
+        ...previous,
         options: {
-          ...prev.options,
+          ...previous.options,
           [type]: {
-            ...group,
+            ...previous.options[type],
             values: [
-              ...group.values,
-              {
-                id: uid(),
-                label: value,
-              },
+              ...previous.options[type].values,
+              ...additions.filter(
+                (option) => !currentLabels.has(normalizeLabel(option.label)),
+              ),
             ],
           },
         },
       };
     });
+
+    setError("");
+    return true;
   };
 
   const removeOption = (type, id) => {
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       options: {
-        ...prev.options,
+        ...previous.options,
         [type]: {
-          ...prev.options[type],
-          values: prev.options[type].values.filter(
+          ...previous.options[type],
+          values: previous.options[type].values.filter(
             (option) => option.id !== id,
           ),
         },
@@ -836,90 +996,55 @@ export default function AdminProductFormPage() {
   };
 
   // ========================================
-  // GENERATE VARIANT COMBINATIONS
+  // VARIANT COMBINATIONS
   // ========================================
 
-  const activeGroups = useMemo(
-    () =>
-      Object.entries(form.options).filter(
-        ([, group]) => group.enabled && group.values.length,
-      ),
-    [form.options],
+  const generated = useMemo(
+    () => generateCombinations(form.options, form.variantsEnabled),
+    [form.options, form.variantsEnabled],
   );
 
-  const combinationCount =
-    !form.variantsEnabled || !activeGroups.length
-      ? 0
-      : activeGroups.reduce(
-          (count, [, group]) => count * group.values.length,
-          1,
-        );
-
-  const combinations = useMemo(() => {
-    if (
-      !form.variantsEnabled ||
-      combinationCount === 0 ||
-      combinationCount > MAX_VARIANTS
-    ) {
-      return [];
-    }
-
-    let rows = [{ parts: [] }];
-
-    for (const [type, group] of activeGroups) {
-      rows = rows.flatMap((row) =>
-        group.values.map((option) => ({
-          parts: [
-            ...row.parts,
-            {
-              type,
-              id: option.id,
-              label: option.label,
-            },
-          ],
-        })),
-      );
-    }
-
-    return rows.map((row) => ({
-      ...row,
-      key: row.parts.map((part) => `${part.type}:${part.id}`).join("|"),
-      title: row.parts.map((part) => part.label).join(" / "),
-    }));
-  }, [activeGroups, combinationCount, form.variantsEnabled]);
+  const combinationCount = generated.count;
 
   const variants = useMemo(
     () =>
-      combinations.map((row) => {
-        const patch = form.variantOverrides[row.key] || {};
-        const autoSku = patch.autoSku ?? true;
+      generated.rows.map((row) => {
+        const saved = form.variantOverrides[row.combinationKey] || {};
+
+        const key = saved.savedKey || row.combinationKey;
+        const autoSku = saved.autoSku ?? true;
 
         return {
           ...row,
+          key,
           autoSku,
-          sku: autoSku
-            ? `${form.sku || "SKB"}-${makeHash(row.key)}`
-            : patch.sku || "",
 
-          imageUrl: patch.imageUrl || "",
-          price: patch.price ?? "",
-          available: patch.available ?? true,
+          // Keep an existing SKU even if autoSku is true.
+          // Only regenerate when explicitly cleared.
+          sku:
+            saved.sku ||
+            (autoSku ? `${form.sku || "SKB-AUTO"}-${makeHash(key)}` : ""),
+
+          imageUrl: String(saved.imageUrl || ""),
+          price: saved.price == null ? "" : String(saved.price),
+          available: saved.available !== false,
         };
       }),
-    [combinations, form.variantOverrides, form.sku],
+    [generated.rows, form.variantOverrides, form.sku],
   );
 
-  const updateVariant = (key, patch) => {
-    setForm((prev) => ({
-      ...prev,
+  const updateVariant = (combinationKey, patch) => {
+    setForm((previous) => ({
+      ...previous,
       variantOverrides: {
-        ...prev.variantOverrides,
-        [key]: {
-          ...(prev.variantOverrides[key] || {}),
+        ...previous.variantOverrides,
+        [combinationKey]: {
+          ...(previous.variantOverrides[combinationKey] || {}),
           ...patch,
         },
       },
     }));
+    setError("");
   };
 
   const filteredVariants = useMemo(
@@ -937,7 +1062,7 @@ export default function AdminProductFormPage() {
           !variantQuery.trim() ||
           `${variant.title} ${variant.sku}`
             .toLowerCase()
-            .includes(variantQuery.toLowerCase().trim())
+            .includes(variantQuery.trim().toLowerCase())
         );
       }),
     [variants, variantFilter, variantQuery],
@@ -953,26 +1078,24 @@ export default function AdminProductFormPage() {
   const basePrice =
     salePrice > 0 && salePrice < regularPrice ? salePrice : regularPrice;
 
-  const purchasableVariants = variants.filter((variant) => variant.available);
+  const prices = [
+    basePrice,
+    ...variants
+      .filter((variant) => variant.available)
+      .map((variant) =>
+        variant.price === "" ? basePrice : Number(variant.price),
+      ),
+  ].filter((value) => Number.isFinite(value) && value > 0);
 
-  const prices = purchasableVariants.map((variant) =>
-    variant.price === "" ? basePrice : Number(variant.price),
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const maxPrice = prices.length ? Math.max(...prices) : 0;
+
+  const reservedExisting = OPTION_TYPES.some((type) =>
+    form.options[type].values.some((option) => isReservedOption(option.label)),
   );
 
-  const minPrice = form.variantsEnabled
-    ? prices.length
-      ? Math.min(...prices)
-      : 0
-    : basePrice;
-
-  const maxPrice = form.variantsEnabled
-    ? prices.length
-      ? Math.max(...prices)
-      : 0
-    : basePrice;
-
   // ========================================
-  // SAVE PRODUCT
+  // SAVE
   // ========================================
 
   const handleSubmit = async (event) => {
@@ -983,37 +1106,24 @@ export default function AdminProductFormPage() {
     setError("");
     setSuccess("");
 
-    const fail = (message) => {
-      setError(message);
-
-      void Swal.fire({
-        title: message,
-        icon: "error",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2500,
-      });
-    };
-
-    if (isEdit && !productLoaded) {
-      return fail("প্রোডাক্টের তথ্য এখনো লোড হয়নি।");
+    if (taxonomyQuery.isPending || taxonomyQuery.isError) {
+      return reportError("আগে ক্যাটাগরি ও উপলক্ষ লোড করুন।");
     }
 
     if (!form.name.trim()) {
-      return fail("প্রোডাক্টের নাম লিখুন।");
+      return reportError("প্রোডাক্টের নাম লিখুন।");
     }
 
-    if (!form.sku.trim()) {
-      return fail("প্রোডাক্ট SKU প্রয়োজন।");
+    if (!form.autoSku && !form.sku.trim()) {
+      return reportError("Product SKU লিখুন।");
     }
 
     if (
       !form.regularPrice ||
-      !Number.isFinite(regularPrice) ||
+      !Number.isFinite(Number(form.regularPrice)) ||
       regularPrice <= 0
     ) {
-      return fail("সঠিক নিয়মিত মূল্য লিখুন।");
+      return reportError("সঠিক নিয়মিত মূল্য লিখুন।");
     }
 
     if (
@@ -1022,168 +1132,199 @@ export default function AdminProductFormPage() {
         salePrice <= 0 ||
         salePrice >= regularPrice)
     ) {
-      return fail("অফার মূল্য নিয়মিত মূল্যের চেয়ে কম হতে হবে।");
+      return reportError("অফার মূল্য নিয়মিত মূল্যের চেয়ে কম হতে হবে।");
     }
 
     if (!form.categoryId) {
-      return fail("ক্যাটাগরি নির্বাচন করুন।");
+      return reportError("ক্যাটাগরি নির্বাচন করুন।");
     }
 
     if (!form.occasionIds.length) {
-      return fail("অন্তত একটি উপলক্ষ নির্বাচন করুন।");
+      return reportError("অন্তত একটি উপলক্ষ নির্বাচন করুন।");
     }
-
-    // IMAGE VALIDATION
 
     const images = form.images.filter((image) => image.url.trim());
 
-    if (!images.length || images.some((image) => !validUrl(image.url))) {
-      return fail("অন্তত একটি সঠিক Image URL প্রয়োজন।");
+    if (
+      !images.length ||
+      images.length > MAX_IMAGES ||
+      images.some((image) => !validUrl(image.url))
+    ) {
+      return reportError("১ থেকে ৫টি valid Product Photo প্রয়োজন।");
     }
 
     if (
       new Set(images.map((image) => image.url.trim())).size !== images.length
     ) {
-      return fail("একই Image URL একাধিকবার দেওয়া যাবে না।");
+      return reportError("একই Product Photo URL বারবার দেওয়া যাবে না।");
     }
 
-    // OPTION VALIDATION
+    for (const type of OPTION_TYPES) {
+      const group = form.options[type];
 
-    for (const [type, group] of Object.entries(form.options)) {
       if (group.values.length > 100) {
-        return fail(`${type}: সর্বোচ্চ ১০০টি অপশন রাখা যাবে।`);
+        return reportError(`${type}: সর্বোচ্চ ১০০টি option রাখা যাবে।`);
       }
 
-      if (group.values.some((option) => !String(option.label || "").trim())) {
-        return fail(`${type}: খালি Option রাখা যাবে না।`);
+      if (group.values.some((option) => isReservedOption(option.label))) {
+        return reportError(
+          `${type}: Default নামের option সরিয়ে দিন। Default স্বয়ংক্রিয়ভাবে থাকবে।`,
+        );
       }
+
+      const labels = group.values.map((option) => normalizeLabel(option.label));
+
+      if (labels.some((label) => !label)) {
+        return reportError(`${type}: খালি option রাখা যাবে না।`);
+      }
+
+      if (new Set(labels).size !== labels.length) {
+        return reportError(`${type}: duplicate option রয়েছে।`);
+      }
+
+      const ids = group.values.map((option) => option.id);
 
       if (
-        group.values.some(
-          (option) => !/^[a-zA-Z0-9_-]+$/.test(String(option.id || "")),
-        )
+        ids.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id)) ||
+        new Set(ids).size !== ids.length
       ) {
-        return fail(`${type}: একটি Option-এর ID সঠিক নয়।`);
+        return reportError(`${type}: option ID সঠিক নয়।`);
       }
     }
 
-    // VARIANT VALIDATION
-
     if (combinationCount > MAX_VARIANTS) {
-      return fail(`সর্বোচ্চ ${MAX_VARIANTS}টি Variant রাখা যাবে।`);
+      return reportError(`সর্বোচ্চ ${MAX_VARIANTS}টি variant রাখা যাবে।`);
     }
 
     if (form.variantsEnabled && !variants.length) {
-      return fail(
-        "Variant চালু থাকলে অন্তত একটি Size, Color বা Type যোগ করুন।",
-      );
-    }
-
-    for (const variant of variants) {
-      if (!variant.sku.trim()) {
-        return fail(`${variant.title}: SKU প্রয়োজন।`);
-      }
-
-      if (variant.imageUrl.trim() && !validUrl(variant.imageUrl)) {
-        return fail(`${variant.title}: Image URL সঠিক নয়।`);
-      }
-
-      if (
-        variant.price !== "" &&
-        (!Number.isFinite(Number(variant.price)) || Number(variant.price) <= 0)
-      ) {
-        return fail(`${variant.title}: মূল্য সঠিক নয়।`);
-      }
-    }
-
-    const allSkus = [form.sku, ...variants.map((variant) => variant.sku)].map(
-      (sku) => sku.trim().toUpperCase(),
-    );
-
-    if (new Set(allSkus).size !== allSkus.length) {
-      return fail("Product ও Variant SKU আলাদা হতে হবে।");
+      return reportError("Variant চালু থাকলে Size, Color বা Type যোগ করুন।");
     }
 
     if (
+      form.premiumBoxPrice === "" ||
       !Number.isFinite(Number(form.premiumBoxPrice)) ||
-      Number(form.premiumBoxPrice) < 0 ||
-      form.premiumBoxPrice === ""
+      Number(form.premiumBoxPrice) < 0
     ) {
-      return fail("Premium Box-এর মূল্য সঠিক নয়।");
+      return reportError("Premium Box-এর মূল্য সঠিক নয়।");
     }
 
-    // ONLY KEEP ACTIVE VARIANT OVERRIDES
+    // Random SKU generation happens only in this event.
+    const masterSku = (form.sku.trim() || makeSku()).toUpperCase();
 
-    const validVariantKeys = new Set(variants.map((variant) => variant.key));
+    const finalVariants = variants.map((variant) => {
+      const metadata = form.variantOverrides[variant.combinationKey] || {};
 
-    const currentOverrides = form.variantsEnabled
-      ? Object.fromEntries(
-          Object.entries(form.variantOverrides).filter(([key]) =>
-            validVariantKeys.has(key),
-          ),
-        )
-      : {};
+      const sku = (
+        metadata.sku ||
+        (variant.autoSku
+          ? `${masterSku}-${makeHash(variant.key)}`
+          : variant.sku)
+      )
+        .trim()
+        .toUpperCase();
 
-    // ========================================
-    // BACKEND-COMPATIBLE PRODUCT PAYLOAD
-    // ========================================
+      return {
+        key: variant.key,
+        title: variant.title,
+        options: { ...variant.options },
+        sku,
+        autoSku: variant.autoSku,
+        price: variant.price === "" ? basePrice : Number(variant.price),
+        imageUrl: variant.imageUrl.trim(),
+        available: variant.available,
+      };
+    });
+
+    for (const variant of finalVariants) {
+      if (!variant.sku) {
+        return reportError(`${variant.title}: SKU প্রয়োজন।`);
+      }
+
+      if (
+        !variant.key ||
+        variant.key.length > 200 ||
+        !/^[a-zA-Z0-9_:|-]+$/.test(variant.key)
+      ) {
+        return reportError(`${variant.title}: variant key সঠিক নয়।`);
+      }
+
+      if (!Number.isFinite(variant.price) || variant.price <= 0) {
+        return reportError(`${variant.title}: মূল্য সঠিক নয়।`);
+      }
+
+      if (variant.imageUrl && !validUrl(variant.imageUrl)) {
+        return reportError(`${variant.title}: Image URL সঠিক নয়।`);
+      }
+
+      if (
+        isReservedOption(variant.title) ||
+        Object.values(variant.options).some(isReservedOption)
+      ) {
+        return reportError("Default নামে variant save করা যাবে না।");
+      }
+    }
+
+    const allSkus = [masterSku, ...finalVariants.map((variant) => variant.sku)];
+
+    if (new Set(allSkus).size !== allSkus.length) {
+      return reportError("Product ও Variant SKU আলাদা হতে হবে।");
+    }
+
+    if (
+      new Set(finalVariants.map((variant) => variant.key)).size !==
+      finalVariants.length
+    ) {
+      return reportError("Duplicate variant key পাওয়া গেছে।");
+    }
+
+    // Persist COMPLETE overrides, not only changed fields.
+    const finalOverrides = Object.fromEntries(
+      finalVariants.map((variant, index) => [
+        variant.key,
+        {
+          sku: variant.sku,
+          autoSku: variant.autoSku,
+          imageUrl: variant.imageUrl,
+          price: variants[index].price === "" ? "" : variant.price,
+          available: variant.available,
+        },
+      ]),
+    );
 
     const payload = {
       name: form.name.trim(),
-      sku: form.sku.trim().toUpperCase(),
+      sku: masterSku,
       autoSku: form.autoSku === true,
-
       regularPrice,
       salePrice: form.salePrice === "" ? null : salePrice,
-
       description: form.description.trim(),
       categoryId: form.categoryId,
       occasionIds: [...form.occasionIds],
-
       images: images.map((image) => ({
         id: image.id,
         url: image.url.trim(),
       })),
-
       available: form.available === true,
       featured: form.featured === true,
       customizable: form.customizable === true,
       variantsEnabled: form.variantsEnabled === true,
 
       options: Object.fromEntries(
-        Object.entries(form.options).map(([type, group]) => [
+        OPTION_TYPES.map((type) => [
           type,
           {
-            enabled: group.enabled === true,
-            values: group.values.map((option) => ({
-              id: String(option.id),
+            enabled: form.options[type].enabled === true,
+            values: form.options[type].values.map((option) => ({
+              id: option.id,
               label: option.label.trim(),
             })),
           },
         ]),
       ),
 
-      variantOverrides: currentOverrides,
-
-      variants: form.variantsEnabled
-        ? variants.map((variant) => ({
-            key: variant.key,
-            title: variant.title,
-
-            options: Object.fromEntries(
-              variant.parts.map((part) => [part.type, part.label]),
-            ),
-
-            sku: variant.sku.trim().toUpperCase(),
-            autoSku: variant.autoSku,
-            price: variant.price === "" ? basePrice : Number(variant.price),
-            imageUrl: variant.imageUrl.trim(),
-            available: variant.available,
-          }))
-        : [],
-
+      variants: form.variantsEnabled ? finalVariants : [],
+      variantOverrides: form.variantsEnabled ? finalOverrides : {},
       customerFieldType: form.customizable ? form.customerFieldType : "none",
-
       packaging: form.packaging === "premium" ? "premium" : "regular",
       premiumBoxPrice: Number(form.premiumBoxPrice),
     };
@@ -1192,19 +1333,7 @@ export default function AdminProductFormPage() {
     setLoading(true);
 
     try {
-      const auth = getAuth(app);
-
-      if (typeof auth.authStateReady === "function") {
-        await auth.authStateReady();
-      }
-
-      const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        throw new Error("প্রোডাক্ট সংরক্ষণ করতে লগইন করুন।");
-      }
-
-      const token = await currentUser.getIdToken();
+      const token = await getToken();
 
       const endpoint = isEdit
         ? `${API_URL}/admin/products/${encodeURIComponent(productId)}`
@@ -1225,42 +1354,29 @@ export default function AdminProductFormPage() {
         throw new Error(result.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।");
       }
 
-      setSuccess(isEdit ? "প্রোডাক্ট আপডেট হয়েছে!" : "প্রোডাক্ট যোগ হয়েছে!");
+      const message = isEdit
+        ? "প্রোডাক্ট আপডেট হয়েছে!"
+        : "প্রোডাক্ট যোগ হয়েছে!";
 
-      void Swal.fire({
-        title: isEdit ? "প্রোডাক্ট আপডেট হয়েছে!" : "প্রোডাক্ট যোগ হয়েছে!",
-        icon: "success",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-      });
+      setSuccess(message);
+      void toast(message);
 
-      await Promise.all(
+      // Cache refresh failure must not report a failed save.
+      await Promise.allSettled(
         [
           ["adminProducts"],
+          ["admin-product-edit"],
           ["products"],
           ["shopProducts"],
           ["featuredProducts"],
+          ["product-details"],
+          ["related-products"],
         ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       );
 
-      navigate("/admin/products", {
-        replace: true,
-      });
-    } catch (err) {
-      const message = err.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।";
-
-      setError(message);
-
-      void Swal.fire({
-        title: message,
-        icon: "error",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2500,
-      });
+      navigate("/admin/products", { replace: true });
+    } catch (saveError) {
+      reportError(saveError.message || "প্রোডাক্ট সংরক্ষণ করা যায়নি।");
     } finally {
       submittingRef.current = false;
       setLoading(false);
@@ -1268,38 +1384,7 @@ export default function AdminProductFormPage() {
   };
 
   // ========================================
-  // LOADING / ERROR
-  // ========================================
-
-  if (isEdit && productLoading) {
-    return (
-      <div className="flex min-h-[65vh] flex-col items-center justify-center gap-3">
-        <Loader2 size={32} className="animate-spin text-secondary" />
-        <p className="text-sm text-muted">প্রোডাক্টের তথ্য লোড হচ্ছে...</p>
-      </div>
-    );
-  }
-
-  if (isEdit && !productLoaded) {
-    return (
-      <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm font-semibold text-red-700">
-          {error || "প্রোডাক্ট লোড করা যায়নি।"}
-        </p>
-
-        <button
-          type="button"
-          onClick={() => navigate("/admin/products")}
-          className="mt-4 rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-white"
-        >
-          প্রোডাক্ট তালিকায় ফিরে যান
-        </button>
-      </div>
-    );
-  }
-
-  // ========================================
-  // PAGE UI
+  // UI
   // ========================================
 
   return (
@@ -1326,11 +1411,7 @@ export default function AdminProductFormPage() {
         onSubmit={handleSubmit}
         className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_350px]"
       >
-        {/* LEFT COLUMN */}
-
-        <div className="min-w-0 space-y-5">
-          {/* BASIC DETAILS */}
-
+        <fieldset disabled={loading} className="min-w-0 space-y-5 border-0 p-0">
           <Section
             title="প্রাথমিক তথ্য (Basic Details)"
             right={
@@ -1342,22 +1423,29 @@ export default function AdminProductFormPage() {
             <Field label="প্রোডাক্টের নাম (Product Name)" required>
               <input
                 value={form.name}
-                onChange={(e) => update("name", e.target.value)}
+                onChange={(event) => update("name", event.target.value)}
                 placeholder="বিবাহবার্ষিকী স্পেশাল কাস্টম কাঠের গিফট বক্স"
                 className={`${inputClass} bg-[#f8f1fd]`}
               />
             </Field>
 
-            <Field label="মাস্টার SKU (Master SKU)" required>
+            <Field
+              label="মাস্টার SKU (Master SKU)"
+              required
+              hint={
+                !form.sku && form.autoSku
+                  ? "Save করার সময় SKU স্বয়ংক্রিয়ভাবে তৈরি হবে।"
+                  : ""
+              }
+            >
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={form.sku}
                   disabled={form.autoSku}
-                  onChange={(e) => update("sku", e.target.value)}
-                  placeholder="SKB-BOX-2026"
+                  onChange={(event) => update("sku", event.target.value)}
+                  placeholder="স্বয়ংক্রিয় SKU"
                   className={`${inputClass} flex-1 bg-[#f8f1fd] disabled:opacity-75`}
                 />
-
                 <button
                   type="button"
                   onClick={() => update("sku", makeSku())}
@@ -1373,7 +1461,7 @@ export default function AdminProductFormPage() {
                 <input
                   type="checkbox"
                   checked={form.autoSku}
-                  onChange={(e) => update("autoSku", e.target.checked)}
+                  onChange={(event) => update("autoSku", event.target.checked)}
                   className="checkbox checkbox-sm border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                 />
                 স্বয়ংক্রিয় SKU ব্যবহার করুন
@@ -1385,14 +1473,16 @@ export default function AdminProductFormPage() {
                 <Field
                   label="মূল্য (Regular Price)"
                   required
-                  hint="ভ্যারিয়েন্ট ছাড়া সাধারণ বিক্রয় মূল্য"
+                  hint="Default / মূল product-এর বিক্রয় মূল্য"
                 >
                   <input
                     type="number"
                     min="0.01"
                     step="0.01"
                     value={form.regularPrice}
-                    onChange={(e) => update("regularPrice", e.target.value)}
+                    onChange={(event) =>
+                      update("regularPrice", event.target.value)
+                    }
                     placeholder="5800"
                     className={inputClass}
                   />
@@ -1409,7 +1499,9 @@ export default function AdminProductFormPage() {
                     min="0.01"
                     step="0.01"
                     value={form.salePrice}
-                    onChange={(e) => update("salePrice", e.target.value)}
+                    onChange={(event) =>
+                      update("salePrice", event.target.value)
+                    }
                     placeholder="4950"
                     className={inputClass}
                   />
@@ -1421,14 +1513,12 @@ export default function AdminProductFormPage() {
               <textarea
                 rows={5}
                 value={form.description}
-                onChange={(e) => update("description", e.target.value)}
+                onChange={(event) => update("description", event.target.value)}
                 placeholder="প্রোডাক্ট সম্পর্কে বিস্তারিত লিখুন..."
                 className={`${inputClass} resize-y bg-[#f8f1fd]`}
               />
             </Field>
           </Section>
-
-          {/* PRODUCT PHOTO GALLERY */}
 
           <Section
             title="ছবি লিংক ইনপুট ও গ্যালারি (Product Photos)"
@@ -1440,27 +1530,35 @@ export default function AdminProductFormPage() {
           >
             <p className="text-sm leading-relaxed text-[#84778b]">
               ছবির URL পেস্ট করুন। ড্র্যাগ করে পজিশন পরিবর্তন করুন। প্রথম ছবিটি
-              প্রধান ছবি হবে।
+              প্রধান ও Default ছবি হবে।
             </p>
 
             <div className="space-y-2">
               {form.images.map((image, index) => (
                 <div
                   key={image.id}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    reorderPhoto(draggingId.current, image.id);
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+
+                    if (!loading) {
+                      reorderPhoto(
+                        draggingId.current ||
+                          event.dataTransfer.getData("text/plain"),
+                        image.id,
+                      );
+                    }
+
                     draggingId.current = null;
                   }}
                   className="flex min-w-0 items-center gap-2 rounded-lg border border-[#ede3f2] bg-[#f7f0fc] p-2.5"
                 >
                   <span
-                    draggable
-                    onDragStart={(e) => {
+                    draggable={!loading}
+                    onDragStart={(event) => {
                       draggingId.current = image.id;
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", image.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", image.id);
                     }}
                     onDragEnd={() => {
                       draggingId.current = null;
@@ -1477,7 +1575,9 @@ export default function AdminProductFormPage() {
                   <input
                     type="url"
                     value={image.url}
-                    onChange={(e) => updatePhoto(image.id, e.target.value)}
+                    onChange={(event) =>
+                      updatePhoto(image.id, event.target.value)
+                    }
                     placeholder="ছবির URL পেস্ট করুন (https://...)"
                     className="min-w-0 flex-1 rounded-lg border border-[#eee5f2] bg-white px-3 py-2 text-sm outline-none focus:border-[#b66ac5]"
                   />
@@ -1486,6 +1586,7 @@ export default function AdminProductFormPage() {
                     type="button"
                     onClick={() => setSelectedPhoto(image.id)}
                     className="shrink-0"
+                    aria-label="ছবির প্রিভিউ"
                   >
                     <Photo url={image.url} className="size-10 rounded-lg" />
                   </button>
@@ -1502,15 +1603,16 @@ export default function AdminProductFormPage() {
                       disabled={index === 0}
                       onClick={() => movePhoto(index, -1)}
                       className="text-[#8c7793] disabled:opacity-25"
+                      aria-label="ছবি উপরে নিন"
                     >
                       <ArrowUp size={15} />
                     </button>
-
                     <button
                       type="button"
                       disabled={index === form.images.length - 1}
                       onClick={() => movePhoto(index, 1)}
                       className="text-[#8c7793] disabled:opacity-25"
+                      aria-label="ছবি নিচে নিন"
                     >
                       <ArrowDown size={15} />
                     </button>
@@ -1539,8 +1641,6 @@ export default function AdminProductFormPage() {
             </button>
           </Section>
 
-          {/* VARIANT CONFIGURATION */}
-
           <Section
             title="ভ্যারিয়েন্ট কনফিগারেশন (Variant Options)"
             right={
@@ -1548,48 +1648,41 @@ export default function AdminProductFormPage() {
                 <span className="text-xs text-[#89798f]">
                   ভ্যারিয়েন্ট সিস্টেম:
                 </span>
-
                 <MiniSwitch
                   checked={form.variantsEnabled}
                   onChange={(value) => update("variantsEnabled", value)}
                 />
-
                 <span className="text-xs font-bold text-[#903eaa]">
                   {form.variantsEnabled ? "চালু" : "বন্ধ"}
                 </span>
               </div>
             }
           >
+            {reservedExisting && (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-6 text-red-700">
+                পুরোনো data-তে Default নামে option আছে। সংশ্লিষ্ট group থেকে
+                সেটি সরিয়ে তারপর save করুন। এটি সরালে ওই option-এর variant-গুলোও
+                বাদ যাবে।
+              </p>
+            )}
+
             {form.variantsEnabled ? (
               <>
-                <OptionGroup
-                  title="১. সাইজ অপশন (Size)"
-                  type="size"
-                  group={form.options.size}
-                  onToggle={toggleOption}
-                  onAdd={addOption}
-                  onRemove={removeOption}
-                />
-
-                <OptionGroup
-                  title="২. কালার অপশন (Color)"
-                  type="color"
-                  group={form.options.color}
-                  onToggle={toggleOption}
-                  onAdd={addOption}
-                  onRemove={removeOption}
-                />
-
-                <OptionGroup
-                  title="৩. ধরন / ডিজাইন টাইপ (Type) (ঐচ্ছিক)"
-                  type="type"
-                  group={form.options.type}
-                  onToggle={toggleOption}
-                  onAdd={addOption}
-                  onRemove={removeOption}
-                />
-
-                {/* GENERATED VARIANT LIST */}
+                {[
+                  ["size", "১. সাইজ অপশন (Size)"],
+                  ["color", "২. কালার অপশন (Color)"],
+                  ["type", "৩. ধরন / ডিজাইন টাইপ (Type) (ঐচ্ছিক)"],
+                ].map(([type, title]) => (
+                  <OptionGroup
+                    key={type}
+                    title={title}
+                    type={type}
+                    group={form.options[type]}
+                    onToggle={toggleOption}
+                    onAdd={addOption}
+                    onRemove={removeOption}
+                  />
+                ))}
 
                 <div className="border-t border-[#eee3f3] pt-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1597,7 +1690,6 @@ export default function AdminProductFormPage() {
                       <h3 className="text-base font-bold text-[#903eaa]">
                         জেনারেটেড ভ্যারিয়েন্ট তালিকা
                       </h3>
-
                       <p className="mt-1 text-xs text-[#88788e]">
                         প্রতি ভ্যারিয়েন্টের ছবি, মূল্য, SKU ও availability
                         আলাদা।
@@ -1608,7 +1700,6 @@ export default function AdminProductFormPage() {
                       <span className="rounded-lg bg-[#f7f0fc] px-3 py-2 text-xs font-semibold">
                         মোট {combinationCount}টি
                       </span>
-
                       <span className="rounded-lg bg-[#edf9f0] px-3 py-2 text-xs font-semibold text-[#237547]">
                         উপলব্ধ{" "}
                         {variants.filter((variant) => variant.available).length}
@@ -1628,18 +1719,17 @@ export default function AdminProductFormPage() {
                     </div>
                   ) : (
                     <>
-                      {/* VARIANT SEARCH */}
-
                       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                         <div className="relative min-w-0 flex-1">
                           <Search
                             size={17}
                             className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9884a0]"
                           />
-
                           <input
                             value={variantQuery}
-                            onChange={(e) => setVariantQuery(e.target.value)}
+                            onChange={(event) =>
+                              setVariantQuery(event.target.value)
+                            }
                             placeholder="ভ্যারিয়েন্ট বা SKU সার্চ করুন..."
                             className={`${inputClass} pl-10`}
                           />
@@ -1647,7 +1737,9 @@ export default function AdminProductFormPage() {
 
                         <select
                           value={variantFilter}
-                          onChange={(e) => setVariantFilter(e.target.value)}
+                          onChange={(event) =>
+                            setVariantFilter(event.target.value)
+                          }
                           className={`${inputClass} sm:w-44`}
                         >
                           <option value="all">সব ভ্যারিয়েন্ট</option>
@@ -1658,7 +1750,6 @@ export default function AdminProductFormPage() {
 
                       <div className="mt-3 flex items-center justify-between text-xs text-[#8d7994]">
                         <span>দেখানো হচ্ছে {filteredVariants.length}টি</span>
-
                         {filteredVariants.length > 6 && (
                           <span className="font-semibold text-[#903eaa]">
                             প্রথম ৬টির পর নিচে স্ক্রল করুন ↓
@@ -1675,12 +1766,12 @@ export default function AdminProductFormPage() {
                       >
                         {filteredVariants.map((variant) => (
                           <VariantCard
-                            key={variant.key}
+                            key={variant.combinationKey}
                             variant={variant}
                             coverImage={gallery[0]?.url}
                             basePrice={basePrice}
                             onChange={(patch) =>
-                              updateVariant(variant.key, patch)
+                              updateVariant(variant.combinationKey, patch)
                             }
                           />
                         ))}
@@ -1698,17 +1789,18 @@ export default function AdminProductFormPage() {
             ) : (
               <div className="rounded-xl border border-dashed border-[#e6d9ed] bg-[#fbf7fd] px-4 py-10 text-center">
                 <Package size={32} className="mx-auto mb-3 text-[#a788b1]" />
-
                 <p className="text-base font-bold">Single Product Mode</p>
-
                 <p className="mt-2 text-sm text-[#82758b]">
                   আলাদা সাইজ, কালার বা ডিজাইন থাকলে Variant System চালু করুন।
                 </p>
+                {isEdit && (
+                  <p className="mt-2 text-xs text-[#82758b]">
+                    বন্ধ অবস্থায় save করলে product-এর variants সরানো হবে।
+                  </p>
+                )}
               </div>
             )}
           </Section>
-
-          {/* CUSTOMER CUSTOMIZATION */}
 
           <Section
             title="গ্রাহক কাস্টমাইজেশন ফিল্ড মোড (Customer Customization Fields)"
@@ -1718,8 +1810,6 @@ export default function AdminProductFormPage() {
               </span>
             }
           >
-            {/* MODE SELECTOR */}
-
             <div className="grid gap-3 sm:grid-cols-3">
               {[
                 {
@@ -1757,12 +1847,10 @@ export default function AdminProductFormPage() {
                         onChange={() => chooseCustomerMode(mode.value)}
                         className="radio radio-sm mt-0.5 shrink-0 border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                       />
-
                       <div>
                         <p className="text-sm font-bold leading-snug">
                           {mode.title}
                         </p>
-
                         <p className="mt-2 text-xs leading-relaxed text-[#82748b]">
                           {mode.text}
                         </p>
@@ -1781,14 +1869,11 @@ export default function AdminProductFormPage() {
 
             <div className="flex items-start gap-2 rounded-lg bg-[#faf5fc] p-3 text-xs text-[#806f88]">
               <Info size={17} className="shrink-0" />
-
               <p>
                 Frame Field বা Custom Note বেছে নিলেই Customizable Product নিজে
                 থেকে চালু হবে। নিচের ফিল্ডগুলো শুধু গ্রাহক ফর্মের প্রিভিউ।
               </p>
             </div>
-
-            {/* FRAME FIELD PREVIEW */}
 
             {form.customerFieldType === "frame" && form.customizable && (
               <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
@@ -1797,7 +1882,6 @@ export default function AdminProductFormPage() {
                     <ImageIcon size={18} className="text-[#903eaa]" />
                     ফ্রেম ফিল্ড সেটিংস (Frame Field Preview)
                   </h3>
-
                   <span className="text-xs text-[#903eaa]">লাইভ প্রিভিউ</span>
                 </div>
 
@@ -1807,18 +1891,10 @@ export default function AdminProductFormPage() {
                       label="৩. আপনার ছবি আপলোড করুন"
                       hint="সর্বোচ্চ ২০টি ছবি আপলোড করা যাবে"
                     >
-                      <label className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-[#e4d3eb] bg-[#fbf8fd] p-5 text-center text-xs text-[#76258a]">
+                      <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-[#e4d3eb] bg-[#fbf8fd] p-5 text-center text-xs text-[#76258a]">
                         <UploadCloud size={25} />
                         <span>ছবি বেছে নিন (Max 20)</span>
-
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          disabled
-                          className="sr-only"
-                        />
-                      </label>
+                      </div>
                     </Field>
                   </div>
 
@@ -1830,7 +1906,6 @@ export default function AdminProductFormPage() {
                         className={inputClass}
                       />
                     </Field>
-
                     <Field label="৪.২. জন্মতারিখ / বিবাহবার্ষিকী">
                       <input type="date" disabled className={inputClass} />
                     </Field>
@@ -1844,7 +1919,6 @@ export default function AdminProductFormPage() {
                   >
                     <textarea
                       rows={3}
-                      maxLength={500}
                       disabled
                       placeholder="যেমন: ভালোবাসার স্মৃতি..."
                       className={`${inputClass} resize-y`}
@@ -1854,8 +1928,6 @@ export default function AdminProductFormPage() {
               </div>
             )}
 
-            {/* CUSTOM NOTE PREVIEW */}
-
             {form.customerFieldType === "note" && form.customizable && (
               <div className="rounded-xl border border-[#eadff0] bg-[#f7f0fc] p-4">
                 <Field
@@ -1864,19 +1936,15 @@ export default function AdminProductFormPage() {
                 >
                   <textarea
                     rows={4}
-                    maxLength={500}
                     disabled
                     placeholder="গ্রাহকের বিশেষ নির্দেশনা..."
                     className={`${inputClass} resize-y`}
                   />
                 </Field>
-
                 <p className="mt-2 text-right text-xs text-[#8e7995]">0/500</p>
               </div>
             )}
           </Section>
-
-          {/* PRODUCT-LEVEL PACKAGING */}
 
           <Section
             title="ঐচ্ছিক গিফট বক্স প্যাকেজিং (Optional Gift Box)"
@@ -1906,11 +1974,9 @@ export default function AdminProductFormPage() {
                   <p className="text-sm font-bold">
                     রেগুলার বক্স (Regular Box)
                   </p>
-
                   <span className="mt-2 inline-block rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#903eaa]">
                     ফ্রি / অন্তর্ভুক্ত
                   </span>
-
                   <p className="mt-2 text-xs text-[#82748b]">
                     স্ট্যান্ডার্ড শখবিলাস সুরক্ষিত ক্রাফট বক্স।
                   </p>
@@ -1931,29 +1997,25 @@ export default function AdminProductFormPage() {
                   onChange={() => update("packaging", "premium")}
                   className="radio radio-sm mt-0.5 border-[#903eaa] checked:border-[#903eaa] checked:bg-[#903eaa]"
                 />
-
                 <div>
                   <p className="text-sm font-bold">
                     প্রিমিয়াম বক্স (Premium Box)
                   </p>
-
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs text-[#82748b]">
                       অতিরিক্ত মূল্য:
                     </span>
-
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={form.premiumBoxPrice}
-                      onChange={(e) =>
-                        update("premiumBoxPrice", e.target.value)
+                      onChange={(event) =>
+                        update("premiumBoxPrice", event.target.value)
                       }
                       className="w-24 rounded-lg border border-[#e7dcec] bg-white px-3 py-2 text-sm outline-none focus:border-[#903eaa]"
                     />
                   </div>
-
                   <p className="mt-2 text-xs text-[#82748b]">
                     ভেলভেট লাইনিংসহ আকর্ষণীয় গিফট বক্স।
                   </p>
@@ -1961,107 +2023,112 @@ export default function AdminProductFormPage() {
               </label>
             </div>
           </Section>
-        </div>
+        </fieldset>
 
         {/* RIGHT SIDEBAR */}
 
         <aside className="min-w-0 space-y-5 lg:sticky lg:top-20">
-          <Section title="সংগঠন ও স্ট্যাটাস ফ্ল্যাগস">
-            <StatusCard
-              title="ক্রয়যোগ্য / উপলব্ধ"
-              subtitle="Available for Purchase"
-              checked={form.available}
-              onChange={(value) => update("available", value)}
-            />
+          <fieldset disabled={loading} className="min-w-0 border-0 p-0">
+            <Section title="সংগঠন ও স্ট্যাটাস ফ্ল্যাগস">
+              <StatusCard
+                title="ক্রয়যোগ্য / উপলব্ধ"
+                subtitle="Available for Purchase"
+                checked={form.available}
+                onChange={(value) => update("available", value)}
+              />
+              <StatusCard
+                title="ফিচার্ড প্রোডাক্ট"
+                subtitle="Featured Product"
+                checked={form.featured}
+                onChange={(value) => update("featured", value)}
+              />
+              <StatusCard
+                title="কাস্টমাইজেশনযোগ্য"
+                subtitle="Customizable Product"
+                checked={form.customizable}
+                onChange={toggleCustomizable}
+              />
 
-            <StatusCard
-              title="ফিচার্ড প্রোডাক্ট"
-              subtitle="Featured Product"
-              checked={form.featured}
-              onChange={(value) => update("featured", value)}
-            />
+              <Field label="ক্যাটাগরি (Category)" required>
+                <select
+                  value={form.categoryId}
+                  onChange={(event) => update("categoryId", event.target.value)}
+                  disabled={taxonomiesLoading}
+                  className={`${inputClass} bg-[#f7f0fc]`}
+                >
+                  <option value="">ক্যাটাগরি নির্বাচন করুন</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-            <StatusCard
-              title="কাস্টমাইজেশনযোগ্য"
-              subtitle="Customizable Product"
-              checked={form.customizable}
-              onChange={toggleCustomizable}
-            />
-
-            {/* CATEGORY */}
-
-            <Field label="ক্যাটাগরি (Category)" required>
-              <select
-                value={form.categoryId}
-                onChange={(e) => update("categoryId", e.target.value)}
-                disabled={taxonomiesLoading}
-                className={`${inputClass} bg-[#f7f0fc]`}
+              <Field
+                label="উপলক্ষ (Occasions)"
+                required
+                hint="প্রয়োজন অনুযায়ী একাধিক উপলক্ষ নির্বাচন করুন।"
               >
-                <option value="">ক্যাটাগরি নির্বাচন করুন</option>
+                <div className="space-y-2 rounded-xl border border-[#e8ddec] bg-[#f7f0fc] p-3">
+                  {taxonomiesLoading && (
+                    <p className="text-xs text-[#82748b]">
+                      উপলক্ষ লোড হচ্ছে...
+                    </p>
+                  )}
 
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            {/* OCCASIONS */}
-
-            <Field
-              label="উপলক্ষ (Occasions)"
-              required
-              hint="প্রয়োজন অনুযায়ী একাধিক উপলক্ষ নির্বাচন করুন।"
-            >
-              <div className="space-y-2 rounded-xl border border-[#e8ddec] bg-[#f7f0fc] p-3">
-                {taxonomiesLoading && (
-                  <p className="text-xs text-[#82748b]">উপলক্ষ লোড হচ্ছে...</p>
-                )}
-
-                {occasions.map((occasion) => (
-                  <label
-                    key={occasion.id}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.occasionIds.includes(occasion.id)}
-                      onChange={(e) => {
-                        update(
-                          "occasionIds",
-                          e.target.checked
-                            ? [...form.occasionIds, occasion.id]
-                            : form.occasionIds.filter(
-                                (id) => id !== occasion.id,
-                              ),
-                        );
-                      }}
-                      className="checkbox checkbox-sm checkbox-secondary"
-                    />
-
-                    {occasion.imageUrl && (
-                      <img
-                        src={occasion.imageUrl}
-                        alt=""
-                        loading="lazy"
-                        className="size-9 shrink-0 rounded-lg object-cover"
+                  {occasions.map((occasion) => (
+                    <label
+                      key={occasion.id}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.occasionIds.includes(occasion.id)}
+                        onChange={(event) => {
+                          update(
+                            "occasionIds",
+                            event.target.checked
+                              ? [...form.occasionIds, occasion.id]
+                              : form.occasionIds.filter(
+                                  (id) => id !== occasion.id,
+                                ),
+                          );
+                        }}
+                        className="checkbox checkbox-sm checkbox-secondary"
                       />
-                    )}
+                      {occasion.imageUrl && (
+                        <img
+                          src={occasion.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="size-9 shrink-0 rounded-lg object-cover"
+                        />
+                      )}
+                      <span>{occasion.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </Field>
 
-                    <span>{occasion.name}</span>
-                  </label>
-                ))}
-              </div>
-            </Field>
-          </Section>
-
-          {/* STOREFRONT LIVE PREVIEW */}
+              {taxonomyQuery.isError && (
+                <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+                  <p>{taxonomyQuery.error.message}</p>
+                  <button
+                    type="button"
+                    onClick={() => taxonomyQuery.refetch()}
+                    className="mt-2 font-semibold underline"
+                  >
+                    আবার চেষ্টা করুন
+                  </button>
+                </div>
+              )}
+            </Section>
+          </fieldset>
 
           <div className="overflow-hidden rounded-xl border border-[#ede4f1] bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-[#eee4f2] bg-[#faf6fc] px-4 py-4">
               <Star size={18} className="text-[#903eaa]" />
-
               <h3 className="text-base font-bold">স্টোরফ্রন্ট লাইভ প্রিভিউ</h3>
             </div>
 
@@ -2082,7 +2149,6 @@ export default function AdminProductFormPage() {
                       ফিচার্ড
                     </span>
                   )}
-
                   {form.customizable && (
                     <span className="rounded-lg bg-[#903eaa] px-3 py-1.5 text-xs font-semibold text-white">
                       কাস্টমাইজড
@@ -2094,8 +2160,6 @@ export default function AdminProductFormPage() {
                   {form.available ? "উপলব্ধ" : "অনুপলব্ধ"}
                 </span>
               </div>
-
-              {/* IMAGE THUMBNAILS */}
 
               {gallery.length > 1 && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -2116,8 +2180,6 @@ export default function AdminProductFormPage() {
                 </div>
               )}
 
-              {/* PRODUCT DETAILS PREVIEW */}
-
               <div className="mt-4 space-y-3">
                 <p className="text-xs text-[#8a7c8c]">
                   শখবিলাস Bespoke • বাংলাদেশ
@@ -2128,17 +2190,11 @@ export default function AdminProductFormPage() {
                 </h3>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {form.variantsEnabled && prices.length === 0 ? (
-                    <p className="text-sm font-bold text-red-500">
-                      সব ভ্যারিয়েন্ট অনুপলব্ধ
-                    </p>
-                  ) : (
-                    <p className="text-xl font-bold">
-                      {minPrice === maxPrice
-                        ? money(minPrice)
-                        : `${money(minPrice)} – ${money(maxPrice)}`}
-                    </p>
-                  )}
+                  <p className="text-xl font-bold">
+                    {minPrice === maxPrice
+                      ? money(minPrice)
+                      : `${money(minPrice)} – ${money(maxPrice)}`}
+                  </p>
 
                   {!form.variantsEnabled &&
                     salePrice > 0 &&
@@ -2151,7 +2207,7 @@ export default function AdminProductFormPage() {
 
                 {form.variantsEnabled && (
                   <p className="text-sm text-[#85758c]">
-                    {variants.length}টি ভ্যারিয়েন্ট
+                    {variants.length}টি ভ্যারিয়েন্ট · Default স্বয়ংক্রিয়
                   </p>
                 )}
 
@@ -2165,23 +2221,18 @@ export default function AdminProductFormPage() {
                   <p className="text-xs text-[#82758b]">✓ কাস্টম নোট সক্রিয়</p>
                 )}
 
-                {form.packaging === "premium" && (
+                {Number(form.premiumBoxPrice) > 0 && (
                   <p className="text-xs text-[#82758b]">
                     ✓ প্রিমিয়াম বক্স: {money(form.premiumBoxPrice)}
                   </p>
                 )}
               </div>
 
-              {/* SAVE BUTTONS */}
-
               <div className="mt-5 space-y-3 border-t border-[#f0e8f3] pt-5">
                 <button
                   type="submit"
                   disabled={
-                    loading ||
-                    taxonomiesLoading ||
-                    productLoading ||
-                    (isEdit && !productLoaded)
+                    loading || taxonomiesLoading || taxonomyQuery.isError
                   }
                   className={`${primaryButton} w-full py-3`}
                 >
@@ -2200,6 +2251,7 @@ export default function AdminProductFormPage() {
 
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => navigate("/admin/products")}
                   className={`${softButton} w-full`}
                 >
@@ -2211,11 +2263,9 @@ export default function AdminProductFormPage() {
 
           <div className="flex gap-3 rounded-xl border border-[#eee4f2] bg-white p-4 text-sm leading-relaxed text-[#88788d]">
             <Info size={19} className="mt-0.5 shrink-0 text-[#903eaa]" />
-
             <p>
-              Slug Backend-এ স্বয়ংক্রিয়ভাবে তৈরি হবে। প্রতিটি Variant-এর SKU
-              আলাদা হতে হবে। Customer Customization Fields Backend নিজেই তৈরি
-              করবে।
+              প্রতিটি Variant-এর SKU আলাদা হতে হবে। Default আলাদা database
+              variant নয়। Option সরালে সংশ্লিষ্ট variant-ও save-এর সময় বাদ যাবে।
             </p>
           </div>
 
@@ -2239,5 +2289,109 @@ export default function AdminProductFormPage() {
         </aside>
       </form>
     </div>
+  );
+}
+
+// ==========================================
+// EDIT DATA LOADER
+// ==========================================
+
+function EditProductLoader({ productId }) {
+  const navigate = useNavigate();
+
+  const productQuery = useQuery({
+    queryKey: ["admin-product-edit", productId],
+
+    queryFn: async ({ signal }) => {
+      const token = await getToken();
+
+      const response = await fetch(
+        `${API_URL}/admin/products/${encodeURIComponent(productId)}`,
+        {
+          signal,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        },
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || result.success !== true || !result.product) {
+        throw new Error(result.message || "প্রোডাক্ট লোড করা যায়নি।");
+      }
+
+      return hydrateProduct(result.product);
+    },
+
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
+
+  if (productQuery.isPending) {
+    return (
+      <div className="flex min-h-[65vh] flex-col items-center justify-center gap-3">
+        <Loader2 size={32} className="animate-spin text-secondary" />
+        <p className="text-sm text-muted">প্রোডাক্টের তথ্য লোড হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  if (productQuery.isError) {
+    return (
+      <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+        <p className="text-sm font-semibold text-red-700">
+          {productQuery.error.message}
+        </p>
+
+        <div className="mt-4 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => productQuery.refetch()}
+            className={primaryButton}
+          >
+            আবার চেষ্টা করুন
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/admin/products")}
+            className={softButton}
+          >
+            প্রোডাক্ট তালিকায় ফিরে যান
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ProductEditor
+      key={productId}
+      productId={productId}
+      initialForm={productQuery.data}
+    />
+  );
+}
+
+export default function AdminProductFormPage() {
+  const params = useParams();
+  const productId = params.productId || params.id;
+
+  if (productId) {
+    return <EditProductLoader key={productId} productId={productId} />;
+  }
+
+  return (
+    <ProductEditor
+      key="new-product"
+      productId=""
+      initialForm={emptyProduct()}
+    />
   );
 }

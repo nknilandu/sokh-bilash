@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Heart, Gift, ArrowRight } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,16 +5,9 @@ import { Link } from "react-router-dom";
 
 import { GoHeartFill } from "react-icons/go";
 import { HiUsers } from "react-icons/hi";
-import {
-  MdFamilyRestroom,
-  MdMosque,
-} from "react-icons/md";
-import {
-  RiCake2Fill,
-  RiHandHeartFill,
-} from "react-icons/ri";
+import { MdFamilyRestroom, MdMosque } from "react-icons/md";
+import { RiCake2Fill, RiHandHeartFill } from "react-icons/ri";
 import { API_URL } from "../../utils/siteConfig";
-
 
 // ========================================
 // FALLBACK ICONS
@@ -44,9 +36,7 @@ const fetchOccasions = async ({ signal }) => {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok || !data.success) {
-    throw new Error(
-      data.message || "Failed to fetch occasions"
-    );
+    throw new Error(data.message || "Failed to fetch occasions");
   }
 
   return data;
@@ -61,10 +51,7 @@ const OccasionIcon = ({ occasion }) => {
 
   const Icon = occasionIcons[occasion.id] || Gift;
 
-  if (
-    occasion.iconUrl &&
-    failedUrl !== occasion.iconUrl
-  ) {
+  if (occasion.iconUrl && failedUrl !== occasion.iconUrl) {
     return (
       <img
         src={occasion.iconUrl}
@@ -124,7 +111,6 @@ const OccasionGifts = () => {
     <section className="section-bg section-padding sm:pb-16">
       <div className="page-container">
         <div className="rounded-3xl border border-base-300/70 bg-gradient-to-br from-secondary/15 to-secondary/10 p-5 sm:p-8 lg:p-10">
-
           {/* ================================= */}
           {/* SECTION HEADER */}
           {/* ================================= */}
@@ -140,8 +126,8 @@ const OccasionGifts = () => {
             </h2>
 
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted">
-              ছোট্ট একটি উপহারও হয়ে উঠুক প্রিয় মানুষের
-              জীবনের সুন্দর একটি স্মৃতি।
+              ছোট্ট একটি উপহারও হয়ে উঠুক প্রিয় মানুষের জীবনের সুন্দর একটি
+              স্মৃতি।
             </p>
           </div>
 
@@ -151,30 +137,23 @@ const OccasionGifts = () => {
 
           {isPending ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {Array.from(
-                { length: 8 },
-                (_, index) => (
-                  <div
-                    key={index}
-                    className="flex h-36 animate-pulse flex-col items-center justify-center gap-4 rounded-2xl bg-base-100 p-4"
-                  >
-                    <div className="size-12 rounded-xl bg-base-200" />
-                    <div className="h-4 w-24 rounded bg-base-200" />
-                  </div>
-                )
-              )}
+              {Array.from({ length: 8 }, (_, index) => (
+                <div
+                  key={index}
+                  className="flex h-36 animate-pulse flex-col items-center justify-center gap-4 rounded-2xl bg-base-100 p-4"
+                >
+                  <div className="size-12 rounded-xl bg-base-200" />
+                  <div className="h-4 w-24 rounded bg-base-200" />
+                </div>
+              ))}
             </div>
-
           ) : isError ? (
-
             /* ================================= */
             /* ERROR STATE */
             /* ================================= */
 
             <div className="rounded-2xl bg-base-100 px-5 py-10 text-center">
-              <p className="text-sm text-muted">
-                উপলক্ষ লোড করা যায়নি।
-              </p>
+              <p className="text-sm text-muted">উপলক্ষ লোড করা যায়নি।</p>
 
               <button
                 type="button"
@@ -184,9 +163,7 @@ const OccasionGifts = () => {
                 আবার চেষ্টা করুন
               </button>
             </div>
-
           ) : occasions.length > 0 ? (
-
             /* ================================= */
             /* OCCASION GRID */
             /* ================================= */
@@ -195,18 +172,13 @@ const OccasionGifts = () => {
               {occasions.map((occasion) => (
                 <Link
                   key={occasion.id}
-                  to={`/shop?occasions=${encodeURIComponent(
-                    occasion.id
-                  )}`}
+                  to={`/shop?occasions=${encodeURIComponent(occasion.id)}`}
                   className="group flex min-w-0 flex-col items-center justify-center rounded-2xl border border-transparent bg-base-100 px-4 py-6 text-center transition duration-300 hover:-translate-y-1 hover:bg-secondary hover:shadow-md"
                 >
-
                   {/* OCCASION ICON */}
 
                   <div className=" flex size-14 items-center justify-center">
-                    <OccasionIcon
-                      occasion={occasion}
-                    />
+                    <OccasionIcon occasion={occasion} />
                   </div>
 
                   {/* OCCASION NAME */}
@@ -221,22 +193,16 @@ const OccasionGifts = () => {
                     উপহার দেখুন
                     <ArrowRight size={12} />
                   </span>
-
                 </Link>
               ))}
             </div>
-
           ) : (
-
             /* ================================= */
             /* EMPTY STATE */
             /* ================================= */
 
             <div className="rounded-2xl bg-base-100 px-5 py-10 text-center">
-              <Gift
-                size={32}
-                className="mx-auto text-secondary"
-              />
+              <Gift size={32} className="mx-auto text-secondary" />
 
               <p className="mt-3 text-sm text-muted">
                 কোনো উপলক্ষ পাওয়া যায়নি।
@@ -257,7 +223,6 @@ const OccasionGifts = () => {
               <ArrowRight size={16} />
             </Link>
           </div>
-
         </div>
       </div>
     </section>

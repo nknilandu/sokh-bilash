@@ -38,6 +38,11 @@ import {
 import { AuthContext } from "../../providers/AuthProvider";
 import { API_URL } from "../../utils/siteConfig";
 
+import {
+  CustomizationZipButton,
+  OrderInvoiceButton,
+} from "./OrderDownloadActions";
+
 const COURIER_KEY = "sokhbilash-admin-courier-names";
 
 const ORDER_LABEL = {
@@ -388,7 +393,7 @@ function Photo({ src, alt = "Image", avatar = false }) {
 // ORDER PRODUCT CARD
 // ==========================================
 
-function OrderItemCard({ item }) {
+function OrderItemCard({ item, orderNumber }) {
   const custom = item.customization || {};
 
   const fields = [
@@ -479,6 +484,11 @@ function OrderItemCard({ item }) {
           </summary>
 
           <div className="space-y-2 border-t border-secondary/15 p-3">
+            {photos.length > 0 && (
+              <div className="mb-3 flex justify-end">
+                <CustomizationZipButton item={item} orderNumber={orderNumber} />
+              </div>
+            )}
             {fields.map(([label, value]) => (
               <div key={label} className="rounded-lg bg-white p-2.5">
                 <p className="text-[11px] font-semibold text-secondary">
@@ -2363,18 +2373,25 @@ export default function AdminOrderDetailsPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => orderQuery.refetch()}
-          disabled={orderQuery.isFetching || busy}
-          className="inline-flex items-center gap-2 rounded-xl border border-base-300 bg-white px-4 py-2.5 text-xs font-bold text-secondary disabled:opacity-50"
-        >
-          <RefreshCw
-            size={15}
-            className={orderQuery.isFetching ? "animate-spin" : ""}
+        <div className="flex flex-wrap items-center gap-2">
+          <OrderInvoiceButton
+            order={order}
+            disabled={orderQuery.isFetching || busy}
           />
-          Refresh
-        </button>
+
+          <button
+            type="button"
+            onClick={() => orderQuery.refetch()}
+            disabled={orderQuery.isFetching || busy}
+            className="inline-flex items-center gap-2 rounded-xl border border-base-300 bg-white px-4 py-2.5 text-xs font-bold text-secondary disabled:opacity-50"
+          >
+            <RefreshCw
+              size={15}
+              className={orderQuery.isFetching ? "animate-spin" : ""}
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* IMPORTANT NOTICES */}
@@ -2492,7 +2509,11 @@ export default function AdminOrderDetailsPage() {
           >
             <div className="space-y-3">
               {items.map((item, i) => (
-                <OrderItemCard key={item.cartId || i} item={item} />
+                <OrderItemCard
+                  key={item.cartId || i}
+                  item={item}
+                  orderNumber={order.orderNumber}
+                />
               ))}
 
               {!items.length && (

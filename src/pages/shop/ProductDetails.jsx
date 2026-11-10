@@ -5,6 +5,8 @@ import Swal from "sweetalert2";
 
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Heart,
   ShoppingBag,
   Sparkles,
@@ -74,10 +76,6 @@ const IMAGE_ACCEPT =
 
 const formatPrice = (value) => `৳${Number(value || 0).toLocaleString("en-US")}`;
 
-const generateId = () =>
-  globalThis.crypto?.randomUUID?.() ||
-  `skb-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-
 const validImageUrl = (url) => {
   try {
     return ["https:", "http:"].includes(new URL(String(url)).protocol);
@@ -100,6 +98,7 @@ const positivePrice = (value) => {
   }
 
   const number = Number(value);
+
   return Number.isFinite(number) && number > 0 ? number : null;
 };
 
@@ -108,18 +107,6 @@ const getBasePrice = (product) => {
   const sale = positivePrice(product?.salePrice);
 
   return sale !== null && sale < regular ? sale : regular;
-};
-
-const getFirstVariant = (product) => {
-  if (!product?.variantsEnabled || !Array.isArray(product.variants)) {
-    return null;
-  }
-
-  return (
-    product.variants.find((v) => v.available !== false) ||
-    product.variants[0] ||
-    null
-  );
 };
 
 const getColorCode = (label) => {
@@ -148,6 +135,45 @@ const showToast = (title, icon = "success") =>
     timerProgressBar: true,
   });
 
+function getScrollBehavior() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+}
+
+// ==========================================
+// EVENT-ONLY HELPERS
+// ==========================================
+
+function generateId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ||
+    `skb-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+  );
+}
+
+function createCartItem(payload) {
+  return {
+    ...payload,
+    cartId: generateId(),
+    addedAt: new Date().toISOString(),
+  };
+}
+
+function persistBuyNowItem(item) {
+  try {
+    sessionStorage.setItem(
+      BUY_NOW_KEY,
+      JSON.stringify({
+        createdAt: Date.now(),
+        item,
+      }),
+    );
+  } catch (error) {
+    console.warn("Buy Now session persistence unavailable:", error);
+  }
+}
+
 // ==========================================
 // IMAGE HELPERS
 // ==========================================
@@ -159,8 +185,8 @@ function extensionOf(fileName) {
     .toLowerCase();
 }
 
-function replaceExtension(fileName, ext) {
-  return `${String(fileName).replace(/\.[^.]+$/, "")}.${ext}`;
+function replaceExtension(fileName, extension) {
+  return `${String(fileName).replace(/\.[^.]+$/, "")}.${extension}`;
 }
 
 function validateFile(file) {
@@ -172,10 +198,10 @@ function validateFile(file) {
     throw new Error("প্রতি ছবি সর্বোচ্চ ১০ MB হতে পারবে।");
   }
 
-  const ext = extensionOf(file.name);
+  const extension = extensionOf(file.name);
   const type = String(file.type || "").toLowerCase();
 
-  if (!FILE_EXTENSIONS.has(ext) && !SUPPORTED_TYPES.has(type)) {
+  if (!FILE_EXTENSIONS.has(extension) && !SUPPORTED_TYPES.has(type)) {
     throw new Error("এই ফরম্যাটের ছবি সাপোর্ট করে না।");
   }
 }
@@ -186,9 +212,6 @@ function blobToFile(blob, filename, type) {
     lastModified: Date.now(),
   });
 }
-
-// AVIF/BMP: convert to a widely supported JPEG.
-// GIF is deliberately NOT converted to preserve animation.
 
 async function convertUsingCanvas(file) {
   const objectUrl = URL.createObjectURL(file);
@@ -211,22 +234,21 @@ async function convertUsingCanvas(file) {
       throw new Error("ছবির সাইজ শনাক্ত করা যায়নি।");
     }
 
-    const maxDimension = 6000;
-    const scale = Math.min(1, maxDimension / Math.max(width, height));
+    const scale = Math.min(1, 6000 / Math.max(width, height));
 
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * scale));
     canvas.height = Math.max(1, Math.round(height * scale));
 
-    const ctx = canvas.getContext("2d");
+    const context = canvas.getContext("2d");
 
-    if (!ctx) {
+    if (!context) {
       throw new Error("ছবি প্রসেস করা যাচ্ছে না।");
     }
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -248,11 +270,11 @@ async function convertUsingCanvas(file) {
 async function prepareImage(file) {
   validateFile(file);
 
-  const ext = extensionOf(file.name);
+  const extension = extensionOf(file.name);
   const type = String(file.type || "").toLowerCase();
 
   const isHeic =
-    ["heic", "heif"].includes(ext) ||
+    ["heic", "heif"].includes(extension) ||
     ["image/heic", "image/heif"].includes(type);
 
   if (isHeic) {
@@ -288,11 +310,8 @@ async function prepareImage(file) {
   }
 
   if (
-    ext === "avif" ||
-    ext === "bmp" ||
-    type === "image/avif" ||
-    type === "image/bmp" ||
-    type === "image/x-ms-bmp"
+    ["avif", "bmp"].includes(extension) ||
+    ["image/avif", "image/bmp", "image/x-ms-bmp"].includes(type)
   ) {
     const converted = await convertUsingCanvas(file);
 
@@ -303,7 +322,7 @@ async function prepareImage(file) {
     return converted;
   }
 
-  if (ext === "jfif") {
+  if (extension === "jfif") {
     return blobToFile(file, replaceExtension(file.name, "jpg"), "image/jpeg");
   }
 
@@ -311,7 +330,7 @@ async function prepareImage(file) {
 }
 
 // ==========================================
-// IMGBB UPLOAD WITH RETRY
+// IMGBB UPLOAD
 // ==========================================
 
 async function uploadToImgBB(file, apiKey) {
@@ -383,49 +402,89 @@ async function uploadToImgBB(file, apiKey) {
 }
 
 // ==========================================
-// THUMBNAIL HELPERS
+// GALLERY / DEFAULT / VARIANT HELPERS
 // ==========================================
 
-function buildThumbnails(product, variants, gallery) {
-  const imageMap = new Map();
+function buildThumbnails(variants, gallery) {
+  // Keep ALL Product Photos as Default/gallery images.
+  // A shared variant URL must not remove a Product Photo.
+  const regular = [...new Set(gallery)].map((url, index) => ({
+    id: `gallery-${index}`,
+    url,
+    isVariant: false,
+    variantKey: "",
+    labels: [],
+  }));
 
-  // Add gallery images first.
-  gallery.forEach((url) => {
-    imageMap.set(url, {
-      url,
-      isVariant: false,
-      labels: [],
-    });
-  });
+  // Keep every variant after all regular Product Photos.
+  const variantImages = variants
+    .filter((variant) => validImageUrl(variant.imageUrl))
+    .map((variant) => ({
+      id: `variant-${variant.key}`,
+      url: variant.imageUrl,
+      isVariant: true,
+      variantKey: variant.key,
+      labels: Object.values(variant.options || {}).filter(Boolean),
+    }));
 
-  // Mark or insert all variant images.
-  if (product.variantsEnabled) {
-    variants.forEach((variant) => {
-      if (!validImageUrl(variant.imageUrl)) return;
+  return [...regular, ...variantImages];
+}
 
-      const optionText = Object.values(variant.options || {})
-        .filter(Boolean)
-        .join(" · ");
+function getDefaultThumbnailId(thumbnails) {
+  return thumbnails.find((thumbnail) => !thumbnail.isVariant)?.id || "";
+}
 
-      const existing = imageMap.get(variant.imageUrl);
-
-      if (existing) {
-        existing.isVariant = true;
-
-        if (optionText && !existing.labels.includes(optionText)) {
-          existing.labels.push(optionText);
-        }
-      } else {
-        imageMap.set(variant.imageUrl, {
-          url: variant.imageUrl,
-          isVariant: true,
-          labels: optionText ? [optionText] : [],
-        });
-      }
-    });
+function getVariantThumbnailId(variant, thumbnails) {
+  if (!variant) {
+    return getDefaultThumbnailId(thumbnails);
   }
 
-  return [...imageMap.values()];
+  return (
+    thumbnails.find(
+      (thumbnail) =>
+        thumbnail.isVariant && thumbnail.variantKey === variant.key,
+    )?.id || getDefaultThumbnailId(thumbnails)
+  );
+}
+
+function selectionForThumbnail(thumbnail, variants) {
+  const variant = thumbnail.isVariant
+    ? variants.find((item) => item.key === thumbnail.variantKey)
+    : null;
+
+  return {
+    selectedVariantKey: variant?.key || "",
+    selectedThumbnailId: thumbnail.id,
+  };
+}
+
+function buildInitialForm(product, thumbnails, saved) {
+  const custom = saved?.customization || {};
+
+  return {
+    // Always open with the first regular Product Photo.
+    selectedVariantKey: "",
+    selectedThumbnailId: getDefaultThumbnailId(thumbnails),
+
+    quantity: Math.min(
+      10,
+      Math.max(1, Math.trunc(Number(saved?.quantity) || 1)),
+    ),
+
+    packaging:
+      positivePrice(product.premiumBoxPrice) && saved?.packaging === "premium"
+        ? "premium"
+        : "regular",
+
+    customText: String(custom.name || ""),
+    customDate: String(custom.date || ""),
+    customMessage: String(custom.message || ""),
+    customNote: String(custom.note || ""),
+
+    photos: Array.isArray(custom.photos)
+      ? custom.photos.filter((photo) => photo && validImageUrl(photo.url))
+      : [],
+  };
 }
 
 // ==========================================
@@ -435,13 +494,12 @@ function buildThumbnails(product, variants, gallery) {
 function ProductDetailsContent({ product, relatedProducts }) {
   const navigate = useNavigate();
   const descriptionRef = useRef(null);
-  const restoredRef = useRef(null);
+  const thumbnailStripRef = useRef(null);
 
   const { user, loading, role, roleLoading, accountStatus } =
     useContext(AuthContext);
 
   const checkingRole = loading || (Boolean(user) && roleLoading);
-
   const isAdmin = Boolean(user) && role === "admin";
 
   const canShop =
@@ -453,7 +511,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
     addToCart,
     isInCart,
     cartReady,
-    cartLoading,
     cartError,
     retrySync,
   } = useCart();
@@ -471,82 +528,133 @@ function ProductDetailsContent({ product, relatedProducts }) {
       product.variantsEnabled && Array.isArray(product.variants)
         ? product.variants
         : [],
-    [product],
+    [product.variantsEnabled, product.variants],
   );
 
-  const firstVariant = useMemo(() => getFirstVariant(product), [product]);
+  const gallery = useMemo(() => getImageUrls(product.images), [product.images]);
 
-  const [selectedVariantKey, setSelectedVariantKey] = useState(
-    () => getFirstVariant(product)?.key || "",
+  const thumbnails = useMemo(
+    () => buildThumbnails(variants, gallery),
+    [variants, gallery],
   );
 
-  const selectedVariant =
-    variants.find((v) => v.key === selectedVariantKey) || null;
-
-  const selectedOptions = selectedVariant?.options || {};
+  const defaultThumbnailId = getDefaultThumbnailId(thumbnails);
+  const hasDefaultPhoto = Boolean(defaultThumbnailId);
 
   const optionGroups = useMemo(() => {
     if (!product.variantsEnabled) return [];
 
     return ["size", "color", "type"]
-      .map((type) => ({
-        type,
-        enabled: product.options?.[type]?.enabled === true,
-        values: product.options?.[type]?.values || [],
-      }))
-      .filter(
-        (group) =>
-          group.enabled &&
-          Array.isArray(group.values) &&
-          group.values.length > 0,
-      );
-  }, [product]);
+      .map((type) => {
+        const configured = product.options?.[type];
 
-  const gallery = useMemo(() => getImageUrls(product.images), [product.images]);
+        const rawValues = Array.isArray(configured?.values)
+          ? configured.values
+          : [];
 
-  const thumbnails = useMemo(
-    () => buildThumbnails(product, variants, gallery),
-    [product, variants, gallery],
-  );
+        const values = rawValues
+          .map((value) =>
+            typeof value === "string" ? { label: value } : value,
+          )
+          .filter(
+            (value) =>
+              value && typeof value.label === "string" && value.label.trim(),
+          );
 
-  const [selectedImage, setSelectedImage] = useState(
-    () =>
-      (validImageUrl(getFirstVariant(product)?.imageUrl)
-        ? getFirstVariant(product).imageUrl
-        : "") ||
-      getImageUrls(product.images)[0] ||
-      "",
-  );
+        return {
+          type,
+          enabled: configured?.enabled === true,
+          values,
+        };
+      })
+      .filter((group) => group.enabled);
+  }, [product.variantsEnabled, product.options]);
 
-  const selectedThumb = thumbnails.find((item) => item.url === selectedImage);
+  // ========================================
+  // FORM STATE
+  // ========================================
+
+  const cartList = Array.isArray(cartItems) ? cartItems : [];
+
+  const savedCartItem = cartReady
+    ? cartList.find(
+        (item) => String(item.productId || item.id) === String(product._id),
+      )
+    : null;
+
+  const initialForm = buildInitialForm(product, thumbnails, savedCartItem);
+
+  const [draft, setDraft] = useState(null);
+  const form = draft ?? initialForm;
+
+  const {
+    quantity,
+    packaging,
+    customText,
+    customDate,
+    customMessage,
+    customNote,
+    photos,
+  } = form;
+
+  const updateForm = (changes) => {
+    setDraft((current) => ({
+      ...(current ?? initialForm),
+      ...changes,
+    }));
+  };
+
+  const setField = (field, nextValue) => {
+    setDraft((current) => {
+      const previous = current ?? initialForm;
+
+      return {
+        ...previous,
+        [field]:
+          typeof nextValue === "function"
+            ? nextValue(previous[field])
+            : nextValue,
+      };
+    });
+  };
+
+  // Empty key means Default/base product.
+  const isDefaultSelection = !form.selectedVariantKey;
+
+  const selectedVariant = isDefaultSelection
+    ? null
+    : variants.find((variant) => variant.key === form.selectedVariantKey) ||
+      null;
+
+  const selectedOptions = selectedVariant?.options || {};
+
+  const selectedThumb =
+    thumbnails.find((thumbnail) => thumbnail.id === form.selectedThumbnailId) ||
+    thumbnails.find(
+      (thumbnail) =>
+        thumbnail.id === getVariantThumbnailId(selectedVariant, thumbnails),
+    ) ||
+    null;
 
   const variantImage = validImageUrl(selectedVariant?.imageUrl)
     ? selectedVariant.imageUrl
     : "";
+
+  const selectedImage = selectedThumb?.url || variantImage || gallery[0] || "";
 
   const [zoom, setZoom] = useState(false);
   const [zoomPosition, setZoomPosition] = useState("50% 50%");
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [hasLongDescription, setHasLongDescription] = useState(false);
 
-  const [quantity, setQuantity] = useState(1);
-
-  const [customText, setCustomText] = useState("");
-  const [customDate, setCustomDate] = useState("");
-  const [customMessage, setCustomMessage] = useState("");
-  const [customNote, setCustomNote] = useState("");
-
-  const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [fileError, setFileError] = useState("");
   const [uploadProgress, setUploadProgress] = useState("");
-
-  const [packaging, setPackaging] = useState("regular");
   const [adding, setAdding] = useState(false);
   const [buying, setBuying] = useState(false);
 
   // ========================================
-  // DESCRIPTION EXPANSION
+  // DESCRIPTION MEASUREMENT
   // ========================================
 
   useEffect(() => {
@@ -555,10 +663,11 @@ function ProductDetailsContent({ product, relatedProducts }) {
     const element = descriptionRef.current;
     if (!element) return;
 
-    const check = () =>
+    const check = () => {
       setHasLongDescription(element.scrollHeight > element.clientHeight + 2);
+    };
 
-    const frame = requestAnimationFrame(check);
+    const frameId = window.requestAnimationFrame(check);
 
     const observer =
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
@@ -567,31 +676,59 @@ function ProductDetailsContent({ product, relatedProducts }) {
     window.addEventListener("resize", check);
 
     return () => {
-      cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(frameId);
       observer?.disconnect();
       window.removeEventListener("resize", check);
     };
   }, [product.description, descriptionExpanded]);
 
   // ========================================
+  // KEEP ACTIVE THUMBNAIL VISIBLE
+  // ========================================
+
+  useEffect(() => {
+    const strip = thumbnailStripRef.current;
+    if (!strip || !selectedThumb?.id) return;
+
+    const button = Array.from(strip.children).find(
+      (element) => element.dataset.thumbnailId === selectedThumb.id,
+    );
+
+    if (!button) return;
+
+    const stripRect = strip.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+
+    let distance = 0;
+
+    if (buttonRect.left < stripRect.left) {
+      distance = buttonRect.left - stripRect.left - 4;
+    } else if (buttonRect.right > stripRect.right) {
+      distance = buttonRect.right - stripRect.right + 4;
+    }
+
+    if (distance) {
+      strip.scrollBy({
+        left: distance,
+        behavior: getScrollBehavior(),
+      });
+    }
+  }, [selectedThumb?.id]);
+
+  // ========================================
   // PRICING
   // ========================================
 
   const regularPrice = positivePrice(product.regularPrice) || 0;
-
   const salePrice = positivePrice(product.salePrice);
-
   const hasSale = salePrice !== null && salePrice < regularPrice;
-
   const basePrice = getBasePrice(product);
 
-  const variantPrice = product.variantsEnabled
-    ? (positivePrice(selectedVariant?.price) ?? basePrice)
+  const variantPrice = selectedVariant
+    ? (positivePrice(selectedVariant.price) ?? basePrice)
     : basePrice;
 
-  // Missing, zero, invalid or negative => no premium.
   const premiumBoxPrice = positivePrice(product.premiumBoxPrice) || 0;
-
   const premiumEnabled = premiumBoxPrice > 0;
 
   const effectivePackaging =
@@ -605,18 +742,20 @@ function ProductDetailsContent({ product, relatedProducts }) {
   const selectedUsesSale = hasSale && Math.abs(variantPrice - salePrice) < 0.01;
 
   const comparisonPrice = regularPrice + packagingExtra;
-
   const showOriginalPrice = selectedUsesSale && comparisonPrice > price;
 
   const discount = showOriginalPrice
     ? Math.round(((comparisonPrice - price) / comparisonPrice) * 100)
     : 0;
 
+  const selectionAvailable =
+    !product.variantsEnabled ||
+    (isDefaultSelection
+      ? hasDefaultPhoto
+      : selectedVariant !== null && selectedVariant.available !== false);
+
   const purchasable =
-    product.available === true &&
-    (!product.variantsEnabled ||
-      (selectedVariant !== null && selectedVariant.available !== false)) &&
-    price > 0;
+    product.available === true && selectionAvailable && price > 0;
 
   // ========================================
   // CUSTOMIZATION
@@ -628,25 +767,27 @@ function ProductDetailsContent({ product, relatedProducts }) {
   const noteMode =
     product.customizable === true && product.customerFieldType === "note";
 
+  const customerFields = Array.isArray(product.customerFields)
+    ? product.customerFields
+    : [];
+
   const photoLimit = Math.min(
     MAX_PHOTOS,
     Math.max(
       1,
       Number(
-        product.customerFields?.find((field) => field.key === "photos")
-          ?.maxFiles || MAX_PHOTOS,
+        customerFields.find((field) => field.key === "photos")?.maxFiles ||
+          MAX_PHOTOS,
       ) || MAX_PHOTOS,
     ),
   );
 
   const customization = {
     mode: frameMode ? "frame" : noteMode ? "note" : "none",
-
     name: frameMode ? customText.trim() : "",
     date: frameMode ? customDate : "",
     message: frameMode ? customMessage.trim() : "",
     note: noteMode ? customNote.trim() : "",
-
     photos: frameMode
       ? photos.map((photo) => ({
           id: photo.id,
@@ -657,65 +798,38 @@ function ProductDetailsContent({ product, relatedProducts }) {
       : [],
   };
 
-  const cartList = Array.isArray(cartItems) ? cartItems : [];
-
-  const alreadyInCart = isInCart({
-    productId: product._id,
-    variantKey: selectedVariant?.key || "",
-    packaging: effectivePackaging,
-    customization,
-  });
+  const alreadyInCart =
+    selectionAvailable &&
+    isInCart({
+      productId: product._id,
+      variantKey: selectedVariant?.key || "",
+      packaging: effectivePackaging,
+      customization,
+    });
 
   const productInCart = cartList.some(
     (item) => String(item.productId || item.id) === String(product._id),
   );
 
   // ========================================
-  // RESTORE SAVED CART
+  // DEFAULT / VARIANT EVENTS
   // ========================================
 
-  useEffect(() => {
-    if (!cartReady) return;
-    if (restoredRef.current === product._id) return;
+  const resetZoom = () => {
+    setZoom(false);
+    setZoomPosition("50% 50%");
+  };
 
-    restoredRef.current = product._id;
+  const chooseDefault = () => {
+    if (!hasDefaultPhoto) return;
 
-    const saved = cartList.find(
-      (item) => String(item.productId || item.id) === String(product._id),
-    );
+    updateForm({
+      selectedVariantKey: "",
+      selectedThumbnailId: defaultThumbnailId,
+    });
 
-    if (!saved) return;
-
-    const variant = variants.find((item) => item.key === saved.variantKey);
-
-    if (variant) setSelectedVariantKey(variant.key);
-
-    setSelectedImage(
-      (validImageUrl(variant?.imageUrl) ? variant.imageUrl : "") ||
-        saved.image ||
-        gallery[0] ||
-        "",
-    );
-
-    setQuantity(Math.min(10, Math.max(1, Number(saved.quantity) || 1)));
-
-    setPackaging(
-      premiumEnabled && saved.packaging === "premium" ? "premium" : "regular",
-    );
-
-    const custom = saved.customization || {};
-
-    setCustomText(custom.name || "");
-    setCustomDate(custom.date || "");
-    setCustomMessage(custom.message || "");
-    setCustomNote(custom.note || "");
-
-    setPhotos(Array.isArray(custom.photos) ? [...custom.photos] : []);
-  }, [cartReady, cartList, product._id, variants, gallery, premiumEnabled]);
-
-  // ========================================
-  // VARIANT SELECTION
-  // ========================================
+    resetZoom();
+  };
 
   const chooseOption = (type, label) => {
     const matching = variants.filter(
@@ -723,24 +837,47 @@ function ProductDetailsContent({ product, relatedProducts }) {
         variant.available !== false && variant.options?.[type] === label,
     );
 
-    const next =
-      matching.find((variant) =>
-        optionGroups.every(
-          (group) =>
-            group.type === type ||
-            variant.options?.[group.type] === selectedOptions[group.type],
-        ),
-      ) || matching[0];
+    const score = (variant) =>
+      optionGroups.reduce(
+        (sum, group) =>
+          sum +
+          (group.type !== type &&
+          variant.options?.[group.type] === selectedOptions[group.type]
+            ? 1
+            : 0),
+        0,
+      );
+
+    const next = matching.reduce(
+      (best, candidate) =>
+        !best || score(candidate) > score(best) ? candidate : best,
+      null,
+    );
 
     if (!next) return;
 
-    setSelectedVariantKey(next.key);
+    updateForm({
+      selectedVariantKey: next.key,
+      selectedThumbnailId: getVariantThumbnailId(next, thumbnails),
+    });
 
-    setSelectedImage(
-      (validImageUrl(next.imageUrl) ? next.imageUrl : "") || gallery[0] || "",
-    );
+    resetZoom();
+  };
 
-    setZoom(false);
+  const chooseThumbnail = (thumbnail) => {
+    updateForm(selectionForThumbnail(thumbnail, variants));
+
+    resetZoom();
+  };
+
+  const scrollThumbnails = (direction) => {
+    const strip = thumbnailStripRef.current;
+    if (!strip) return;
+
+    strip.scrollBy({
+      left: direction * Math.max(120, strip.clientWidth * 0.75),
+      behavior: getScrollBehavior(),
+    });
   };
 
   // ========================================
@@ -749,7 +886,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
   const handleFileChange = async (event) => {
     const incoming = Array.from(event.target.files || []);
-
     event.target.value = "";
 
     if (!incoming.length || uploading) return;
@@ -770,7 +906,7 @@ function ProductDetailsContent({ product, relatedProducts }) {
       return;
     }
 
-    const seen = new Set(photos.map((p) => `${p.name}-${p.size}`));
+    const seen = new Set(photos.map((photo) => `${photo.name}-${photo.size}`));
 
     const accepted = [];
     const errors = [];
@@ -801,6 +937,7 @@ function ProductDetailsContent({ product, relatedProducts }) {
       return;
     }
 
+    updateForm({});
     setUploading(true);
 
     try {
@@ -818,15 +955,14 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
           const uploaded = await uploadToImgBB(readyFile, apiKey);
 
-          setPhotos((current) => [
-            ...current,
-            {
-              id: generateId(),
-              name: original.name,
-              size: original.size,
-              url: uploaded.url,
-            },
-          ]);
+          const newPhoto = {
+            id: generateId(),
+            name: original.name,
+            size: original.size,
+            url: uploaded.url,
+          };
+
+          setField("photos", (current) => [...current, newPhoto]);
         } catch (error) {
           console.error("Customer Image Upload:", original.name, error);
 
@@ -840,8 +976,15 @@ function ProductDetailsContent({ product, relatedProducts }) {
     }
   };
 
-  const removePhoto = (id) => {
-    setPhotos((current) => current.filter((p) => p.id !== id));
+  const removePhoto = (photoToRemove) => {
+    setField("photos", (current) =>
+      current.filter((photo) =>
+        photoToRemove.id
+          ? photo.id !== photoToRemove.id
+          : photo.url !== photoToRemove.url,
+      ),
+    );
+
     setFileError("");
   };
 
@@ -871,35 +1014,26 @@ function ProductDetailsContent({ product, relatedProducts }) {
   };
 
   // ========================================
-  // BUILD CART / BUY NOW ITEM
+  // CART / BUY NOW
+  // Default: variantKey = "", selectedOptions = {}
   // ========================================
 
-  const buildCartItem = () => ({
-    cartId: generateId(),
-
+  const cartPayload = {
     productId: product._id,
     id: product._id,
-
     slug: product.slug || "",
     name: product.name,
     sku: selectedVariant?.sku || product.sku || "",
-
     image: variantImage || gallery[0] || "",
-
     price,
     unitPrice: price,
     quantity,
-
     variantKey: selectedVariant?.key || "",
-
-    selectedOptions: product.variantsEnabled ? { ...selectedOptions } : {},
-
+    selectedOptions: selectedVariant ? { ...selectedOptions } : {},
     packaging: effectivePackaging,
     premiumBoxPrice: packagingExtra,
-
     customization,
-    addedAt: new Date().toISOString(),
-  });
+  };
 
   const shoppingError = () => {
     if (isAdmin) {
@@ -912,10 +1046,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
     return "এই অ্যাকাউন্ট দিয়ে কেনাকাটা করা যাবে না।";
   };
-
-  // ========================================
-  // ADD TO CART
-  // ========================================
 
   const handleAddToCart = async () => {
     if (!canShop) {
@@ -942,10 +1072,12 @@ function ProductDetailsContent({ product, relatedProducts }) {
       return;
     }
 
+    updateForm({});
     setAdding(true);
 
     try {
-      await addToCart(buildCartItem());
+      const item = createCartItem(cartPayload);
+      await addToCart(item);
       showToast("পণ্যটি কার্টে যোগ হয়েছে!");
     } catch (error) {
       Swal.fire({
@@ -959,36 +1091,21 @@ function ProductDetailsContent({ product, relatedProducts }) {
     }
   };
 
-  // ========================================
-  // BUY NOW — CART UNCHANGED
-  // ========================================
-
   const handleBuyNow = () => {
     if (!canShop) {
       showToast(shoppingError(), "error");
       return;
     }
 
-    if (!purchasable || uploading || buying || adding) {
-      return;
-    }
+    if (!purchasable || uploading || buying || adding) return;
 
+    updateForm({});
     setBuying(true);
 
     try {
-      const item = buildCartItem();
+      const item = createCartItem(cartPayload);
 
-      try {
-        sessionStorage.setItem(
-          BUY_NOW_KEY,
-          JSON.stringify({
-            createdAt: Date.now(),
-            item,
-          }),
-        );
-      } catch (error) {
-        console.warn("Buy Now session persistence unavailable:", error);
-      }
+      persistBuyNowItem(item);
 
       navigate("/checkout?mode=buy-now", {
         state: { buyNowItem: item },
@@ -1004,16 +1121,20 @@ function ProductDetailsContent({ product, relatedProducts }) {
   // ========================================
 
   const handleWhatsApp = () => {
-    const optionText = Object.entries(selectedOptions)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(", ");
+    const optionText = selectedVariant
+      ? Object.entries(selectedOptions)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(", ")
+      : product.variantsEnabled
+        ? "Default"
+        : "";
 
     const message = [
       "আসসালামু আলাইকুম, SokhBilash সাপোর্ট।",
       "",
       `প্রোডাক্ট: ${product.name}`,
-      `SKU: ${selectedVariant?.sku || product.sku}`,
-      optionText && `ভ্যারিয়েন্ট: ${optionText}`,
+      `SKU: ${selectedVariant?.sku || product.sku || "—"}`,
+      optionText && `অপশন: ${optionText}`,
       `পরিমাণ: ${quantity}`,
       `মোট মূল্য: ${formatPrice(total)}`,
       "",
@@ -1037,8 +1158,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
   return (
     <main className="page-bg min-h-screen pb-12">
       <div className="page-container">
-        {/* BREADCRUMB */}
-
         <nav
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-2 py-4 text-xs text-muted sm:py-5 sm:text-sm"
@@ -1046,15 +1165,11 @@ function ProductDetailsContent({ product, relatedProducts }) {
           <Link to="/" className="hover:text-secondary">
             হোম
           </Link>
-
           <span>/</span>
-
           <Link to="/shop" className="hover:text-secondary">
             শপ
           </Link>
-
           <span>/</span>
-
           <span className="font-medium text-primary">{product.name}</span>
         </nav>
 
@@ -1072,7 +1187,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                     const rect = event.currentTarget.getBoundingClientRect();
 
                     const x = ((event.clientX - rect.left) / rect.width) * 100;
-
                     const y = ((event.clientY - rect.top) / rect.height) * 100;
 
                     setZoomPosition(`${x}% ${y}%`);
@@ -1080,11 +1194,13 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   }
                 }}
                 onMouseLeave={() => setZoom(false)}
-                onClick={() => setZoom((v) => !v)}
+                onClick={() => setZoom((value) => !value)}
                 onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    setZoom((v) => !v);
+                    setZoom((value) => !value);
                   }
                 }}
                 role="button"
@@ -1157,55 +1273,84 @@ function ProductDetailsContent({ product, relatedProducts }) {
               </div>
             </div>
 
-            {/* VARIANT TAGS ON THUMBNAILS */}
+            {/* SINGLE-ROW THUMBNAILS */}
 
-            <div className="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
-              {thumbnails.map((thumb) => (
+            {thumbnails.length > 0 && (
+              <div className="mt-3 flex min-w-0 items-center gap-2">
                 <button
                   type="button"
-                  key={thumb.url}
-                  onClick={() => {
-                    setSelectedImage(thumb.url);
-                    setZoom(false);
-                  }}
-                  title={
-                    thumb.isVariant
-                      ? `ভ্যারিয়েন্ট: ${thumb.labels.join(", ")}`
-                      : "প্রোডাক্ট ছবি"
-                  }
-                  aria-label={
-                    thumb.isVariant
-                      ? `ভ্যারিয়েন্ট ছবি ${thumb.labels.join(", ")}`
-                      : "প্রোডাক্ট ছবি"
-                  }
-                  aria-pressed={selectedImage === thumb.url}
-                  className={`relative aspect-square min-w-0 overflow-hidden rounded-xl border-2 bg-base-200 transition ${
-                    selectedImage === thumb.url
-                      ? "border-secondary"
-                      : "border-base-300 hover:border-secondary/60"
-                  }`}
+                  onClick={() => scrollThumbnails(-1)}
+                  aria-label="আগের ছবিগুলো দেখুন"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-base-300 bg-base-100 text-secondary shadow-sm transition hover:border-secondary hover:bg-secondary/5 sm:size-9"
                 >
-                  <img
-                    src={thumb.url}
-                    alt={product.name}
-                    loading="lazy"
-                    className="size-full object-cover"
-                  />
-
-                  {thumb.isVariant && (
-                    <span className="absolute bottom-1 left-1 right-1 truncate rounded bg-secondary/95 px-1 py-1 text-center text-[9px] font-bold text-white shadow-sm">
-                      ভ্যারিয়েন্ট
-                    </span>
-                  )}
-
-                  {selectedImage === thumb.url && (
-                    <span className="absolute right-1 top-1 rounded-full bg-white p-1 text-secondary shadow-sm">
-                      <Check size={12} />
-                    </span>
-                  )}
+                  <ChevronLeft size={19} />
                 </button>
-              ))}
-            </div>
+
+                <div
+                  ref={thumbnailStripRef}
+                  role="group"
+                  aria-label="প্রোডাক্ট ও ভ্যারিয়েন্টের ছবি"
+                  className="flex min-w-0 flex-1 flex-nowrap gap-2 overflow-x-auto overscroll-x-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3"
+                >
+                  {thumbnails.map((thumbnail) => {
+                    const active = selectedThumb?.id === thumbnail.id;
+
+                    const label = thumbnail.isVariant
+                      ? `ভ্যারিয়েন্ট: ${thumbnail.labels.join(" · ")}`
+                      : "প্রোডাক্ট ছবি — Default";
+
+                    return (
+                      <button
+                        key={thumbnail.id}
+                        data-thumbnail-id={thumbnail.id}
+                        type="button"
+                        onClick={() => chooseThumbnail(thumbnail)}
+                        title={label}
+                        aria-label={label}
+                        aria-pressed={active}
+                        className={`relative size-20 shrink-0 overflow-hidden rounded-xl border-2 bg-base-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2 sm:size-24 ${
+                          active
+                            ? "border-secondary"
+                            : "border-base-300 hover:border-secondary/60"
+                        }`}
+                      >
+                        <img
+                          src={thumbnail.url}
+                          alt={
+                            thumbnail.isVariant
+                              ? `${product.name} — ${thumbnail.labels.join(" / ")}`
+                              : product.name
+                          }
+                          loading="lazy"
+                          className="size-full object-cover "
+                        />
+
+                        {thumbnail.isVariant && (
+                          <span className="absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-secondary/95 px-2 py-1 text-center text-[9px] font-bold text-white shadow-sm">
+                            ভ্যারিয়েন্ট
+                          </span>
+                        )}
+
+                        {active && (
+                          <span className="absolute right-1 top-1 rounded-full bg-white p-1 text-secondary shadow-sm">
+                            <Check size={12} />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => scrollThumbnails(1)}
+                  aria-label="পরের ছবিগুলো দেখুন"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-base-300 bg-base-100 text-secondary shadow-sm transition hover:border-secondary hover:bg-secondary/5 sm:size-9"
+                >
+                  <ChevronRight size={19} />
+                </button>
+              </div>
+            )}
 
             {selectedThumb?.isVariant && selectedThumb.labels.length > 0 && (
               <p className="mt-2 text-xs leading-5 text-muted">
@@ -1220,7 +1365,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 <div className="icon-box">
                   <Gift size={20} />
                 </div>
-
                 <div>
                   <p className="text-sm font-bold text-primary">
                     আপনার মতো করে তৈরি
@@ -1235,7 +1379,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 <div className="icon-box">
                   <ShieldCheck size={20} />
                 </div>
-
                 <div>
                   <p className="text-sm font-bold text-primary">
                     যত্নসহকারে প্যাকেজিং
@@ -1294,7 +1437,7 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 {(hasLongDescription || descriptionExpanded) && (
                   <button
                     type="button"
-                    onClick={() => setDescriptionExpanded((v) => !v)}
+                    onClick={() => setDescriptionExpanded((value) => !value)}
                     className="mt-2 text-xs font-bold text-secondary hover:underline"
                   >
                     {descriptionExpanded ? "কম দেখুন ↑" : "আরও দেখুন ↓"}
@@ -1316,7 +1459,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                     <span className="text-sm text-muted line-through">
                       {formatPrice(comparisonPrice)}
                     </span>
-
                     {discount > 0 && (
                       <span className="badge-gold">{discount}% ছাড়</span>
                     )}
@@ -1326,7 +1468,10 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
               <p className="mt-2 text-xs leading-5 text-muted">
                 {product.variantsEnabled && (
-                  <>ভ্যারিয়েন্ট মূল্য: {formatPrice(variantPrice)}। </>
+                  <>
+                    {isDefaultSelection ? "Default মূল্য" : "ভ্যারিয়েন্ট মূল্য"}
+                    : {formatPrice(variantPrice)}।{" "}
+                  </>
                 )}
                 {hasSale && (
                   <>
@@ -1337,11 +1482,11 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 {packagingExtra > 0 && (
                   <>প্রিমিয়াম বক্স: +{formatPrice(packagingExtra)}। </>
                 )}
-                নির্বাচিত ভ্যারিয়েন্ট ও প্যাকেজিং অনুযায়ী মূল্য পরিবর্তন হবে।
+                নির্বাচিত অপশন ও প্যাকেজিং অনুযায়ী মূল্য পরিবর্তন হবে।
               </p>
             </div>
 
-            {/* VARIANT OPTIONS */}
+            {/* VARIANT OPTIONS — DEFAULT FIRST */}
 
             {optionGroups.map((group, index) => (
               <div className="mt-6" key={group.type}>
@@ -1361,8 +1506,26 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={chooseDefault}
+                    disabled={!hasDefaultPhoto}
+                    aria-pressed={isDefaultSelection}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-medium transition sm:px-4 sm:text-sm ${
+                      isDefaultSelection
+                        ? "border-secondary bg-secondary/5 text-primary ring-1 ring-secondary"
+                        : "border-base-300 text-muted hover:border-secondary/50"
+                    } disabled:cursor-not-allowed disabled:opacity-40`}
+                  >
+                    Default
+                    {isDefaultSelection && (
+                      <Check size={14} className="text-secondary" />
+                    )}
+                  </button>
+
                   {group.values.map((option) => {
                     const selected =
+                      !isDefaultSelection &&
                       selectedOptions[group.type] === option.label;
 
                     const available = variants.some(
@@ -1407,16 +1570,24 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
             {product.variantsEnabled && (
               <p className="mt-3 text-xs text-muted">
-                Variant SKU:{" "}
+                {isDefaultSelection ? "Default SKU:" : "Variant SKU:"}{" "}
                 <span className="font-semibold text-secondary">
-                  {selectedVariant?.sku || "—"}
+                  {isDefaultSelection
+                    ? product.sku || "—"
+                    : selectedVariant?.sku || "—"}
                 </span>
               </p>
             )}
 
             {!purchasable && (
               <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
-                এই প্রোডাক্ট বা নির্বাচিত ভ্যারিয়েন্ট বর্তমানে অনুপলব্ধ।
+                {product.available !== true
+                  ? "এই প্রোডাক্টটি বর্তমানে অনুপলব্ধ।"
+                  : product.variantsEnabled &&
+                      isDefaultSelection &&
+                      !hasDefaultPhoto
+                    ? "Default ছবি পাওয়া যায়নি। অন্য একটি উপলব্ধ অপশন বেছে নিন।"
+                    : "নির্বাচিত অপশনটি বর্তমানে কেনার জন্য উপলব্ধ নয়।"}
               </p>
             )}
 
@@ -1424,20 +1595,16 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
             {frameMode && (
               <>
-                {/* IMAGE UPLOAD */}
-
                 <div className="mt-6">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h2 className="text-sm font-bold text-primary sm:text-base">
                         আপনার ছবি আপলোড করুন
                       </h2>
-
                       <p className="mt-1 text-xs text-muted">
                         একসঙ্গে একাধিক ছবি নির্বাচন করতে পারবেন।
                       </p>
                     </div>
-
                     <span className="badge-soft">
                       {photos.length}/{photoLimit} ছবি
                     </span>
@@ -1466,11 +1633,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
                             ? "সর্বোচ্চ ছবি যোগ হয়েছে"
                             : "ছবি নির্বাচন করুন"}
                       </span>
-
                       <span className="mt-1 block text-xs leading-5 text-muted">
                         JPG, PNG, WebP, JFIF, GIF, HEIC, HEIF, AVIF, BMP
                       </span>
-
                       <span className="mt-0.5 block text-[11px] text-muted">
                         প্রতি ছবি সর্বোচ্চ ১০ MB
                       </span>
@@ -1497,7 +1662,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                       className="mt-3 flex items-center gap-2 rounded-lg bg-secondary/5 p-3 text-xs text-secondary"
                     >
                       <Loader2 size={16} className="shrink-0 animate-spin" />
-
                       <span className="min-w-0 break-all">
                         {uploadProgress}
                       </span>
@@ -1517,15 +1681,12 @@ function ProductDetailsContent({ product, relatedProducts }) {
                     </div>
                   )}
 
-                  {/* UPLOADED IMAGE PREVIEW */}
-
                   {photos.length > 0 && (
                     <div className="mt-4 rounded-xl border border-base-300 p-3 sm:p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-bold text-primary">
                           নির্বাচিত ছবিগুলো
                         </p>
-
                         <span className="text-xs text-muted">
                           {photos.length}টি ছবি
                         </span>
@@ -1534,7 +1695,7 @@ function ProductDetailsContent({ product, relatedProducts }) {
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                         {photos.map((photo) => (
                           <div
-                            key={photo.id}
+                            key={photo.id || photo.url}
                             className="relative min-w-0 overflow-hidden rounded-lg border border-base-300 bg-base-200"
                           >
                             <a
@@ -1552,7 +1713,7 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
                             <button
                               type="button"
-                              onClick={() => removePhoto(photo.id)}
+                              onClick={() => removePhoto(photo)}
                               aria-label={`${photo.name} সরান`}
                               className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-white text-red-600 shadow-sm hover:bg-red-50"
                             >
@@ -1562,7 +1723,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                             <p className="truncate px-1.5 py-1 text-[10px] text-primary">
                               {photo.name}
                             </p>
-
                             <p className="px-1.5 pb-1 text-[10px] text-muted">
                               {(
                                 Number(photo.size || 0) /
@@ -1577,8 +1737,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   )}
                 </div>
 
-                {/* NAME & DATE */}
-
                 <div className="mt-6">
                   <h2 className="text-sm font-bold text-primary sm:text-base">
                     খোদাইয়ের জন্য নাম ও তারিখ
@@ -1589,12 +1747,13 @@ function ProductDetailsContent({ product, relatedProducts }) {
                       <span className="mb-2 text-xs font-semibold text-primary">
                         নাম বা শিরোনাম
                       </span>
-
                       <input
                         type="text"
                         maxLength={80}
                         value={customText}
-                        onChange={(event) => setCustomText(event.target.value)}
+                        onChange={(event) =>
+                          setField("customText", event.target.value)
+                        }
                         placeholder="যেমন: অর্ণব ও প্রিয়ার গল্প"
                         className="mt-1 w-full rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm text-primary outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/10"
                       />
@@ -1604,30 +1763,27 @@ function ProductDetailsContent({ product, relatedProducts }) {
                       <span className="mb-2 text-xs font-semibold text-primary">
                         বিশেষ তারিখ
                       </span>
-
                       <input
                         type="date"
                         value={customDate}
-                        onChange={(event) => setCustomDate(event.target.value)}
+                        onChange={(event) =>
+                          setField("customDate", event.target.value)
+                        }
                         className="mt-1 w-full rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm text-primary outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/10"
                       />
                     </label>
                   </div>
                 </div>
 
-                {/* ENGRAVING MESSAGE */}
-
                 <div className="mt-6">
                   <div className="flex items-start gap-3">
                     <div className="icon-box">
                       <MessageSquareText size={20} />
                     </div>
-
                     <div>
                       <h2 className="text-sm font-bold text-primary sm:text-base">
                         ফ্রেমের নিচের খোদাই বার্তা / উইশ
                       </h2>
-
                       <p className="mt-1 text-xs leading-5 text-muted">
                         ফ্রেমের নিচে যে বার্তাটি খোদাই করতে চান, এখানে লিখুন।
                       </p>
@@ -1636,7 +1792,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
                   <textarea
                     value={customMessage}
-                    onChange={(event) => setCustomMessage(event.target.value)}
+                    onChange={(event) =>
+                      setField("customMessage", event.target.value)
+                    }
                     maxLength={300}
                     rows={4}
                     placeholder="যেমন: আমাদের ছোট্ট গল্পটা চিরদিন সুন্দর থাকুক..."
@@ -1658,12 +1816,10 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   <div className="icon-box">
                     <MessageSquareText size={20} />
                   </div>
-
                   <div>
                     <h2 className="text-sm font-bold text-primary sm:text-base">
                       বিশেষ নির্দেশনা / কাস্টম নোট
                     </h2>
-
                     <p className="mt-1 text-xs text-muted">
                       আপনার প্রিয় গল্প, জন্মদিনের শুভেচ্ছা কিংবা মনের বিশেষ
                       কথাগুলো আমাদের জানান।
@@ -1673,7 +1829,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
                 <textarea
                   value={customNote}
-                  onChange={(event) => setCustomNote(event.target.value)}
+                  onChange={(event) =>
+                    setField("customNote", event.target.value)
+                  }
                   maxLength={500}
                   rows={4}
                   placeholder="যেমন: প্রিয় মানুষের জন্মদিনে তার নাম, শুভেচ্ছাবার্তা ও ভালোবাসার কিছু স্মৃতি যোগ করতে চাই..."
@@ -1686,38 +1844,29 @@ function ProductDetailsContent({ product, relatedProducts }) {
               </div>
             )}
 
-            {/* ======================================
-    GIFT WRAPPING OPTIONS
-====================================== */}
+            {/* GIFT WRAPPING */}
 
             <div className="mt-7">
               <div className="mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary/10 text-secondary">
-                    <Gift size={19} />
-                  </span>
-
+                  <Gift size={18} className="text-secondary" />
                   <h2 className="text-sm font-bold text-primary sm:text-base">
-                    উপহারের প্যাকেজিং বেছে নিন
+                    প্যাকেজিং বেছে নিন
                   </h2>
                 </div>
-
-                <p className="mt-2 text-xs leading-5 text-muted">
-                  আপনার উপহারটি আরও সুন্দর করে সাজাতে পছন্দের প্যাকেজিং নির্বাচন
-                  করুন।
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  আপনার উপহারটি কীভাবে সাজিয়ে দিতে চান?
                 </p>
               </div>
 
               <div
-                className={`grid grid-cols-1 gap-3 ${
-                  premiumEnabled ? "min-[420px]:grid-cols-2" : ""
+                className={`grid gap-3 ${
+                  premiumEnabled ? "grid-cols-2" : "grid-cols-1"
                 }`}
               >
-                {/* FREE PACKAGING */}
-
                 <button
                   type="button"
-                  onClick={() => setPackaging("regular")}
+                  onClick={() => setField("packaging", "regular")}
                   aria-pressed={effectivePackaging === "regular"}
                   className={`group relative flex min-w-0 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
                     effectivePackaging === "regular"
@@ -1746,22 +1895,18 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   <span className="mt-3 block text-sm font-bold text-primary">
                     সাধারণ প্যাকেজিং
                   </span>
-
                   <span className="mt-1 block text-[11px] leading-[18px] text-muted">
                     যত্নসহকারে প্যাক করা হবে আপনার প্রিয় উপহারটি।
                   </span>
-
                   <span className="mt-auto block pt-3 text-sm font-bold text-secondary">
                     সম্পূর্ণ ফ্রি
                   </span>
                 </button>
 
-                {/* GIFT WRAPPING BOX */}
-
                 {premiumEnabled && (
                   <button
                     type="button"
-                    onClick={() => setPackaging("premium")}
+                    onClick={() => setField("packaging", "premium")}
                     aria-pressed={effectivePackaging === "premium"}
                     className={`group relative flex min-w-0 flex-col rounded-2xl border-2 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
                       effectivePackaging === "premium"
@@ -1795,11 +1940,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
                     <span className="mt-3 block text-sm font-bold text-primary">
                       গিফট র‍্যাপিং বক্স
                     </span>
-
                     <span className="mt-1 block text-[11px] leading-[18px] text-muted">
                       সুন্দর র‍্যাপিংয়ে প্রিয়জনের উপহারটি হয়ে উঠুক আরও বিশেষ!
                     </span>
-
                     <span className="mt-auto block pt-3 text-sm font-bold text-secondary">
                       +{formatPrice(premiumBoxPrice)}
                     </span>
@@ -1823,7 +1966,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 <h2 className="text-sm font-bold text-primary">
                   পরিমাণ (Quantity)
                 </h2>
-
                 <p className="mt-1 text-xs text-muted">সর্বোচ্চ ১০টি</p>
               </div>
 
@@ -1831,7 +1973,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 <button
                   type="button"
                   disabled={quantity <= 1}
-                  onClick={() => setQuantity((v) => Math.max(1, v - 1))}
+                  onClick={() =>
+                    setField("quantity", (value) => Math.max(1, value - 1))
+                  }
                   className="flex size-10 items-center justify-center text-primary disabled:opacity-30"
                   aria-label="পরিমাণ কমাও"
                 >
@@ -1845,7 +1989,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 <button
                   type="button"
                   disabled={quantity >= 10}
-                  onClick={() => setQuantity((v) => Math.min(10, v + 1))}
+                  onClick={() =>
+                    setField("quantity", (value) => Math.min(10, value + 1))
+                  }
                   className="flex size-10 items-center justify-center text-primary disabled:opacity-30"
                   aria-label="পরিমাণ বাড়াও"
                 >
@@ -1855,19 +2001,17 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
               <div className="w-full border-t border-base-300 pt-3 sm:flex sm:items-center sm:justify-between">
                 <span className="text-sm text-muted">সর্বমোট পণ্যমূল্য</span>
-
                 <span className="text-xl font-extrabold text-primary">
                   {formatPrice(total)}
                 </span>
               </div>
             </div>
 
-            {/* CART SYNC ERROR */}
+            {/* CART SYNC */}
 
             {cartError && !cartReady && (
               <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <p className="text-sm text-amber-900">{cartError}</p>
-
                 <button
                   type="button"
                   onClick={retrySync}
@@ -1885,7 +2029,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   <Check size={16} />
                   এই প্রোডাক্টটি ইতিমধ্যে কার্টে আছে
                 </p>
-
                 <Link
                   to="/cart"
                   className="text-xs font-bold text-secondary underline"
@@ -1895,11 +2038,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
               </div>
             )}
 
-            {/* ADD TO CART & BUY NOW */}
+            {/* PURCHASE BUTTONS */}
 
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {/* ADD TO CART */}
-
               <button
                 type="button"
                 onClick={handleAddToCart}
@@ -1908,7 +2049,8 @@ function ProductDetailsContent({ product, relatedProducts }) {
                   !cartReady ||
                   adding ||
                   buying ||
-                  (!alreadyInCart && (!purchasable || uploading))
+                  uploading ||
+                  (!alreadyInCart && !purchasable)
                 }
                 className="btn-gold flex min-h-12 min-w-0 w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-center text-xs font-bold leading-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 sm:text-sm"
               >
@@ -1929,17 +2071,15 @@ function ProductDetailsContent({ product, relatedProducts }) {
                       ? "কার্টে যোগ হচ্ছে..."
                       : !cartReady
                         ? "কার্ট প্রস্তুত নয়"
-                        : alreadyInCart
-                          ? "কার্টে যোগ করা আছে"
-                          : uploading
-                            ? "ছবি আপলোড হচ্ছে..."
+                        : uploading
+                          ? "ছবি আপলোড হচ্ছে..."
+                          : alreadyInCart
+                            ? "কার্টে যোগ করা আছে"
                             : !purchasable
                               ? "অনুপলব্ধ"
                               : "কার্টে যোগ করুন"}
                 </span>
               </button>
-
-              {/* BUY NOW */}
 
               <button
                 type="button"
@@ -1978,7 +2118,6 @@ function ProductDetailsContent({ product, relatedProducts }) {
                 <span className="block text-sm font-bold text-primary">
                   কোনো সমস্যা হচ্ছে?
                 </span>
-
                 <span className="mt-1 block text-xs leading-5 text-muted">
                   প্রোডাক্ট বা কাস্টমাইজেশন নিয়ে সাহায্যের জন্য WhatsApp-এ
                   যোগাযোগ করুন।
@@ -1993,12 +2132,10 @@ function ProductDetailsContent({ product, relatedProducts }) {
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex items-start gap-3 rounded-xl bg-base-200 p-4">
                 <Truck size={20} className="shrink-0 text-secondary" />
-
                 <div>
                   <p className="text-sm font-bold text-primary">
                     দেশজুড়ে ডেলিভারি
                   </p>
-
                   <p className="mt-1 text-xs leading-5 text-muted">
                     ডেলিভারি চার্জ ও সময় চেকআউটে নিশ্চিত করতে হবে।
                   </p>
@@ -2007,12 +2144,10 @@ function ProductDetailsContent({ product, relatedProducts }) {
 
               <div className="flex items-start gap-3 rounded-xl bg-base-200 p-4">
                 <ShieldCheck size={20} className="shrink-0 text-secondary" />
-
                 <div>
                   <p className="text-sm font-bold text-primary">
                     নিরাপদ অর্ডার
                   </p>
-
                   <p className="mt-1 text-xs leading-5 text-muted">
                     অর্ডার নিশ্চিত করার আগে সব তথ্য যাচাই করুন।
                   </p>
@@ -2029,11 +2164,9 @@ function ProductDetailsContent({ product, relatedProducts }) {
             <div className="mb-6 flex items-end justify-between gap-4">
               <div>
                 <span className="badge-soft">আপনার জন্য আরও</span>
-
                 <h2 className="mt-3 text-xl font-extrabold text-primary sm:text-2xl">
                   একই ক্যাটাগরির উপহার
                 </h2>
-
                 <p className="mt-2 text-sm text-muted">
                   আপনার পছন্দের আরও কিছু সুন্দর স্মৃতি।
                 </p>
@@ -2114,7 +2247,9 @@ export default function ProductDetails() {
 
       const result = await response.json().catch(() => ({}));
 
-      return response.ok && result.success ? result.products || [] : [];
+      return response.ok && result.success && Array.isArray(result.products)
+        ? result.products
+        : [];
     },
 
     staleTime: 60 * 1000,

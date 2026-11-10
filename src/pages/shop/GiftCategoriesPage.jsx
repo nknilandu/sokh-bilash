@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -348,6 +348,7 @@ function OccasionCard({ occasion, index }) {
 
 export default function GiftCategoriesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -399,6 +400,33 @@ export default function GiftCategoriesPage() {
       Array.isArray(occasionData?.occasions) ? occasionData.occasions : [],
     [occasionData],
   );
+
+  // URL-এ #occasions থাকলে data load শেষে
+  // উপলক্ষ section-এ scroll করবে।
+  useEffect(() => {
+    if (location.hash !== "#occasions") return;
+
+    // উপরের category grid load হলে section-এর
+    // অবস্থান বদলাতে পারে, তাই দুটো query শেষ হওয়া চাই।
+    if (loadingCategories || loadingOccasions) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      const section = document.getElementById("occasions");
+
+      if (!section) return;
+
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      section.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [location.hash, location.key, loadingCategories, loadingOccasions]);
 
   // ========================================
   // SEARCH FILTER
@@ -612,7 +640,10 @@ export default function GiftCategoriesPage() {
       {/* OCCASION SECTION */}
       {/* ==================================== */}
 
-      <section className="section-bg py-12 sm:py-16">
+      <section
+        id="occasions"
+        className="section-bg scroll-mt-24 py-12 sm:py-16"
+      >
         <div className="page-container">
           {/* HEADER */}
           <div className="mb-8 text-center">

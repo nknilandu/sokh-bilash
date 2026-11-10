@@ -687,7 +687,7 @@ export default function MyOrdersPage() {
               </h2>
 
               <p className="mt-1 text-xs text-muted">
-                Order Number অথবা Status দিয়ে সার্চ করুন।
+                পণ্যের নাম অথবা Order Number দিয়ে সার্চ করুন।
               </p>
             </div>
 
@@ -720,8 +720,9 @@ export default function MyOrdersPage() {
                   type="search"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  maxLength={60}
-                  placeholder="Order Number লিখুন..."
+                  maxLength={120}
+                  placeholder="পণ্যের নাম / Order Number..."
+                  aria-label="পণ্যের নাম অথবা Order Number দিয়ে অর্ডার খুঁজুন"
                   className="h-11 w-full min-w-0 rounded-xl border border-base-300 bg-base-200/50 py-2 pl-10 pr-3 text-xs text-primary outline-none focus:border-secondary sm:text-sm"
                 />
               </div>
